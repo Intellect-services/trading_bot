@@ -43,7 +43,7 @@ class TradingBot:
         self.risk_manager = risk_manager
         self.client = AlpacaClient(config)
         self.data_feed = data_feed or DataFeed(config, self.client)
-        self.portfolio = portfolio or Portfolio(config)
+        self.portfolio = portfolio or Portfolio(initial_balance=100000.0)  # Default initial balance
         logger.info("Trading bot initialized")
 
     def get_account_info(self) -> Dict[str, float]:
@@ -145,7 +145,8 @@ class TradingBot:
                 logger.info(f"Account info: {account_info}")
 
                 # Get market data
-                data = self.data_feed.get_latest_data(self.config.SYMBOL)
+                symbol = getattr(self.config, 'SYMBOL', 'SPY')
+                data = self.data_feed.get_latest_data(symbol)
                 if data is None or data.empty:
                     logger.warning("No data available")
                     continue
@@ -157,7 +158,7 @@ class TradingBot:
                     continue
 
                 # Apply risk management
-                signals = self.risk_manager.apply_risk_management(signals, account_info)
+                signals = self.risk_manager.apply_risk_management(signals)
                 if signals is None or signals.empty:
                     logger.info("No valid signals after risk management")
                     continue
@@ -178,7 +179,7 @@ class TradingBot:
                         )
 
                 # Update portfolio
-                self.portfolio.update(account_info)
+                self.portfolio.update_balance(account_info['equity'])
 
         except Exception as e:
             logger.error(f"Error in trading bot main loop: {e}")
