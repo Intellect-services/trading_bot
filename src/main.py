@@ -1,135 +1,86 @@
-import time
-from datetime import datetime
-from typing import Dict, Optional
+"""Main module for running the trading bot."""
+
+from typing import Optional
+import argparse
+import logging
 
 from src.utils.config import Config
-from src.utils.logger import setup_logger
 from src.core.strategy import Strategy
 from src.core.risk_manager import RiskManager
 from src.core.portfolio import Portfolio
 from src.core.data_feed import DataFeed
-from src.utils.alpaca_client import AlpacaClient
+from src.core.bot import TradingBot
+from src.utils.logger import setup_logger
 
 logger = setup_logger(__name__)
 
+def parse_args() -> argparse.Namespace:
+    """Parse command line arguments.
+    
+    Returns:
+        Parsed arguments
+    """
+    parser = argparse.ArgumentParser(description="Trading Bot")
+    parser.add_argument("--config", type=str, help="Path to config file")
+    parser.add_argument("--symbols", type=str, nargs="+", help="Symbols to trade")
+    parser.add_argument("--capital", type=float, help="Initial capital")
+    parser.add_argument("--debug", action="store_true", help="Enable debug logging")
+    return parser.parse_args()
 
-class TradingBot:
-    """Main trading bot class."""
-
-    def __init__(self):
-        """Initialize trading bot components."""
-        self.config = Config()
-        self.client = AlpacaClient(
-            api_key=self.config.ALPACA_API_KEY,
-            secret_key=self.config.ALPACA_SECRET_KEY
+def main() -> None:
+    """Main function to run the trading bot."""
+    try:
+        # Parse arguments
+        args = parse_args()
+        
+        # Set logging level
+        if args.debug:
+            logging.getLogger().setLevel(logging.DEBUG)
+            
+        # Load config
+        config = Config(args.config if args.config else None)
+        
+        # Initialize components
+        strategy = Strategy(config)
+        risk_manager = RiskManager(config)
+        data_feed = DataFeed(config)
+        portfolio: Optional[Portfolio] = None
+        
+        if args.capital:
+            portfolio = Portfolio(args.capital)
+            
+        # Initialize bot
+        bot = TradingBot(
+            config=config,
+            strategy=strategy,
+            risk_manager=risk_manager,
+            data_feed=data_feed,
+            portfolio=portfolio
         )
-
-        # Set up components
-        self.data_feed = DataFeed(self.config)
-        self.strategy = Strategy(self.config)
-        self.risk_manager = RiskManager(self.config)
-        self.portfolio = Portfolio(self.config)
-
-        # Track state
-        self.start_time = datetime.now()
-        self.last_price = None
-        self.positions = {}
-
-        logger.info("Trading bot initialized")
-
-    def is_market_open(self) -> bool:
-        """Check if market is currently open.
-
-        Returns:
-            True if market is open, False otherwise
-        """
-        now = datetime.now().time()
-        return self.config.MARKET_OPEN <= now <= self.config.MARKET_CLOSE
-
-    def get_account_info(self) -> Optional[Dict]:
-        """Get current account information.
-
-        Returns:
-            Dictionary with account info if successful, None otherwise
-        """
-        try:
-            account = self.client.get_account()
-            return {
-                "equity": float(account.equity),
-                "cash": float(account.cash),
-                "buying_power": float(account.buying_power),
-            }
-        except Exception as e:
-            logger.error(f"Error getting account info: {str(e)}")
-            return None
-
-    def run(self):
-        """Run the trading bot."""
-        try:
-            logger.info("Starting trading bot...")
-
-            while True:
-                if not self.is_market_open():
-                    logger.info("Market closed. Waiting...")
-                    time.sleep(60)
-                    continue
-
-                # Get latest data
-                data = self.data_feed.get_latest_data(self.config.DEFAULT_SYMBOL)
-                if not data:
-                    logger.warning("No market data available")
-                    time.sleep(60)
-                    continue
-
-                # Generate signals
-                signals = self.strategy.generate_signals(data)
-
-                # Apply risk management
-                filtered_signals = self.risk_manager.apply_risk_rules(
-                    signals, self.portfolio.positions
-                )
-
-                # Execute trades
-                for signal in filtered_signals:
-                    self._execute_trade(signal)
-
-                # Update state
-                self.portfolio.update()
-                time.sleep(60)
-
-        except Exception as e:
-            logger.error(f"Error running trading bot: {str(e)}")
-            raise
-
-    def _execute_trade(self, signal: Dict) -> None:
-        """Execute a trade based on signal.
-
-        Args:
-            signal: Trading signal dictionary
-        """
-        try:
-            # Calculate position size
-            size = self.portfolio.calculate_position_size(signal["price"])
-
-            # Submit order
-            self.client.submit_order(
-                symbol=signal["symbol"],
-                qty=size,
-                side=signal["action"],
-                type="market"
-            )
-
-            msg = (
-                f"Executed {signal['action']} order: {size} shares "
-                f"at {signal['price']}"
-            )
-            logger.info(msg)
-
-        except Exception as e:
-            logger.error(f"Error executing trade: {str(e)}")
-            raise
-
+        
+        # Add symbols
+        if args.symbols:
+            for symbol in args.symbols:
+                bot.add_symbol(symbol)
+        else:
+            bot.add_symbol(config.DEFAULT_SYMBOL)
+            
+        # Start bot
+        bot.start()
+        
+        # Run main loop
+        while True:
+            bot.run()
+            
+    except KeyboardInterrupt:
+        logger.info("Stopping bot...")
+        if 'bot' in locals():
+            bot.stop()
+    except Exception as e:
+        logger.error("Error in main: %s", e)
+        if 'bot' in locals():
+            bot.stop()
+        raise
 
 if __name__ == "__main__":
-    bot = TradingBot()
-    bot.run()
+    main()

@@ -21,8 +21,8 @@ wheels/
 *.egg
 
 # Virtual Environment
-venv*/
-env*/
+venv/
+env/
 ENV/
 
 # IDE
@@ -30,12 +30,13 @@ ENV/
 .vscode/
 *.swp
 *.swo
+.DS_Store
 
 # Testing
 .coverage
-coverage.xml
 htmlcov/
 .pytest_cache/
+.mypy_cache/
 
 # Logs
 *.log
@@ -44,7 +45,4 @@ logs/
 # Environment variables
 .env
 .env.local
-
-# OS
-.DS_Store
 Thumbs.db 
