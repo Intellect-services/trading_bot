@@ -6,18 +6,26 @@ from alpaca.trading.client import TradingClient
 from ..strategies.base import Strategy
 from ..utils.config import get_config
 from ..utils.logger import BotLogger
+import logging
+from src.utils.config import Config
+from src.utils.logger import setup_logger
+from src.utils.alpaca_client import AlpacaClient
+from src.utils.risk_manager import RiskManager
 
 class TradingBot:
-    def __init__(self, strategy: Strategy, config: Optional[Dict[str, Any]] = None):
-        self.config = config or get_config()
-        self.strategy = strategy
-        self.logger = BotLogger()
+    def __init__(self):
+        self.config = Config()
+        self.logger = setup_logger(__name__)
+        self.alpaca_client = AlpacaClient()
+        self.risk_manager = RiskManager()
+        self.positions = {}
+        self.last_update = None
+        self.strategy = Strategy()
         self.trading_client = TradingClient(
             self.config['ALPACA_API_KEY'],
             self.config['ALPACA_SECRET_KEY'],
             paper=True
         )
-        self.positions: Dict[str, Dict[str, float]] = {}
         self.start_time = datetime.now()
         self.last_price: Optional[float] = None
         
