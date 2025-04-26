@@ -51,7 +51,7 @@ jobs:
 
       - name: Run safety check
         run: |
-          pip install safety==1.10.3
+          pip install safety==2.3.5
           safety check
 
       - name: Run bandit
