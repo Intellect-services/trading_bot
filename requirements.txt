@@ -7,7 +7,7 @@ pandas==1.5.3
 numpy==1.24.3
 aiohttp==3.8.1
 requests==2.31.0
-websockets==11.0.3
+websockets==10.4
 pytz==2023.3
 python-dateutil==2.8.2
 setuptools==68.2.2
@@ -16,9 +16,9 @@ wheel==0.41.2
 # Development dependencies
 pytest==7.4.3
 pytest-cov==4.1.0
-black==23.3.0
+black==23.12.1
 flake8==6.1.0
-mypy==1.5.1
+mypy==1.7.1
 safety==1.10.3
 bandit==1.7.5
 packaging==21.3 

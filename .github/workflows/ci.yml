@@ -11,7 +11,7 @@ jobs:
     runs-on: ubuntu-latest
     strategy:
       matrix:
-        python-version: [3.8, 3.9, "3.10"]
+        python-version: ["3.10"]
 
     steps:
       - uses: actions/checkout@v3
@@ -35,9 +35,9 @@ jobs:
 
       - name: Type checking with mypy
         run: |
-          mypy src/utils/ --ignore-missing-imports
-          mypy src/core/ --ignore-missing-imports
-          mypy src/backtesting/ --ignore-missing-imports
+          mypy src/utils/ --ignore-missing-imports --disallow-untyped-defs
+          mypy src/core/ --ignore-missing-imports --disallow-untyped-defs
+          mypy src/backtesting/ --ignore-missing-imports --disallow-untyped-defs
 
       - name: Run tests with pytest
         run: |
