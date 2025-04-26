@@ -1,8 +1,13 @@
+import secrets
 import time
 from datetime import datetime, time as dt_time
 import pytz
 import random
 from typing import Dict, Any, Optional
+
+from src.utils.logger import setup_logger
+
+logger = setup_logger(__name__)
 
 class MockTradingBot:
     def __init__(self):
@@ -25,34 +30,41 @@ class MockTradingBot:
     
     def get_account_info(self) -> Dict[str, float]:
         """Mock account information"""
+        # Use secrets for better security
+        equity_change = secrets.SystemRandom().uniform(-1000, 1000)
+        cash_change = secrets.SystemRandom().uniform(-500, 500)
+        buying_power_change = secrets.SystemRandom().uniform(-2000, 2000)
+        
         return {
-            'equity': 100000.0 + random.uniform(-1000, 1000),
-            'cash': 50000.0 + random.uniform(-500, 500),
-            'buying_power': 200000.0 + random.uniform(-2000, 2000)
+            'equity': 100000.0 + equity_change,
+            'cash': 50000.0 + cash_change,
+            'buying_power': 200000.0 + buying_power_change
         }
     
     def get_positions(self) -> Dict[str, Dict[str, float]]:
         """Mock positions"""
-        if random.random() < 0.3:  # 30% chance to have a position
+        # Use secrets for better security
+        if secrets.SystemRandom().random() < 0.3:  # 30% chance to have a position
             self.positions = {
                 self.mock_symbol: {
-                    'quantity': random.randint(1, 100),
+                    'quantity': secrets.SystemRandom().randint(1, 100),
                     'current_price': self.last_price,
-                    'market_value': self.last_price * random.randint(1, 100)
+                    'market_value': self.last_price * secrets.SystemRandom().randint(1, 100)
                 }
             }
         return self.positions
     
     def get_latest_price(self) -> float:
         """Mock price updates"""
-        # Simulate price movement
-        change = random.uniform(-2.0, 2.0)
+        # Use secrets for better security
+        change = secrets.SystemRandom().uniform(-2.0, 2.0)
         self.last_price = max(1.0, self.last_price + change)
         return self.last_price
     
     def get_price_change(self) -> float:
         """Mock price change percentage"""
-        return random.uniform(-5.0, 5.0)
+        # Use secrets for better security
+        return secrets.SystemRandom().uniform(-5.0, 5.0)
     
     def run(self):
         """Mock main loop"""

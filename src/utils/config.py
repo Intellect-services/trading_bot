@@ -1,5 +1,5 @@
 import os
-from typing import Dict, Any
+from typing import Dict, Any, Optional
 from dotenv import load_dotenv
 
 def get_config() -> Dict[str, Any]:
@@ -60,4 +60,53 @@ def validate_config(config: Dict[str, Any]) -> bool:
         if not config.get(key):
             raise ValueError(f"Missing required configuration: {key}")
     
-    return True 
+    return True
+
+load_dotenv()
+
+class Config:
+    """Configuration class for the trading bot."""
+    
+    # API Configuration
+    ALPACA_API_KEY: str = os.getenv('ALPACA_API_KEY', '')
+    ALPACA_SECRET_KEY: str = os.getenv('ALPACA_SECRET_KEY', '')
+    ALPACA_BASE_URL: str = os.getenv('ALPACA_BASE_URL', 'https://paper-api.alpaca.markets')
+    
+    # Trading Configuration
+    DEFAULT_SYMBOL: str = os.getenv('DEFAULT_SYMBOL', 'AAPL')
+    MAX_POSITION_SIZE: float = float(os.getenv('MAX_POSITION_SIZE', '10000.0'))
+    RISK_PER_TRADE: float = float(os.getenv('RISK_PER_TRADE', '0.02'))
+    STOP_LOSS_PERCENT: float = float(os.getenv('STOP_LOSS_PERCENT', '0.05'))
+    
+    # Backtesting Configuration
+    BACKTEST_START_DATE: str = os.getenv('BACKTEST_START_DATE', '2023-01-01')
+    BACKTEST_END_DATE: str = os.getenv('BACKTEST_END_DATE', '2023-12-31')
+    INITIAL_CAPITAL: float = float(os.getenv('INITIAL_CAPITAL', '100000.0'))
+    
+    # Logging Configuration
+    LOG_LEVEL: str = os.getenv('LOG_LEVEL', 'INFO')
+    LOG_FILE: str = os.getenv('LOG_FILE', 'trading_bot.log')
+    
+    @classmethod
+    def validate(cls) -> bool:
+        """Validate the configuration."""
+        required_vars = ['ALPACA_API_KEY', 'ALPACA_SECRET_KEY']
+        return all(getattr(cls, var) for var in required_vars)
+
+    @classmethod
+    def get_trading_params(cls) -> Dict[str, float]:
+        """Get trading parameters."""
+        return {
+            'max_position_size': cls.MAX_POSITION_SIZE,
+            'risk_per_trade': cls.RISK_PER_TRADE,
+            'stop_loss_percent': cls.STOP_LOSS_PERCENT
+        }
+
+    @classmethod
+    def get_backtest_params(cls) -> Dict[str, str]:
+        """Get backtesting parameters."""
+        return {
+            'start_date': cls.BACKTEST_START_DATE,
+            'end_date': cls.BACKTEST_END_DATE,
+            'initial_capital': str(cls.INITIAL_CAPITAL)
+        } 

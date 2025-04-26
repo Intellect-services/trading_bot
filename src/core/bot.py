@@ -3,20 +3,22 @@ from datetime import datetime, time as dt_time
 import pytz
 from typing import Dict, Any, Optional
 from alpaca.trading.client import TradingClient
-from ..strategies.base import Strategy
+from src.core.strategy import Strategy
 from ..utils.config import get_config
 from ..utils.logger import BotLogger
 import logging
 from src.utils.config import Config
 from src.utils.logger import setup_logger
 from src.utils.alpaca_client import AlpacaClient
-from src.utils.risk_manager import RiskManager
+from src.core.risk_manager import RiskManager
 from typing import Dict, List, Optional, Tuple
 import pandas as pd
 import numpy as np
 from alpaca_trade_api.rest import REST, TimeFrame
 from alpaca_trade_api.stream import Stream
 from src.utils.helpers import calculate_position_size, format_price
+
+logger = setup_logger(__name__)
 
 class TradingBot:
     def __init__(self):
