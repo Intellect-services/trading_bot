@@ -21,8 +21,8 @@ wheels/
 *.egg
 
 # Virtual Environment
-venv/
-env/
+venv*/
+env*/
 ENV/
 
 # IDE
@@ -31,12 +31,19 @@ ENV/
 *.swp
 *.swo
 
-# Environment variables
-.env
+# Testing
+.coverage
+coverage.xml
+htmlcov/
+.pytest_cache/
 
 # Logs
 *.log
 logs/
+
+# Environment variables
+.env
+.env.local
 
 # OS
 .DS_Store

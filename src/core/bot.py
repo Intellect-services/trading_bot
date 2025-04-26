@@ -11,6 +11,12 @@ from src.utils.config import Config
 from src.utils.logger import setup_logger
 from src.utils.alpaca_client import AlpacaClient
 from src.utils.risk_manager import RiskManager
+from typing import Dict, List, Optional, Tuple
+import pandas as pd
+import numpy as np
+from alpaca_trade_api.rest import REST, TimeFrame
+from alpaca_trade_api.stream import Stream
+from src.utils.helpers import calculate_position_size, format_price
 
 class TradingBot:
     def __init__(self):
