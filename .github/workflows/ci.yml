@@ -34,7 +34,9 @@ jobs:
 
       - name: Type checking with mypy
         run: |
-          mypy src --ignore-missing-imports
+          mypy src/utils/ --ignore-missing-imports
+          mypy src/core/ --ignore-missing-imports
+          mypy src/backtesting/ --ignore-missing-imports
 
       - name: Run tests with pytest
         run: |

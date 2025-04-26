@@ -1,19 +1,20 @@
 # Core dependencies
-alpaca-trade-api
-flask
-flask-socketio
-python-dotenv
-pandas
-numpy
-pytz
+alpaca-trade-api>=2.3.0
+flask>=2.2.5
+flask-socketio>=5.3.6
+python-dotenv>=0.19.0
+pandas>=1.5.3
+numpy>=1.24.3
+pytz>=2023.3
+aiohttp>=3.9.1
 
 # Development dependencies
-pytest
-pytest-cov
-flake8
-mypy
-black
-isort
-pip-tools
-safety
-bandit 
+pytest>=7.4.3
+pytest-cov>=4.1.0
+flake8>=6.1.0
+mypy>=1.7.1
+black>=23.12.1
+isort>=5.13.2
+pip-tools>=7.3.0
+safety>=2.3.5
+bandit>=1.7.7 
