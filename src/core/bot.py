@@ -43,7 +43,7 @@ class TradingBot:
         self.risk_manager = risk_manager
         self.client = AlpacaClient(config)
         self.data_feed = data_feed or DataFeed(config, self.client)
-        self.portfolio = portfolio or Portfolio(initial_balance=100000.0)  # Default initial balance
+        self.portfolio = portfolio or Portfolio(initial_capital=100000.0)  # Default initial capital
         logger.info("Trading bot initialized")
 
     def get_account_info(self) -> Dict[str, float]:
@@ -86,27 +86,15 @@ class TradingBot:
             Dictionary containing order information
         """
         try:
-            order_data = {
-                "symbol": symbol,
-                "qty": qty,
-                "side": side,
-                "type": type,
-                "time_in_force": time_in_force
-            }
-            order = self.client.submit_order(**order_data)
-            if isinstance(order, Order):
-                return {
-                    "id": order.id,
-                    "symbol": order.symbol,
-                    "qty": float(order.qty),
-                    "filled_qty": float(order.filled_qty) if order.filled_qty else 0.0,
-                    "filled_avg_price": float(order.filled_avg_price) if order.filled_avg_price else 0.0,
-                    "status": order.status,
-                    "side": order.side,
-                    "type": order.type,
-                    "time_in_force": order.time_in_force,
-                    "created_at": order.created_at
-                }
+            order = self.client.submit_order(
+                symbol=symbol,
+                qty=qty,
+                side=side,
+                type=type,
+                time_in_force=time_in_force
+            )
+            if isinstance(order, dict):
+                return order
             return None
         except Exception as e:
             logger.error(f"Error executing trade: {e}")
@@ -178,8 +166,9 @@ class TradingBot:
                             side=OrderSide.SELL
                         )
 
-                # Update portfolio
-                self.portfolio.update_balance(account_info['equity'])
+                # Update portfolio with current prices
+                prices = {symbol: data['close'].iloc[-1]}
+                self.portfolio.update_prices(prices)
 
         except Exception as e:
             logger.error(f"Error in trading bot main loop: {e}")

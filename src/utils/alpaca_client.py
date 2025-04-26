@@ -1,6 +1,6 @@
 """Alpaca API client for trading operations."""
 
-from typing import Any, Dict, List, Optional, Union
+from typing import Any, Dict, List, Optional, Union, cast
 from datetime import datetime, timedelta
 import logging
 import pandas as pd
@@ -167,9 +167,9 @@ class AlpacaClient:
                 return {
                     "id": order.id,
                     "symbol": order.symbol,
-                    "qty": float(order.qty),
-                    "filled_qty": float(order.filled_qty) if order.filled_qty else 0.0,
-                    "filled_avg_price": float(order.filled_avg_price) if order.filled_avg_price else 0.0,
+                    "qty": float(str(order.qty)) if order.qty else 0.0,
+                    "filled_qty": float(str(order.filled_qty)) if order.filled_qty else 0.0,
+                    "filled_avg_price": float(str(order.filled_avg_price)) if order.filled_avg_price else 0.0,
                     "status": order.status,
                     "side": order.side,
                     "type": order.type,
