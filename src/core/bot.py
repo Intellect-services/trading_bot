@@ -1,218 +1,185 @@
-"""Trading bot implementation."""
-import time
-from datetime import datetime, time as dt_time
-import pytz
-from typing import Dict, Any, Optional
-from alpaca.trading.client import TradingClient
-from alpaca.data.historical import StockHistoricalDataClient
-from alpaca.data.requests import StockBarsRequest
-from alpaca.data.timeframe import TimeFrame
-import pandas as pd
+"""Trading bot core module."""
 
-from src.core.strategy import Strategy
-from src.core.risk_manager import RiskManager
+from typing import Dict, List, Optional, Union, Any
+from datetime import datetime, timedelta
+import logging
+import pandas as pd
+from alpaca.trading.models import TradeAccount, Position, Order
+from alpaca.data.models import BarSet
+from alpaca.trading.enums import OrderSide, TimeInForce
+
 from src.utils.config import Config
 from src.utils.logger import setup_logger
 from src.utils.alpaca_client import AlpacaClient
+from src.core.strategy import Strategy
+from src.core.risk_manager import RiskManager
+from src.core.data_feed import DataFeed
+from src.core.portfolio import Portfolio
 
 logger = setup_logger(__name__)
 
-
 class TradingBot:
-    """Trading bot that executes strategies and manages trades."""
+    """Main trading bot class."""
 
-    def __init__(self, config: Config):
-        """Initialize the trading bot with configuration.
+    def __init__(
+        self,
+        config: Config,
+        strategy: Strategy,
+        risk_manager: RiskManager,
+        data_feed: Optional[DataFeed] = None,
+        portfolio: Optional[Portfolio] = None
+    ) -> None:
+        """Initialize the trading bot.
 
         Args:
-            config (Config): Configuration object containing bot parameters
+            config: Configuration object
+            strategy: Trading strategy instance
+            risk_manager: Risk management instance
+            data_feed: Optional data feed instance
+            portfolio: Optional portfolio instance
         """
         self.config = config
-        self.strategy = Strategy(config.to_dict())
-        self.risk_manager = RiskManager(config.to_dict())
-        self.positions: Dict[str, Dict] = {}
-        self.logger = logger
-        self.alpaca_client = AlpacaClient()
-        self.last_update: Optional[datetime] = None
-        self.start_time: datetime = datetime.now()
-        self.last_price: Optional[float] = None
+        self.strategy = strategy
+        self.risk_manager = risk_manager
+        self.client = AlpacaClient(config)
+        self.data_feed = data_feed or DataFeed(config, self.client)
+        self.portfolio = portfolio or Portfolio(config)
+        logger.info("Trading bot initialized")
 
-        self.trading_client = TradingClient(
-            api_key=self.config.ALPACA_API_KEY,
-            secret_key=self.config.ALPACA_SECRET_KEY,
-            paper=True
-        )
-
-        self.data_client = StockHistoricalDataClient(
-            api_key=self.config.ALPACA_API_KEY,
-            secret_key=self.config.ALPACA_SECRET_KEY
-        )
-
-        logger.info("Initialized trading bot")
-
-    def is_market_open(self) -> bool:
-        """Check if the market is currently open.
+    def get_account_info(self) -> Dict[str, float]:
+        """Get current account information.
 
         Returns:
-            bool: True if market is open, False otherwise
-        """
-        eastern = pytz.timezone('US/Eastern')
-        now = datetime.now(eastern)
-        current_time = now.time()
-        market_open = dt_time.fromisoformat(self.config.MARKET_OPEN)
-        market_close = dt_time.fromisoformat(self.config.MARKET_CLOSE)
-
-        is_open = (now.weekday() < 5 and
-                  market_open <= current_time <= market_close)
-
-        if not is_open:
-            self.logger.info("Market is currently closed")
-        return is_open
-
-    def get_account_info(self) -> Optional[Dict[str, float]]:
-        """Get account information.
-
-        Returns:
-            Optional[Dict[str, float]]: Account information or None if error occurs
+            Dictionary containing account metrics
         """
         try:
-            account = self.trading_client.get_account()
-            info = {
-                'equity': float(account.equity),
-                'cash': float(account.cash),
-                'buying_power': float(account.buying_power)
-            }
-            self.logger.info(
-                "Account update - Equity: $%.2f, Cash: $%.2f, Buying Power: $%.2f",
-                info['equity'], info['cash'], info['buying_power']
-            )
-            return info
+            account = self.client.get_account()
+            if isinstance(account, TradeAccount):
+                return {
+                    "equity": float(account.equity) if account.equity else 0.0,
+                    "cash": float(account.cash) if account.cash else 0.0,
+                    "buying_power": float(account.buying_power) if account.buying_power else 0.0
+                }
+            return {"equity": 0.0, "cash": 0.0, "buying_power": 0.0}
         except Exception as e:
-            self.logger.error("Error getting account info: %s", str(e))
-            return None
+            logger.error(f"Error getting account info: {e}")
+            return {"equity": 0.0, "cash": 0.0, "buying_power": 0.0}
 
-    def place_order(
+    def execute_trade(
         self,
         symbol: str,
         qty: float,
-        side: str,
-        order_type: str = 'market'
+        side: OrderSide,
+        type: str = "market",
+        time_in_force: TimeInForce = TimeInForce.DAY
     ) -> Optional[Dict[str, Any]]:
-        """Place a trading order.
+        """Execute a trading order.
 
         Args:
-            symbol: Trading symbol
-            qty: Order quantity
-            side: Order side ('buy' or 'sell')
-            order_type: Order type (default: 'market')
+            symbol: Stock symbol
+            qty: Number of shares
+            side: Order side (buy/sell)
+            type: Order type
+            time_in_force: Time in force for the order
 
         Returns:
-            Optional[Dict[str, Any]]: Order information or None if error occurs
+            Dictionary containing order information
         """
         try:
-            order = self.trading_client.submit_order(
-                symbol=symbol,
-                qty=qty,
-                side=side,
-                type=order_type,
-                time_in_force='day'
-            )
-            self.logger.info(
-                "Order placed - Symbol: %s, Side: %s, Qty: %.2f, Price: $%.2f, Status: %s",
-                symbol, side, qty, float(order.filled_avg_price), order.status
-            )
-            return order
-        except Exception as e:
-            self.logger.error("Error placing order: %s", str(e))
-            return None
-
-    def update_positions(self) -> None:
-        """Update current positions."""
-        try:
-            positions = self.trading_client.get_all_positions()
-            for position in positions:
-                symbol = position.symbol
-                current_price = float(position.current_price)
-                qty = float(position.qty)
-                self.positions[symbol] = {
-                    'quantity': qty,
-                    'current_price': current_price,
-                    'market_value': float(position.market_value)
+            order_data = {
+                "symbol": symbol,
+                "qty": qty,
+                "side": side,
+                "type": type,
+                "time_in_force": time_in_force
+            }
+            order = self.client.submit_order(**order_data)
+            if isinstance(order, Order):
+                return {
+                    "id": order.id,
+                    "symbol": order.symbol,
+                    "qty": float(order.qty),
+                    "filled_qty": float(order.filled_qty) if order.filled_qty else 0.0,
+                    "filled_avg_price": float(order.filled_avg_price) if order.filled_avg_price else 0.0,
+                    "status": order.status,
+                    "side": order.side,
+                    "type": order.type,
+                    "time_in_force": order.time_in_force,
+                    "created_at": order.created_at
                 }
-                self.logger.info(
-                    "Position update - Symbol: %s, Qty: %.2f shares @ $%.2f",
-                    symbol, qty, current_price
-                )
+            return None
         except Exception as e:
-            self.logger.error("Error monitoring positions: %s", str(e))
-
-    def get_market_data(self, symbol: str, timeframe: str = '1D', limit: int = 100) -> Optional[pd.DataFrame]:
-        """Get market data for a symbol.
-
-        Args:
-            symbol: Trading symbol
-            timeframe: Timeframe for the data (default: '1D')
-            limit: Number of bars to retrieve (default: 100)
-
-        Returns:
-            Optional[pd.DataFrame]: Market data or None if error occurs
-        """
-        try:
-            request_params = StockBarsRequest(
-                symbol_or_symbols=symbol,
-                timeframe=TimeFrame.Day,
-                limit=limit
-            )
-            bars = self.data_client.get_stock_bars(request_params)
-            return bars.df
-        except Exception as e:
-            self.logger.error("Error getting market data: %s", str(e))
+            logger.error(f"Error executing trade: {e}")
             return None
 
-    def execute_strategy(self) -> None:
-        """Execute the trading strategy."""
-        if not self.is_market_open():
-            return
+    def get_position(self, symbol: str) -> Optional[Dict[str, Any]]:
+        """Get position information for a symbol.
 
+        Args:
+            symbol: Stock symbol
+
+        Returns:
+            Dictionary containing position information
+        """
         try:
-            # Get latest market data
-            data = self.get_market_data(self.config.DEFAULT_SYMBOL)
-            if data is None:
-                return
-
-            # Generate signals from strategy
-            signals = self.strategy.generate_signals(data)
-
-            # Apply risk management
-            signals = self.risk_manager.apply_risk_management(signals)
-
-            # Execute trades based on signals
-            for _, signal in signals.iterrows():
-                if signal['signal'] != 0:  # Buy or sell signal
-                    self.place_order(
-                        symbol=self.config.DEFAULT_SYMBOL,
-                        qty=signal['position_size'],
-                        side='buy' if signal['signal'] > 0 else 'sell'
-                    )
-
+            positions = self.client.get_positions()
+            for pos in positions:
+                if isinstance(pos, Position) and pos.symbol == symbol:
+                    return {
+                        "symbol": pos.symbol,
+                        "qty": float(pos.qty),
+                        "current_price": float(pos.current_price) if pos.current_price else 0.0,
+                        "market_value": float(pos.market_value) if pos.market_value else 0.0
+                    }
+            return None
         except Exception as e:
-            self.logger.error("Error executing strategy: %s", str(e))
+            logger.error(f"Error getting position: {e}")
+            return None
 
     def run(self) -> None:
-        """Main trading loop."""
-        self.logger.info("Starting trading bot...")
+        """Run the trading bot's main loop."""
+        try:
+            while True:
+                # Get account information
+                account_info = self.get_account_info()
+                logger.info(f"Account info: {account_info}")
 
-        while True:
-            try:
-                if self.is_market_open():
-                    self.update_positions()
-                    self.execute_strategy()
+                # Get market data
+                data = self.data_feed.get_latest_data(self.config.SYMBOL)
+                if data is None or data.empty:
+                    logger.warning("No data available")
+                    continue
 
-                time.sleep(int(self.config.get('UPDATE_INTERVAL', 60)))
+                # Generate trading signals
+                signals = self.strategy.generate_signals(data)
+                if signals is None or signals.empty:
+                    logger.info("No signals generated")
+                    continue
 
-            except KeyboardInterrupt:
-                self.logger.info("Stopping trading bot...")
-                break
-            except Exception as e:
-                self.logger.error("Error in main loop: %s", str(e))
-                time.sleep(int(self.config.get('ERROR_RETRY_INTERVAL', 60))) 
+                # Apply risk management
+                signals = self.risk_manager.apply_risk_management(signals, account_info)
+                if signals is None or signals.empty:
+                    logger.info("No valid signals after risk management")
+                    continue
+
+                # Execute trades
+                for _, signal in signals.iterrows():
+                    if signal['action'] == 'buy':
+                        self.execute_trade(
+                            symbol=signal['symbol'],
+                            qty=signal['size'],
+                            side=OrderSide.BUY
+                        )
+                    elif signal['action'] == 'sell':
+                        self.execute_trade(
+                            symbol=signal['symbol'],
+                            qty=signal['size'],
+                            side=OrderSide.SELL
+                        )
+
+                # Update portfolio
+                self.portfolio.update(account_info)
+
+        except Exception as e:
+            logger.error(f"Error in trading bot main loop: {e}")
+            raise 
