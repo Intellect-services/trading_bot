@@ -1,0 +1,19 @@
+# Core dependencies
+alpaca-trade-api
+flask
+flask-socketio
+python-dotenv
+pandas
+numpy
+pytz
+
+# Development dependencies
+pytest
+pytest-cov
+flake8
+mypy
+black
+isort
+pip-tools
+safety
+bandit 

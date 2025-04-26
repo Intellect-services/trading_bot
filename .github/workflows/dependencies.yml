@@ -1,0 +1,34 @@
+name: Dependencies
+
+on:
+  schedule:
+    - cron: "0 0 * * 0" # Run weekly on Sunday
+  workflow_dispatch: # Allow manual triggering
+
+jobs:
+  update:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v3
+
+      - name: Set up Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: "3.10"
+
+      - name: Install pip-tools
+        run: pip install pip-tools
+
+      - name: Check for updates
+        run: |
+          pip-compile --upgrade --output-file requirements.txt requirements.in
+
+      - name: Create Pull Request
+        uses: peter-evans/create-pull-request@v4
+        with:
+          title: "Update dependencies"
+          body: "Automated dependency updates"
+          branch: "dependencies/update"
+          commit-message: "Update dependencies"
+          author: "github-actions[bot] <github-actions[bot]@users.noreply.github.com>"
+          labels: dependencies
