@@ -1,59 +1,73 @@
-import numpy as np
-import pandas as pd
-from typing import Dict, Any, List
+"""Backtesting metrics module."""
 
-def calculate_metrics(returns: pd.Series, trades: List[Dict[str, Any]]) -> Dict[str, float]:
-    """Calculate performance metrics for a strategy"""
-    metrics = {}
+from typing import Dict, List, Any
+import pandas as pd
+import numpy as np
+
+
+def calculate_metrics(trades: List[Dict[str, Any]], initial_capital: float) -> Dict[str, float]:
+    """Calculate performance metrics from trade history.
     
-    # Basic return metrics
-    metrics['total_return'] = (returns + 1).prod() - 1
-    metrics['annual_return'] = (1 + metrics['total_return']) ** (252 / len(returns)) - 1
-    
-    # Risk metrics
-    metrics['volatility'] = returns.std() * np.sqrt(252)
-    metrics['sharpe_ratio'] = metrics['annual_return'] / metrics['volatility'] if metrics['volatility'] != 0 else 0
-    
-    # Drawdown metrics
-    cum_returns = (1 + returns).cumprod()
-    running_max = cum_returns.expanding().max()
-    drawdowns = (cum_returns - running_max) / running_max
-    metrics['max_drawdown'] = drawdowns.min()
-    metrics['avg_drawdown'] = drawdowns[drawdowns < 0].mean()
-    
-    # Trade metrics
-    if trades:
-        win_trades = [t for t in trades if t['type'] == 'sell' and t['price'] > t.get('entry_price', 0)]
-        loss_trades = [t for t in trades if t['type'] == 'sell' and t['price'] <= t.get('entry_price', 0)]
+    Args:
+        trades: List of trade dictionaries
+        initial_capital: Initial capital amount
         
-        metrics['total_trades'] = len(trades) // 2  # Each trade has a buy and sell
-        metrics['win_rate'] = len(win_trades) / (len(win_trades) + len(loss_trades)) if (len(win_trades) + len(loss_trades)) > 0 else 0
+    Returns:
+        Dictionary containing performance metrics
+    """
+    if not trades:
+        return {
+            'total_return': 0.0,
+            'sharpe_ratio': 0.0,
+            'max_drawdown': 0.0,
+            'win_rate': 0.0
+        }
         
-        # Calculate average win/loss
-        if win_trades:
-            metrics['avg_win'] = np.mean([t['price'] / t.get('entry_price', t['price']) - 1 for t in win_trades])
-        if loss_trades:
-            metrics['avg_loss'] = np.mean([t['price'] / t.get('entry_price', t['price']) - 1 for t in loss_trades])
-        
-        # Calculate profit factor
-        total_profit = sum([t['price'] - t.get('entry_price', t['price']) for t in win_trades])
-        total_loss = abs(sum([t['price'] - t.get('entry_price', t['price']) for t in loss_trades]))
-        metrics['profit_factor'] = total_profit / total_loss if total_loss != 0 else float('inf')
+    # Convert trades to DataFrame
+    df = pd.DataFrame(trades)
+    df['timestamp'] = pd.to_datetime(df['timestamp'])
+    df.set_index('timestamp', inplace=True)
     
-    return metrics
+    # Calculate returns
+    df['returns'] = df['value'].pct_change()
+    total_return = (df['value'].iloc[-1] - initial_capital) / initial_capital
+    
+    # Calculate Sharpe ratio
+    risk_free_rate = 0.02  # 2% annual risk-free rate
+    excess_returns = df['returns'] - risk_free_rate / 252  # Daily risk-free rate
+    sharpe_ratio = np.sqrt(252) * excess_returns.mean() / excess_returns.std()
+    
+    # Calculate maximum drawdown
+    rolling_max = df['value'].expanding().max()
+    drawdowns = df['value'] / rolling_max - 1
+    max_drawdown = drawdowns.min()
+    
+    # Calculate win rate
+    profitable_trades = len(df[df['returns'] > 0])
+    win_rate = profitable_trades / len(df) if len(df) > 0 else 0.0
+    
+    return {
+        'total_return': float(total_return),
+        'sharpe_ratio': float(sharpe_ratio),
+        'max_drawdown': float(max_drawdown),
+        'win_rate': float(win_rate)
+    }
+
 
 def format_metrics(metrics: Dict[str, float]) -> Dict[str, str]:
     """Format metrics for display"""
     formatted = {}
     for key, value in metrics.items():
-        if key in ['total_return', 'annual_return', 'volatility', 'avg_win', 'avg_loss', 'max_drawdown', 'avg_drawdown']:
+        if key in [
+            "total_return",
+            "annualized_return",
+            "volatility",
+            "max_drawdown",
+            "win_rate",
+        ]:
             formatted[key] = f"{value:.2%}"
-        elif key in ['sharpe_ratio', 'profit_factor']:
+        elif key in ["sharpe_ratio"]:
             formatted[key] = f"{value:.2f}"
-        elif key in ['win_rate']:
-            formatted[key] = f"{value:.1%}"
-        elif key in ['total_trades']:
-            formatted[key] = f"{int(value)}"
         else:
             formatted[key] = str(value)
-    return formatted 
+    return formatted

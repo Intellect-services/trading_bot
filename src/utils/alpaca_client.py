@@ -18,6 +18,7 @@ from src.utils.logger import setup_logger
 
 logger = setup_logger(__name__)
 
+
 class AlpacaClient:
     """Client for interacting with Alpaca API."""
 
@@ -31,11 +32,10 @@ class AlpacaClient:
         self.trading_client = TradingClient(
             api_key=config.ALPACA_API_KEY,
             secret_key=config.ALPACA_SECRET_KEY,
-            paper=config.PAPER_TRADING if hasattr(config, 'PAPER_TRADING') else True
+            paper=config.PAPER_TRADING if hasattr(config, "PAPER_TRADING") else True,
         )
         self.data_client = StockHistoricalDataClient(
-            api_key=config.ALPACA_API_KEY,
-            secret_key=config.ALPACA_SECRET_KEY
+            api_key=config.ALPACA_API_KEY, secret_key=config.ALPACA_SECRET_KEY
         )
         logger.info("Alpaca client initialized")
 
@@ -53,21 +53,41 @@ class AlpacaClient:
                     "status": account.status,
                     "currency": account.currency,
                     "cash": float(account.cash) if account.cash else 0.0,
-                    "portfolio_value": float(account.portfolio_value) if account.portfolio_value else 0.0,
-                    "buying_power": float(account.buying_power) if account.buying_power else 0.0,
-                    "initial_margin": float(account.initial_margin) if account.initial_margin else 0.0,
-                    "maintenance_margin": float(account.maintenance_margin) if account.maintenance_margin else 0.0,
-                    "daytrading_buying_power": float(account.daytrading_buying_power) if account.daytrading_buying_power else 0.0,
+                    "portfolio_value": (
+                        float(account.portfolio_value)
+                        if account.portfolio_value
+                        else 0.0
+                    ),
+                    "buying_power": (
+                        float(account.buying_power) if account.buying_power else 0.0
+                    ),
+                    "initial_margin": (
+                        float(account.initial_margin) if account.initial_margin else 0.0
+                    ),
+                    "maintenance_margin": (
+                        float(account.maintenance_margin)
+                        if account.maintenance_margin
+                        else 0.0
+                    ),
+                    "daytrading_buying_power": (
+                        float(account.daytrading_buying_power)
+                        if account.daytrading_buying_power
+                        else 0.0
+                    ),
                     "equity": float(account.equity) if account.equity else 0.0,
-                    "last_equity": float(account.last_equity) if account.last_equity else 0.0,
-                    "multiplier": float(account.multiplier) if account.multiplier else 0.0,
+                    "last_equity": (
+                        float(account.last_equity) if account.last_equity else 0.0
+                    ),
+                    "multiplier": (
+                        float(account.multiplier) if account.multiplier else 0.0
+                    ),
                     "shorting_enabled": account.shorting_enabled,
                     "pattern_day_trader": account.pattern_day_trader,
                     "trading_blocked": account.trading_blocked,
                     "transfers_blocked": account.transfers_blocked,
                     "account_blocked": account.account_blocked,
                     "created_at": account.created_at,
-                    "trade_suspended_by_user": account.trade_suspended_by_user
+                    "trade_suspended_by_user": account.trade_suspended_by_user,
                 }
             return {}
         except Exception as e:
@@ -87,13 +107,29 @@ class AlpacaClient:
                     "symbol": pos.symbol,
                     "qty": float(pos.qty),
                     "avg_entry_price": float(pos.avg_entry_price),
-                    "market_value": float(pos.market_value) if pos.market_value else 0.0,
-                    "current_price": float(pos.current_price) if pos.current_price else 0.0,
-                    "unrealized_pl": float(pos.unrealized_pl) if pos.unrealized_pl else 0.0,
-                    "unrealized_plpc": float(pos.unrealized_plpc) if pos.unrealized_plpc else 0.0,
-                    "unrealized_intraday_pl": float(pos.unrealized_intraday_pl) if pos.unrealized_intraday_pl else 0.0,
-                    "unrealized_intraday_plpc": float(pos.unrealized_intraday_plpc) if pos.unrealized_intraday_plpc else 0.0,
-                    "side": pos.side
+                    "market_value": (
+                        float(pos.market_value) if pos.market_value else 0.0
+                    ),
+                    "current_price": (
+                        float(pos.current_price) if pos.current_price else 0.0
+                    ),
+                    "unrealized_pl": (
+                        float(pos.unrealized_pl) if pos.unrealized_pl else 0.0
+                    ),
+                    "unrealized_plpc": (
+                        float(pos.unrealized_plpc) if pos.unrealized_plpc else 0.0
+                    ),
+                    "unrealized_intraday_pl": (
+                        float(pos.unrealized_intraday_pl)
+                        if pos.unrealized_intraday_pl
+                        else 0.0
+                    ),
+                    "unrealized_intraday_plpc": (
+                        float(pos.unrealized_intraday_plpc)
+                        if pos.unrealized_intraday_plpc
+                        else 0.0
+                    ),
+                    "side": pos.side,
                 }
                 for pos in positions
                 if isinstance(pos, Position)
@@ -103,11 +139,7 @@ class AlpacaClient:
             return []
 
     def get_historical_bars(
-        self,
-        symbol: str,
-        timeframe: str,
-        start: datetime,
-        end: datetime
+        self, symbol: str, timeframe: str, start: datetime, end: datetime
     ) -> Optional[pd.DataFrame]:
         """Get historical price data.
 
@@ -123,12 +155,14 @@ class AlpacaClient:
         try:
             request_params = StockBarsRequest(
                 symbol_or_symbols=symbol,
-                timeframe=TimeFrame(timeframe, unit='min' if 'm' in timeframe else 'day'),
+                timeframe=TimeFrame(
+                    timeframe, unit="min" if "m" in timeframe else "day"
+                ),
                 start=start,
-                end=end
+                end=end,
             )
             bars = self.data_client.get_stock_bars(request_params)
-            if isinstance(bars, BarSet) and hasattr(bars, 'df'):
+            if isinstance(bars, BarSet) and hasattr(bars, "df"):
                 return bars.df
             return None
         except Exception as e:
@@ -141,7 +175,7 @@ class AlpacaClient:
         qty: float,
         side: OrderSide,
         type: str = "market",
-        time_in_force: TimeInForce = TimeInForce.DAY
+        time_in_force: TimeInForce = TimeInForce.DAY,
     ) -> Optional[Dict[str, Any]]:
         """Submit a trading order.
 
@@ -157,10 +191,7 @@ class AlpacaClient:
         """
         try:
             order_data = MarketOrderRequest(
-                symbol=symbol,
-                qty=qty,
-                side=side,
-                time_in_force=time_in_force
+                symbol=symbol, qty=qty, side=side, time_in_force=time_in_force
             )
             order = self.trading_client.submit_order(order_data)
             if isinstance(order, Order):
@@ -168,15 +199,21 @@ class AlpacaClient:
                     "id": order.id,
                     "symbol": order.symbol,
                     "qty": float(str(order.qty)) if order.qty else 0.0,
-                    "filled_qty": float(str(order.filled_qty)) if order.filled_qty else 0.0,
-                    "filled_avg_price": float(str(order.filled_avg_price)) if order.filled_avg_price else 0.0,
+                    "filled_qty": (
+                        float(str(order.filled_qty)) if order.filled_qty else 0.0
+                    ),
+                    "filled_avg_price": (
+                        float(str(order.filled_avg_price))
+                        if order.filled_avg_price
+                        else 0.0
+                    ),
                     "status": order.status,
                     "side": order.side,
                     "type": order.type,
                     "time_in_force": order.time_in_force,
-                    "created_at": order.created_at
+                    "created_at": order.created_at,
                 }
             return None
         except Exception as e:
             logger.error(f"Error submitting order: {e}")
-            return None 
+            return None

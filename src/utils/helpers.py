@@ -1,4 +1,5 @@
 """Helper functions for trading calculations and formatting."""
+
 from typing import Union, Optional
 from decimal import Decimal
 
@@ -8,7 +9,7 @@ def calculate_position_size(
     risk_per_trade: float,
     entry_price: float,
     stop_loss: Optional[float] = None,
-    leverage: float = 1.0
+    leverage: float = 1.0,
 ) -> float:
     """
     Calculate the position size based on risk parameters.
@@ -42,7 +43,7 @@ def format_price(
     price: Union[float, Decimal],
     decimals: int = 8,
     include_currency: bool = False,
-    currency_symbol: str = "$"
+    currency_symbol: str = "$",
 ) -> str:
     """
     Format a price value with specified decimal places and optional currency symbol.
@@ -57,12 +58,12 @@ def format_price(
         str: Formatted price string
     """
     formatted_price = f"{float(price):.{decimals}f}"
-    
+
     # Remove trailing zeros after decimal point
     if "." in formatted_price:
         formatted_price = formatted_price.rstrip("0").rstrip(".")
-    
+
     if include_currency:
         return f"{currency_symbol}{formatted_price}"
-    
-    return formatted_price 
+
+    return formatted_price

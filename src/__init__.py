@@ -6,4 +6,4 @@ from src.utils.config import Config
 
 __all__ = ["Strategy", "RiskManager", "Config"]
 
-__version__ = "0.1.0" 
+__version__ = "0.1.0"

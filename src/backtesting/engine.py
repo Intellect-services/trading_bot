@@ -1,194 +1,273 @@
 """Backtesting engine module."""
-from typing import Any, Dict, List, Optional
-from datetime import datetime
+
+from datetime import datetime, timedelta
+from typing import Dict, List, Any, Optional
 import pandas as pd
 import numpy as np
 
+from src.utils.config import Config
 from src.core.strategy import Strategy
 from src.core.risk_manager import RiskManager
-from src.core.data_feed import DataFeed
 from src.core.portfolio import Portfolio
-from src.core.order import Order
-from src.core.position import Position
-from src.core.trade import Trade
+from src.core.data_feed import DataFeed
+from src.utils.logger import setup_logger
+
+logger = setup_logger(__name__)
+
 
 class BacktestingEngine:
+    """Engine for backtesting trading strategies."""
+
     def __init__(
         self,
+        config: Config,
         strategy: Strategy,
-        risk_manager: RiskManager,
         data_feed: DataFeed,
         initial_capital: float = 100000.0,
         commission: float = 0.001,
         slippage: float = 0.001
     ):
-        """Initialize the backtesting engine.
-
+        """Initialize backtesting engine.
+        
         Args:
-            strategy: Trading strategy instance
-            risk_manager: Risk management instance
-            data_feed: Data feed instance
-            initial_capital: Initial capital amount
-            commission: Commission rate
-            slippage: Slippage rate
+            config: Configuration object
+            strategy: Trading strategy to test
+            data_feed: Data feed for historical data
+            initial_capital: Initial capital (default: 100000.0)
+            commission: Commission rate (default: 0.001)
+            slippage: Slippage rate (default: 0.001)
         """
+        self.config = config
         self.strategy = strategy
-        self.risk_manager = risk_manager
         self.data_feed = data_feed
         self.initial_capital = initial_capital
         self.commission = commission
         self.slippage = slippage
         
         self.portfolio = Portfolio(initial_capital)
-        self.positions: Dict[str, Position] = {}
-        self.trades: List[Trade] = []
-        self.orders: List[Order] = []
+        self.risk_manager = RiskManager(config)
         
+        self.positions: Dict[str, Dict[str, Any]] = {}
+        self.trades: List[Dict[str, Any]] = []
         self.current_time: Optional[datetime] = None
         self.current_data: Dict[str, pd.DataFrame] = {}
         
-    def run(self, start_date: datetime, end_date: datetime) -> Dict[str, Any]:
-        """Run the backtest simulation.
+        logger.info("Backtesting engine initialized")
 
+    def run(self, symbol: str, start: datetime, end: datetime) -> Dict[str, Any]:
+        """Run backtest simulation.
+        
         Args:
-            start_date: Start date for the backtest
-            end_date: End date for the backtest
-
+            symbol: Symbol to backtest
+            start: Start date
+            end: End date
+            
         Returns:
-            Dict containing performance metrics
+            Dictionary containing backtest results
         """
-        # Get historical data for the period
-        historical_data = self.data_feed.get_historical_data(
-            symbol=self.strategy.config['symbol'],
-            timeframe=self.strategy.config['timeframe'],
-            start=start_date,
-            end=end_date
-        )
+        try:
+            logger.info(f"Starting backtest for {symbol} from {start} to {end}")
+            
+            # Get historical data
+            data = self.data_feed.get_historical_data(
+                symbol=symbol,
+                lookback_days=(end - start).days,
+                timeframe="1D"
+            )
+            if data.empty:
+                logger.error("No historical data available")
+                return {}
+            
+            # Initialize strategy
+            self.strategy.initialize_symbol(symbol, data)
+            
+            # Run simulation
+            for timestamp in data.index:
+                self.current_time = timestamp
+                row_data = data.loc[timestamp].to_dict()
+                row_data["timestamp"] = timestamp
+                self._update_portfolio(symbol, row_data)
+            
+            # Calculate performance metrics
+            results = self._calculate_performance_metrics()
+            logger.info("Backtest completed")
+            return results
+        except Exception as e:
+            logger.error(f"Error running backtest: {e}")
+            return {}
+
+    def _update_portfolio(self, symbol: str, data: Dict[str, Any]) -> None:
+        """Update portfolio based on new data.
         
-        if historical_data is None or historical_data.empty:
-            raise ValueError("No historical data available for backtesting")
-        
-        # Main simulation loop
-        for timestamp, data in historical_data.groupby(level=0):
-            self.current_time = timestamp
-            self.current_data = {self.strategy.config['symbol']: data}
+        Args:
+            symbol: Symbol being traded
+            data: Current market data
+        """
+        try:
+            # Get trading signal
+            signal = self.strategy.generate_signals(pd.DataFrame([data])).iloc[-1]["signal"]
+            if signal is None:
+                return
             
-            # Update portfolio and positions
-            self._update_portfolio()
-            
-            # Generate signals from strategy
-            signals = self.strategy.generate_signals(data)
-            
-            # Apply risk management
-            signals = self.risk_manager.apply_risk_management(signals)
+            # Check risk management
+            position = self.portfolio.get_position(symbol) or {}
+            if not self.risk_manager.apply_risk_management(
+                price=float(data["close"]),
+                position=position,
+                account_value=self.portfolio.get_value()
+            ):
+                logger.debug("Risk check failed at %s", self.current_time)
+                return
             
             # Execute trades
-            self._execute_trades(signals)
-            
-            # Update performance metrics
-            self._update_performance()
-        
-        # Calculate final performance metrics
-        return self._calculate_performance_metrics()
-    
-    def _update_portfolio(self) -> None:
-        """Update portfolio values based on current market data."""
-        prices = {}
-        for symbol, data in self.current_data.items():
-            if not data.empty:
-                prices[symbol] = data['close'].iloc[-1]
-        
-        self.portfolio.update_prices(prices)
-    
-    def _execute_trades(self, signals: pd.DataFrame) -> None:
-        """Execute trades based on signals.
+            self._execute_trades(symbol, signal, data)
+        except Exception as e:
+            logger.error("Error updating portfolio: %s", e)
 
+    def _execute_trades(self, symbol: str, signal: int, data: Dict[str, Any]) -> None:
+        """Execute trades based on signal.
+        
         Args:
-            signals: DataFrame containing trading signals
+            symbol: Symbol to trade
+            signal: Trading signal (1: buy, -1: sell, 0: hold)
+            data: Current market data
         """
-        if signals is None or signals.empty:
-            return
-
-        for _, signal in signals.iterrows():
-            symbol = signal['symbol']
-            if symbol not in self.current_data:
-                continue
+        try:
+            if signal == 0:
+                return
+            
+            position = self.portfolio.get_position(symbol)
+            size = self.portfolio.calculate_position_size(float(data["close"]))
+            
+            if size == 0:
+                logger.debug(f"Position size is 0 at {self.current_time}")
+                return
+            
+            price = float(data["close"]) * (1 + self.slippage if signal > 0 else 1 - self.slippage)
+            commission = price * size * self.commission
+            
+            if signal > 0 and (position is None or position["size"] < size):
+                # Buy or increase position
+                qty = size - (position["size"] if position else 0)
+                cost = price * qty + commission
                 
-            current_price = self.current_data[symbol]['close'].iloc[-1]
+                if cost <= self.portfolio.get_balance():
+                    self.portfolio.execute_order(
+                        symbol=symbol,
+                        qty=qty,
+                        side="buy",
+                        price=price
+                    )
+                    self.trades.append({
+                        "timestamp": self.current_time,
+                        "symbol": symbol,
+                        "side": "buy",
+                        "qty": qty,
+                        "price": price,
+                        "commission": commission,
+                        "portfolio_value": self.portfolio.get_value()
+                    })
+                    logger.debug(f"Buy {qty} shares at {price} at {self.current_time}")
             
-            # Calculate position size
-            if signal['action'] == 'buy':
-                position_size = self.strategy.calculate_position_size(current_price)
-            elif signal['action'] == 'sell':
-                position_size = -self.strategy.calculate_position_size(current_price)
-            else:
-                continue
-            
-            # Update portfolio position
-            self.portfolio.update_position(
-                symbol=symbol,
-                quantity=position_size,
-                price=current_price,
-                timestamp=self.current_time
-            )
-    
-    def _update_performance(self) -> None:
-        """Update performance metrics for current time period."""
-        # Portfolio metrics are updated automatically by update_position and update_prices
-        pass
-    
+            elif signal < 0 and position is not None and position["size"] > 0:
+                # Sell or decrease position
+                qty = position["size"]
+                self.portfolio.execute_order(
+                    symbol=symbol,
+                    qty=qty,
+                    side="sell",
+                    price=price
+                )
+                self.trades.append({
+                    "timestamp": self.current_time,
+                    "symbol": symbol,
+                    "side": "sell",
+                    "qty": qty,
+                    "price": price,
+                    "commission": commission,
+                    "portfolio_value": self.portfolio.get_value()
+                })
+                logger.debug(f"Sell {qty} shares at {price} at {self.current_time}")
+        except Exception as e:
+            logger.error(f"Error executing trades: {e}")
+
     def _calculate_performance_metrics(self) -> Dict[str, Any]:
-        """Calculate final performance metrics.
-
+        """Calculate performance metrics.
+        
         Returns:
-            Dict containing performance metrics
+            Dictionary containing performance metrics
         """
-        # Calculate portfolio metrics
-        portfolio_returns = self.portfolio.get_returns()
-        total_return = (self.portfolio.equity / self.initial_capital) - 1
-        sharpe_ratio = self._calculate_sharpe_ratio(portfolio_returns)
-        max_drawdown = self._calculate_max_drawdown(portfolio_returns)
-        
-        # Calculate trade metrics
-        total_trades = len(self.portfolio.trades)
-        winning_trades = len([t for t in self.portfolio.trades if t['value'] > 0])
-        win_rate = winning_trades / total_trades if total_trades > 0 else 0
-        
-        return {
-            'total_return': total_return,
-            'sharpe_ratio': sharpe_ratio,
-            'max_drawdown': max_drawdown,
-            'total_trades': total_trades,
-            'win_rate': win_rate,
-            'final_portfolio_value': self.portfolio.equity,
-            'final_cash': self.portfolio.cash
-        }
-    
-    def _calculate_sharpe_ratio(self, returns: pd.Series, risk_free_rate: float = 0.02) -> float:
+        try:
+            # Get portfolio value history
+            equity_curve = pd.Series(
+                [trade["portfolio_value"] for trade in self.trades],
+                index=[trade["timestamp"] for trade in self.trades]
+            )
+            
+            # Calculate returns
+            returns = equity_curve.pct_change().dropna()
+            
+            # Calculate metrics
+            total_return = (equity_curve.iloc[-1] - self.initial_capital) / self.initial_capital
+            sharpe_ratio = self._calculate_sharpe_ratio(returns)
+            max_drawdown = self._calculate_max_drawdown(equity_curve)
+            
+            return {
+                "initial_capital": self.initial_capital,
+                "final_capital": float(equity_curve.iloc[-1]),
+                "total_return": float(total_return),
+                "sharpe_ratio": float(sharpe_ratio),
+                "max_drawdown": float(max_drawdown),
+                "total_trades": len(self.trades),
+                "equity_curve": equity_curve.to_dict(),
+                "trades": self.trades
+            }
+        except Exception as e:
+            logger.error(f"Error calculating performance metrics: {e}")
+            return {}
+
+    def _calculate_sharpe_ratio(self, returns: pd.Series) -> float:
         """Calculate Sharpe ratio.
-
+        
         Args:
             returns: Series of returns
-            risk_free_rate: Annual risk-free rate
-
+            
         Returns:
-            float: Sharpe ratio
+            Sharpe ratio
         """
-        excess_returns = returns - risk_free_rate/252  # Daily risk-free rate
-        if len(excess_returns) < 2:
+        try:
+            if returns.empty:
+                return 0.0
+            
+            risk_free_rate = 0.02  # Assume 2% annual risk-free rate
+            excess_returns = returns - risk_free_rate / 252  # Daily risk-free rate
+            
+            if excess_returns.std() == 0:
+                return 0.0
+            
+            sharpe = np.sqrt(252) * excess_returns.mean() / excess_returns.std()
+            return float(sharpe)
+        except Exception as e:
+            logger.error(f"Error calculating Sharpe ratio: {e}")
             return 0.0
-        return np.sqrt(252) * excess_returns.mean() / excess_returns.std()
-    
-    def _calculate_max_drawdown(self, returns: pd.Series) -> float:
+
+    def _calculate_max_drawdown(self, equity_curve: pd.Series) -> float:
         """Calculate maximum drawdown.
-
+        
         Args:
-            returns: Series of returns
-
+            equity_curve: Series of portfolio values
+            
         Returns:
-            float: Maximum drawdown
+            Maximum drawdown as a percentage
         """
-        cumulative_returns = (1 + returns).cumprod()
-        running_max = cumulative_returns.expanding().max()
-        drawdowns = (cumulative_returns - running_max) / running_max
-        return drawdowns.min() 
+        try:
+            if equity_curve.empty:
+                return 0.0
+            
+            rolling_max = equity_curve.expanding().max()
+            drawdowns = equity_curve / rolling_max - 1
+            max_drawdown = drawdowns.min()
+            return float(max_drawdown)
+        except Exception as e:
+            logger.error(f"Error calculating max drawdown: {e}")
+            return 0.0

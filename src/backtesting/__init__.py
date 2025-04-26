@@ -2,8 +2,7 @@
 Backtesting module for strategy evaluation.
 """
 
-from .backtest import Backtest
-from .data_loader import DataLoader
-from .performance import PerformanceMetrics
+from src.backtesting.engine import BacktestingEngine
+from src.backtesting.metrics import calculate_metrics, format_metrics
 
-__all__ = ['Backtest', 'DataLoader', 'PerformanceMetrics'] 
+__all__ = ['BacktestingEngine', 'calculate_metrics', 'format_metrics']
