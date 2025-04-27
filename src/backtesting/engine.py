@@ -43,7 +43,13 @@ class BacktestingEngine:
         self.commission = commission
         self.slippage = slippage
         self.portfolio = Portfolio(initial_capital)
-        self.risk_manager = RiskManager(Config())
+        self.risk_manager = RiskManager({
+            'RISK_FREE_RATE': 0.02,
+            'RISK_MAX_POSITION_SIZE': 0.1,
+            'RISK_STOP_LOSS_PCT': 0.02,
+            'RISK_MAX_DRAWDOWN': 0.1,
+            'RISK_PER_TRADE': 0.01
+        })
         self.positions: Dict[str, Dict[str, Any]] = {}
         self.logger = logging.getLogger(__name__)
         self.trade_history: List[Dict[str, Any]] = []
