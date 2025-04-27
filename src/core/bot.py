@@ -33,7 +33,14 @@ class TradingBot:
     def __init__(self, config: Dict[str, Any]) -> None:
         """Initialize trading bot."""
         self.config = config
-        self.client = AlpacaClient(config)
+        # Convert dict to Config object for AlpacaClient
+        config_obj = Config(
+            api_key=config['API_KEY'],
+            secret_key=config['SECRET_KEY'],
+            paper=config.get('PAPER', True),
+            initial_balance=config.get('INITIAL_BALANCE', 10000.0)
+        )
+        self.client = AlpacaClient(config_obj)
         self.data_feed = DataFeed(self.client)
         self.portfolio = Portfolio(config['INITIAL_BALANCE'])
         self.risk_manager = RiskManager(config)

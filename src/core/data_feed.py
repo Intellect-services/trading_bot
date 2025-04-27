@@ -142,6 +142,9 @@ class DataFeed:
             # Ensure RSI values are numeric and handle NaN values
             df['rsi'] = pd.to_numeric(df['rsi'], errors='coerce').fillna(50)
             
+            # Convert Series to float for comparison
+            df['rsi'] = df['rsi'].astype(float)
+            
             # Update stored data
             self.data[symbol] = df
         except Exception as e:
