@@ -10,6 +10,7 @@ from alpaca.trading.models import TradeAccount, Position, Order
 from alpaca.data.historical import StockHistoricalDataClient
 from alpaca.data.requests import StockBarsRequest
 from alpaca.data.timeframe import TimeFrame
+from alpaca.data.models import Bar
 
 from src.utils.config import Config
 from src.utils.logger import setup_logger
@@ -39,18 +40,18 @@ class AlpacaClient:
             account = cast(TradeAccount, self._client.get_account())
             return {
                 'account_number': str(account.account_number),
-                'cash': float(account.cash),
-                'buying_power': float(account.buying_power),
-                'equity': float(account.equity),
-                'last_equity': float(account.last_equity),
-                'created_at': account.created_at.isoformat(),
+                'cash': float(account.cash) if account.cash is not None else 0.0,
+                'buying_power': float(account.buying_power) if account.buying_power is not None else 0.0,
+                'equity': float(account.equity) if account.equity is not None else 0.0,
+                'last_equity': float(account.last_equity) if account.last_equity is not None else 0.0,
+                'created_at': account.created_at.isoformat() if account.created_at is not None else '',
                 'currency': str(account.currency),
-                'daytrade_count': int(account.daytrade_count),
-                'initial_margin': float(account.initial_margin),
-                'maintenance_margin': float(account.maintenance_margin),
+                'daytrade_count': int(account.daytrade_count) if account.daytrade_count is not None else 0,
+                'initial_margin': float(account.initial_margin) if account.initial_margin is not None else 0.0,
+                'maintenance_margin': float(account.maintenance_margin) if account.maintenance_margin is not None else 0.0,
                 'pattern_day_trader': bool(account.pattern_day_trader),
-                'portfolio_value': float(account.portfolio_value),
-                'regt_buying_power': float(account.regt_buying_power),
+                'portfolio_value': float(account.portfolio_value) if account.portfolio_value is not None else 0.0,
+                'regt_buying_power': float(account.regt_buying_power) if account.regt_buying_power is not None else 0.0,
                 'shorting_enabled': bool(account.shorting_enabled),
                 'status': str(account.status),
                 'trading_blocked': bool(account.trading_blocked),
@@ -69,12 +70,12 @@ class AlpacaClient:
                 return None
             return {
                 'symbol': str(position.symbol),
-                'qty': float(position.qty),
-                'avg_entry_price': float(position.avg_entry_price),
-                'current_price': float(position.current_price),
-                'market_value': float(position.market_value),
-                'unrealized_pl': float(position.unrealized_pl),
-                'unrealized_plpc': float(position.unrealized_plpc),
+                'qty': float(position.qty) if position.qty is not None else 0.0,
+                'avg_entry_price': float(position.avg_entry_price) if position.avg_entry_price is not None else 0.0,
+                'current_price': float(position.current_price) if position.current_price is not None else 0.0,
+                'market_value': float(position.market_value) if position.market_value is not None else 0.0,
+                'unrealized_pl': float(position.unrealized_pl) if position.unrealized_pl is not None else 0.0,
+                'unrealized_plpc': float(position.unrealized_plpc) if position.unrealized_plpc is not None else 0.0,
                 'side': str(position.side)
             }
         except Exception as e:
@@ -87,12 +88,12 @@ class AlpacaClient:
             positions = cast(List[Position], self._client.get_all_positions())
             return [{
                 'symbol': str(p.symbol),
-                'qty': float(p.qty),
-                'avg_entry_price': float(p.avg_entry_price),
-                'current_price': float(p.current_price),
-                'market_value': float(p.market_value),
-                'unrealized_pl': float(p.unrealized_pl),
-                'unrealized_plpc': float(p.unrealized_plpc),
+                'qty': float(p.qty) if p.qty is not None else 0.0,
+                'avg_entry_price': float(p.avg_entry_price) if p.avg_entry_price is not None else 0.0,
+                'current_price': float(p.current_price) if p.current_price is not None else 0.0,
+                'market_value': float(p.market_value) if p.market_value is not None else 0.0,
+                'unrealized_pl': float(p.unrealized_pl) if p.unrealized_pl is not None else 0.0,
+                'unrealized_plpc': float(p.unrealized_plpc) if p.unrealized_plpc is not None else 0.0,
                 'side': str(p.side)
             } for p in positions]
         except Exception as e:
@@ -113,12 +114,12 @@ class AlpacaClient:
             
             df = pd.DataFrame([{
                 'timestamp': b.timestamp,
-                'open': float(b.open),
-                'high': float(b.high),
-                'low': float(b.low),
-                'close': float(b.close),
-                'volume': int(b.volume)
-            } for b in bars])
+                'open': float(b.open) if b.open is not None else 0.0,
+                'high': float(b.high) if b.high is not None else 0.0,
+                'low': float(b.low) if b.low is not None else 0.0,
+                'close': float(b.close) if b.close is not None else 0.0,
+                'volume': int(b.volume) if b.volume is not None else 0
+            } for b in cast(List[Bar], bars)])
             
             df.set_index('timestamp', inplace=True)
             df.sort_index(inplace=True)
@@ -176,16 +177,16 @@ class AlpacaClient:
             return {
                 'id': str(order.id),
                 'symbol': str(order.symbol),
-                'qty': float(order.qty),
-                'filled_qty': float(order.filled_qty),
+                'qty': float(order.qty) if order.qty is not None else 0.0,
+                'filled_qty': float(order.filled_qty) if order.filled_qty is not None else 0.0,
                 'type': str(order.type),
                 'side': str(order.side),
                 'time_in_force': str(order.time_in_force),
                 'status': str(order.status),
-                'limit_price': float(order.limit_price) if order.limit_price else None,
-                'stop_price': float(order.stop_price) if order.stop_price else None,
-                'filled_avg_price': float(order.filled_avg_price) if order.filled_avg_price else None,
-                'created_at': order.created_at.isoformat()
+                'limit_price': float(order.limit_price) if order.limit_price is not None else None,
+                'stop_price': float(order.stop_price) if order.stop_price is not None else None,
+                'filled_avg_price': float(order.filled_avg_price) if order.filled_avg_price is not None else None,
+                'created_at': order.created_at.isoformat() if order.created_at is not None else ''
             }
         except Exception as e:
             logger.error(f"Error submitting order: {e}")
@@ -209,16 +210,16 @@ class AlpacaClient:
             return {
                 'id': str(order.id),
                 'symbol': str(order.symbol),
-                'qty': float(order.qty),
-                'filled_qty': float(order.filled_qty),
+                'qty': float(order.qty) if order.qty is not None else 0.0,
+                'filled_qty': float(order.filled_qty) if order.filled_qty is not None else 0.0,
                 'type': str(order.type),
                 'side': str(order.side),
                 'time_in_force': str(order.time_in_force),
                 'status': str(order.status),
-                'limit_price': float(order.limit_price) if order.limit_price else None,
-                'stop_price': float(order.stop_price) if order.stop_price else None,
-                'filled_avg_price': float(order.filled_avg_price) if order.filled_avg_price else None,
-                'created_at': order.created_at.isoformat()
+                'limit_price': float(order.limit_price) if order.limit_price is not None else None,
+                'stop_price': float(order.stop_price) if order.stop_price is not None else None,
+                'filled_avg_price': float(order.filled_avg_price) if order.filled_avg_price is not None else None,
+                'created_at': order.created_at.isoformat() if order.created_at is not None else ''
             }
         except Exception as e:
             logger.error(f"Error getting order {order_id}: {e}")
