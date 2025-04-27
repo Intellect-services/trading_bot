@@ -21,7 +21,7 @@ class Portfolio:
             initial_capital: Initial capital amount
         """
         self.initial_capital = float(initial_capital)
-        self.current_capital = float(initial_capital)
+        self.current_balance = float(initial_capital)
         self.max_position_size = 0.1  # Maximum position size as fraction of portfolio
         self.commission = 0.001  # 0.1% commission
         self.positions: Dict[str, Dict[str, Any]] = {}
@@ -36,13 +36,13 @@ class Portfolio:
             Current portfolio value
         """
         try:
-            total_value = self.current_capital
+            total_value = self.current_balance
             for symbol, position in self.positions.items():
                 total_value += position["size"] * position["current_price"]
             return total_value
         except Exception as e:
             logger.error(f"Error getting portfolio value: {e}")
-            return self.current_capital
+            return self.current_balance
 
     def get_balance(self) -> float:
         """Get current cash balance.
@@ -50,7 +50,7 @@ class Portfolio:
         Returns:
             Current cash balance
         """
-        return self.current_capital
+        return self.current_balance
 
     def get_position(self, symbol: str) -> Optional[Dict[str, Any]]:
         """Get position for a symbol.
@@ -119,11 +119,11 @@ class Portfolio:
             
             if side.lower() == "buy":
                 cost = qty * price
-                if cost > self.current_capital:
+                if cost > self.current_balance:
                     logger.warning("Insufficient funds for buy order")
                     return {}
                 
-                self.current_capital -= cost
+                self.current_balance -= cost
                 if symbol in self.positions:
                     position = self.positions[symbol]
                     new_size = position["size"] + qty
@@ -152,7 +152,7 @@ class Portfolio:
                     return {}
                 
                 proceeds = qty * price
-                self.current_capital += proceeds
+                self.current_balance += proceeds
                 
                 new_size = position["size"] - qty
                 if new_size == 0:
@@ -195,7 +195,7 @@ class Portfolio:
             current_value = self.get_value()
             return {
                 "initial_capital": self.initial_capital,
-                "current_capital": self.current_capital,
+                "current_balance": self.current_balance,
                 "current_value": current_value,
                 "peak_value": self.peak_value,
                 "total_return": (current_value - self.initial_capital) / self.initial_capital,
@@ -230,10 +230,10 @@ class Portfolio:
 
             if action == "buy":
                 total_cost = cost + commission
-                if total_cost > self.current_capital:
+                if total_cost > self.current_balance:
                     logger.warning("Insufficient funds for trade")
                     return False
-                self.current_capital -= total_cost
+                self.current_balance -= total_cost
                 if symbol in self.positions:
                     self.positions[symbol]["quantity"] += quantity
                     self.positions[symbol]["cost_basis"] = (
@@ -254,7 +254,7 @@ class Portfolio:
                 if quantity > self.positions[symbol]["quantity"]:
                     logger.warning("Insufficient quantity to sell")
                     return False
-                self.current_capital += cost - commission
+                self.current_balance += cost - commission
                 self.positions[symbol]["quantity"] -= quantity
                 if self.positions[symbol]["quantity"] <= 0:
                     del self.positions[symbol]
@@ -267,7 +267,7 @@ class Portfolio:
                 "quantity": quantity,
                 "price": price,
                 "commission": commission,
-                "balance": self.current_capital
+                "balance": self.current_balance
             })
 
             # Update peak value
@@ -294,7 +294,7 @@ class Portfolio:
         Returns:
             Portfolio returns as decimal
         """
-        return (self.current_capital - self.initial_capital) / self.initial_capital
+        return (self.current_balance - self.initial_capital) / self.initial_capital
 
     def update_portfolio(
         self,
@@ -341,7 +341,7 @@ class Portfolio:
             self.calculate_position_value(symbol, price)
             for symbol, price in current_prices.items()
         )
-        return self.current_capital + position_values
+        return self.current_balance + position_values
 
     def calculate_total_returns(self, current_prices: Dict[str, float]) -> float:
         """Calculate total portfolio returns.
