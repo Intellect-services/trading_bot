@@ -39,7 +39,7 @@ def sample_data():
 
 def test_portfolio_initialization(portfolio):
     assert portfolio.initial_capital == 100000
-    assert portfolio.current_capital == 100000
+    assert portfolio.current_balance == 100000
     assert portfolio.max_position_size == 0.1
     assert portfolio.commission == 0.001
     assert len(portfolio.positions) == 0
@@ -55,7 +55,7 @@ def test_update_portfolio(portfolio, sample_data):
     assert len(portfolio.positions) == 1
     assert portfolio.positions["AAPL"]["quantity"] == quantity
     assert portfolio.positions["AAPL"]["entry_price"] == price
-    assert portfolio.current_capital < portfolio.initial_capital
+    assert portfolio.current_balance < portfolio.initial_capital
 
 
 def test_calculate_position_value(portfolio, sample_data):
@@ -86,7 +86,7 @@ def test_calculate_portfolio_value(portfolio, sample_data):
     portfolio_value = portfolio.calculate_portfolio_value(current_prices)
 
     assert portfolio_value > 0
-    assert portfolio_value == portfolio.current_capital + sum(
+    assert portfolio_value == portfolio.current_balance + sum(
         portfolio.calculate_position_value(symbol, price)
         for symbol, price in current_prices.items()
     )
