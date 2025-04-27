@@ -49,6 +49,10 @@ jobs:
           file: ./coverage.xml
           fail_ci_if_error: true
           token: ${{ secrets.CODECOV_TOKEN }}
+          flags: unittests
+          name: codecov-umbrella
+          verbose: true
+          slug: betintellect-com/trading_bot
 
       - name: Run safety check
         run: |
