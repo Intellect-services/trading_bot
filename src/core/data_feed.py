@@ -1,175 +1,144 @@
 """Data feed module for fetching and processing market data."""
 
 from typing import Dict, List, Any, Optional, Callable
-from datetime import datetime, timedelta
 import pandas as pd
 import numpy as np
+from datetime import datetime, timedelta
+import pytz
 from src.core.alpaca_client import AlpacaClient
-from src.utils.config import Config
 from src.utils.logger import setup_logger
-from src.data_handler import DataHandler
 
 logger = setup_logger(__name__)
 
 class DataFeed:
-    """Handles market data feed and processing."""
-    
-    def __init__(self, config: Config):
-        """Initialize data feed with configuration.
-        
+    """Class for fetching and processing market data."""
+
+    def __init__(self, client: AlpacaClient) -> None:
+        """Initialize data feed.
+
         Args:
-            config: Configuration object containing API keys and settings
+            client: Alpaca client instance
         """
-        self.config = config
-        self.client = AlpacaClient(
-            api_key=config.ALPACA_API_KEY,
-            secret_key=config.ALPACA_SECRET_KEY,
-            paper=True  # Always use paper trading for safety
-        )
+        self.client = client
+        self.symbols: List[str] = []
         self.data: Dict[str, pd.DataFrame] = {}
         self.callbacks: List[Callable[[str, pd.DataFrame], None]] = []
-        logger.info("Data feed initialized")
-    
-    def add_symbol(self, symbol: str) -> None:
+
+    def add_symbol(self, symbol: str) -> bool:
         """Add a symbol to track.
-        
+
         Args:
-            symbol: Stock symbol to track
+            symbol: Trading symbol to add
+
+        Returns:
+            True if symbol was added successfully, False otherwise
         """
-        if symbol not in self.data:
-            self.data[symbol] = pd.DataFrame()
-            logger.info(f"Added symbol: {symbol}")
-    
+        try:
+            if symbol not in self.symbols:
+                self.symbols.append(symbol)
+                logger.info(f"Added symbol {symbol} to data feed")
+                return True
+            return False
+        except Exception as e:
+            logger.error(f"Error adding symbol {symbol}: {str(e)}")
+            return False
+
     def get_historical_data(
         self,
         symbol: str,
-        lookback_days: int = 30,
-        timeframe: str = "1D"
+        timeframe: str = '1Day',
+        start: Optional[datetime] = None,
+        end: Optional[datetime] = None,
+        limit: int = 100
     ) -> pd.DataFrame:
         """Get historical market data.
-        
+
         Args:
-            symbol: Stock symbol
-            lookback_days: Number of days to look back (default: 30)
-            timeframe: Timeframe for data (default: "1D")
-            
+            symbol: Trading symbol
+            timeframe: Time frame for the data ('1Min', '1Hour', '1Day')
+            start: Start datetime
+            end: End datetime
+            limit: Maximum number of bars to return
+
         Returns:
-            DataFrame containing historical data
+            DataFrame containing historical market data
         """
         try:
-            end = datetime.now()
-            start = end - timedelta(days=lookback_days)
-            
-            data = self.client.get_historical_data(symbol, start, end, timeframe)
-            if not data:
-                logger.warning(f"No historical data found for {symbol}")
-                return pd.DataFrame()
-            
-            df = pd.DataFrame(data)
-            df.set_index("timestamp", inplace=True)
-            
-            self.data[symbol] = df
-            self.calculate_indicators(symbol)
-            
-            logger.info(f"Retrieved historical data for {symbol}")
-            return self.data[symbol]
+            df = self.client.get_bars(symbol, timeframe, start, end, limit)
+            if not df.empty:
+                self.data[symbol] = df
+                self.calculate_indicators(symbol)
+            return df
         except Exception as e:
-            logger.error(f"Error getting historical data: {e}")
+            logger.error(f"Error getting historical data for {symbol}: {str(e)}")
             return pd.DataFrame()
-    
+
     def calculate_indicators(self, symbol: str) -> None:
         """Calculate technical indicators for a symbol.
-        
+
         Args:
-            symbol: Stock symbol
+            symbol: Trading symbol
         """
         try:
-            if symbol not in self.data or self.data[symbol].empty:
-                logger.warning(f"No data available for {symbol}")
+            if symbol not in self.data:
                 return
-            
+
             df = self.data[symbol]
-            
-            # Calculate SMA
-            df["sma_20"] = df["close"].rolling(window=20).mean()
-            df["sma_50"] = df["close"].rolling(window=50).mean()
-            
-            # Calculate RSI
-            delta = df["close"].diff()
-            gain = delta.where(delta.gt(0), 0).rolling(window=14).mean()
-            loss = -delta.where(delta.lt(0), 0).rolling(window=14).mean()
-            rs = gain / loss
-            df["rsi"] = 100 - (100 / (1 + rs))
-            
+            if df.empty:
+                return
+
+            # Calculate Simple Moving Average (SMA)
+            df['sma_20'] = df['close'].astype(float).rolling(window=20).mean()
+            df['sma_50'] = df['close'].astype(float).rolling(window=50).mean()
+
+            # Calculate Relative Strength Index (RSI)
+            delta = df['close'].astype(float).diff()
+            gain = delta.where(delta > 0, 0.0).astype(float)
+            loss = -delta.where(delta < 0, 0.0).astype(float)
+            avg_gain = gain.rolling(window=14).mean()
+            avg_loss = loss.rolling(window=14).mean()
+            rs = avg_gain / avg_loss
+            df['rsi'] = 100.0 - (100.0 / (1.0 + rs))
+
             self.data[symbol] = df
-            logger.info(f"Calculated indicators for {symbol}")
         except Exception as e:
-            logger.error(f"Error calculating indicators: {e}")
-    
+            logger.error(f"Error calculating indicators for {symbol}: {str(e)}")
+
+    def get_latest_data(self, symbol: str) -> Optional[pd.DataFrame]:
+        """Get latest market data for a symbol.
+
+        Args:
+            symbol: Trading symbol
+
+        Returns:
+            DataFrame containing latest market data or None if not available
+        """
+        try:
+            if symbol not in self.data:
+                return None
+
+            df = self.data[symbol]
+            if df.empty:
+                return None
+
+            latest_data = df.iloc[-1:]
+            for callback in self.callbacks:
+                callback(symbol, latest_data)
+
+            return latest_data
+        except Exception as e:
+            logger.error(f"Error getting latest data for {symbol}: {str(e)}")
+            return None
+
     def add_callback(self, callback: Callable[[str, pd.DataFrame], None]) -> None:
         """Add a callback function for data updates.
-        
+
         Args:
-            callback: Function to call when data is updated
-        """
-        self.callbacks.append(callback)
-        logger.info("Added data callback function")
-    
-    def update_data(self, symbol: str, new_data: List[Dict[str, Any]]) -> None:
-        """Update data for a symbol.
-        
-        Args:
-            symbol: Stock symbol
-            new_data: New data points to add
+            callback: Function to call when new data is available
         """
         try:
-            if not new_data:
-                logger.warning(f"No new data to update for {symbol}")
-                return
-            
-            df = pd.DataFrame(new_data)
-            df.set_index("timestamp", inplace=True)
-            
-            if symbol in self.data:
-                self.data[symbol] = pd.concat([self.data[symbol], df])
-            else:
-                self.data[symbol] = df
-            
-            self.calculate_indicators(symbol)
-            
-            for callback in self.callbacks:
-                callback(symbol, self.data[symbol])
-            
-            logger.info(f"Updated data for {symbol}")
+            if callback not in self.callbacks:
+                self.callbacks.append(callback)
+                logger.info("Added callback to data feed")
         except Exception as e:
-            logger.error(f"Error updating data: {e}")
-    
-    def get_latest_data(self, symbol: str) -> Optional[Dict[str, Any]]:
-        """Get latest data point for a symbol.
-        
-        Args:
-            symbol: Stock symbol
-            
-        Returns:
-            Latest data point or None if not available
-        """
-        try:
-            if symbol not in self.data or self.data[symbol].empty:
-                logger.warning(f"No data available for {symbol}")
-                return None
-            
-            latest = self.data[symbol].iloc[-1]
-            return {
-                "timestamp": latest.name,
-                "open": float(latest["open"]),
-                "high": float(latest["high"]),
-                "low": float(latest["low"]),
-                "close": float(latest["close"]),
-                "volume": int(latest["volume"]),
-                "sma_20": float(latest["sma_20"]) if "sma_20" in latest else None,
-                "sma_50": float(latest["sma_50"]) if "sma_50" in latest else None,
-                "rsi": float(latest["rsi"]) if "rsi" in latest else None
-            }
-        except Exception as e:
-            logger.error(f"Error getting latest data: {e}")
-            return None
+            logger.error(f"Error adding callback: {str(e)}")

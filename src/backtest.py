@@ -1,97 +1,101 @@
-import pandas as pd
-from datetime import date
-from typing import Dict, List, Optional
+"""Backtesting module."""
 
+from typing import Dict, List, Any, Optional
+from datetime import datetime
+import pandas as pd
+import json
+
+from src.utils.config import Config
 from src.core.strategy import Strategy
 from src.core.risk_manager import RiskManager
-from src.core.portfolio import Portfolio
-from src.utils.config import Config
+from src.backtesting.engine import BacktestingEngine
 from src.utils.logger import setup_logger
+from src.core.bot import TradingBot
+from src.core.portfolio import Portfolio
+from src.core.data_feed import DataFeed
 
 logger = setup_logger(__name__)
 
 
-class Backtester:
-    """Backtesting engine for trading strategies."""
-
-    def __init__(
-        self,
-        strategy: Strategy,
-        risk_manager: RiskManager,
-        portfolio: Portfolio,
-        config: Config,
-    ):
-        """Initialize backtester with strategy and data.
-
-        Args:
-            strategy: Trading strategy instance
-            risk_manager: Risk manager instance
-            portfolio: Portfolio instance
-            config: Configuration instance
-        """
-        self.strategy = strategy
-        self.risk_manager = risk_manager
-        self.portfolio = portfolio
-        self.config = config
-        logger.info("Backtester initialized")
-
-
 def run_backtest():
-    # Load configuration
-    config = get_config()
+    """Run backtest simulation."""
+    try:
+        # Load configuration
+        config = Config()
+        
+        # Initialize components
+        risk_manager = RiskManager({
+            'max_position_size': config.RISK_MAX_POSITION_SIZE,
+            'stop_loss': config.RISK_STOP_LOSS_PCT,
+            'take_profit': config.RISK_STOP_LOSS_PCT * 2,  # Use 2x stop loss as take profit
+            'max_drawdown': config.RISK_MAX_DRAWDOWN,
+            'max_leverage': config.RISK_MAX_LEVERAGE,
+            'risk_per_trade': config.RISK_PER_TRADE
+        })
+        
+        portfolio = Portfolio(config.INITIAL_BALANCE)
+        data_feed = DataFeed(config)
+        strategy = Strategy(config)
+        
+        # Initialize and run backtest
+        bot = TradingBot(
+            config=config,
+            strategy=strategy,
+            risk_manager=risk_manager,
+            portfolio=portfolio,
+            data_feed=data_feed
+        )
+        
+        # Run backtest
+        results = bot.backtest()
+        
+        # Save results
+        save_results(results)
+        
+        return results
+        
+    except Exception as e:
+        logger.error(f"Error in backtest: {str(e)}")
+        raise
 
-    # Create strategy with parameters
-    strategy_params = {"short_window": 20, "long_window": 50, "signal_threshold": 0.01}
-    strategy = MovingAverageCrossover(strategy_params)
 
-    # Load historical data
-    # In a real implementation, this would fetch data from your data source
-    # For this example, we'll create sample data
-    dates = pd.date_range(
-        start=config["BACKTEST_START_DATE"], end=config["BACKTEST_END_DATE"], freq="D"
-    )
-    data = pd.DataFrame(
-        {
-            "open": 100 + pd.Series(range(len(dates))) * 0.1,
-            "high": 100 + pd.Series(range(len(dates))) * 0.1 + 1,
-            "low": 100 + pd.Series(range(len(dates))) * 0.1 - 1,
-            "close": 100 + pd.Series(range(len(dates))) * 0.1,
-            "volume": 1000000,
-        },
-        index=dates,
-    )
+def save_results(results: Dict[str, Any]) -> None:
+    """Save backtest results to file.
 
-    # Create and run backtest
-    engine = BacktestEngine(
-        strategy=strategy, initial_capital=config["BACKTEST_INITIAL_CAPITAL"]
-    )
+    Args:
+        results: Dictionary containing backtest results
+    """
+    try:
+        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+        filename = f"backtest_results_{timestamp}.json"
 
-    results = engine.run(data, commission=config["BACKTEST_COMMISSION"])
+        with open(filename, "w") as f:
+            json.dump(results, f, indent=4, default=str)
 
-    # Print results
-    print("\nBacktest Results")
-    print("=" * 50)
+        logger.info(f"Results saved to {filename}")
 
-    # Print metrics
-    formatted_metrics = format_metrics(results["metrics"])
-    for metric, value in formatted_metrics.items():
-        print(f"{metric}: {value}")
+    except Exception as e:
+        logger.error(f"Error saving results: {str(e)}")
 
-    # Print trade summary
-    print("\nTrade Summary")
-    print("=" * 50)
-    print(f"Total Trades: {len(results['trades']) // 2}")
 
-    # Print equity curve summary
-    print("\nEquity Curve Summary")
-    print("=" * 50)
-    initial_equity = results["equity_curve"][0]["equity"]
-    final_equity = results["equity_curve"][-1]["equity"]
-    total_return = (final_equity - initial_equity) / initial_equity
-    print(f"Initial Equity: ${initial_equity:,.2f}")
-    print(f"Final Equity: ${final_equity:,.2f}")
-    print(f"Total Return: {total_return:.2%}")
+def main() -> None:
+    """Main entry point."""
+    try:
+        results = run_backtest()
+        print("\nBacktest Results:")
+        print("================")
+        print(f"Initial Value: ${results.get('initial_value', 0):,.2f}")
+        print(f"Final Value: ${results.get('final_value', 0):,.2f}")
+        print(f"Total Return: {results.get('total_return', 0) * 100:.2f}%")
+        print(f"Total Trades: {results.get('total_trades', 0)}")
+        print(f"Sharpe Ratio: {results.get('sharpe_ratio', 0):.2f}")
+        print(f"Max Drawdown: {results.get('max_drawdown', 0) * 100:.2f}%")
+        print(f"Win Rate: {results.get('win_rate', 0) * 100:.2f}%")
+        print(f"Average Trade Return: {results.get('avg_trade_return', 0) * 100:.2f}%")
+
+    except Exception as e:
+        logger.error(f"Error in main: {str(e)}")
 
 
 if __name__ == "__main__":
-    run_backtest()
+    main()

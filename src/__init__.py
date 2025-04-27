@@ -1,4 +1,6 @@
-"""Trading bot package."""
+"""
+Trading Bot Package
+"""
 
 from src.core.strategy import Strategy
 from src.core.risk_manager import RiskManager

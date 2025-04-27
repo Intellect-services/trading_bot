@@ -1,8 +1,10 @@
-"""Main module for running the trading bot."""
+"""Main module for trading bot."""
 
-from typing import Optional
-import argparse
-import logging
+import sys
+import signal
+from typing import Dict, Any, Optional
+import json
+import os
 
 from src.utils.config import Config
 from src.core.strategy import Strategy
@@ -14,42 +16,47 @@ from src.utils.logger import setup_logger
 
 logger = setup_logger(__name__)
 
-def parse_args() -> argparse.Namespace:
-    """Parse command line arguments.
-    
-    Returns:
-        Parsed arguments
-    """
-    parser = argparse.ArgumentParser(description="Trading Bot")
-    parser.add_argument("--config", type=str, help="Path to config file")
-    parser.add_argument("--symbols", type=str, nargs="+", help="Symbols to trade")
-    parser.add_argument("--capital", type=float, help="Initial capital")
-    parser.add_argument("--debug", action="store_true", help="Enable debug logging")
-    return parser.parse_args()
 
-def main() -> None:
-    """Main function to run the trading bot."""
+def load_config(config_file: str = "config.json") -> Config:
+    """Load configuration from file.
+
+    Args:
+        config_file: Path to configuration file
+
+    Returns:
+        Configuration instance
+    """
     try:
-        # Parse arguments
-        args = parse_args()
-        
-        # Set logging level
-        if args.debug:
-            logging.getLogger().setLevel(logging.DEBUG)
-            
-        # Load config
-        config = Config(args.config if args.config else None)
-        
+        return Config(config_file)
+    except Exception as e:
+        logger.error(f"Error loading config: {str(e)}")
+        sys.exit(1)
+
+
+def initialize_bot(config: Config) -> TradingBot:
+    """Initialize trading bot.
+
+    Args:
+        config: Configuration instance
+
+    Returns:
+        Trading bot instance
+    """
+    try:
         # Initialize components
         strategy = Strategy(config)
-        risk_manager = RiskManager(config)
+        risk_manager = RiskManager({
+            'max_position_size': config.RISK_MAX_POSITION_SIZE,
+            'stop_loss': config.RISK_STOP_LOSS_PCT,
+            'take_profit': config.RISK_STOP_LOSS_PCT * 2,
+            'max_drawdown': config.RISK_MAX_DRAWDOWN,
+            'max_leverage': config.RISK_MAX_LEVERAGE,
+            'risk_per_trade': config.RISK_PER_TRADE
+        })
         data_feed = DataFeed(config)
-        portfolio: Optional[Portfolio] = None
-        
-        if args.capital:
-            portfolio = Portfolio(args.capital)
-            
-        # Initialize bot
+        portfolio = Portfolio(config.INITIAL_BALANCE)
+
+        # Create bot
         bot = TradingBot(
             config=config,
             strategy=strategy,
@@ -57,30 +64,74 @@ def main() -> None:
             data_feed=data_feed,
             portfolio=portfolio
         )
-        
+
         # Add symbols
-        if args.symbols:
-            for symbol in args.symbols:
-                bot.add_symbol(symbol)
-        else:
-            bot.add_symbol(config.DEFAULT_SYMBOL)
-            
-        # Start bot
+        for symbol in config.STRATEGY_PARAMS.get("symbols", ["SPY"]):
+            bot.add_symbol(symbol)
+
+        return bot
+
+    except Exception as e:
+        logger.error(f"Error initializing bot: {str(e)}")
+        sys.exit(1)
+
+
+def handle_shutdown(bot: TradingBot) -> None:
+    """Handle graceful shutdown.
+
+    Args:
+        bot: Trading bot instance
+    """
+    def signal_handler(signum: int, frame: Any) -> None:
+        """Handle shutdown signal.
+
+        Args:
+            signum: Signal number
+            frame: Current stack frame
+        """
+        logger.info("Shutting down...")
+        bot.stop()
+        sys.exit(0)
+
+    signal.signal(signal.SIGINT, signal_handler)
+    signal.signal(signal.SIGTERM, signal_handler)
+
+
+def main() -> None:
+    """Main entry point for the trading bot."""
+    try:
+        # Load configuration
+        config = Config()
+        
+        # Initialize components
+        risk_manager = RiskManager({
+            'max_position_size': config.RISK_MAX_POSITION_SIZE,
+            'stop_loss': config.RISK_STOP_LOSS_PCT,
+            'take_profit': config.RISK_STOP_LOSS_PCT * 2,
+            'max_drawdown': config.RISK_MAX_DRAWDOWN,
+            'max_leverage': config.RISK_MAX_LEVERAGE,
+            'risk_per_trade': config.RISK_PER_TRADE
+        })
+        
+        portfolio = Portfolio(config.INITIAL_BALANCE)
+        data_feed = DataFeed(config)
+        strategy = Strategy(config)
+        
+        # Initialize and start trading bot
+        bot = TradingBot(
+            config=config,
+            strategy=strategy,
+            risk_manager=risk_manager,
+            portfolio=portfolio,
+            data_feed=data_feed
+        )
+        
         bot.start()
         
-        # Run main loop
-        while True:
-            bot.run()
-            
-    except KeyboardInterrupt:
-        logger.info("Stopping bot...")
-        if 'bot' in locals():
-            bot.stop()
     except Exception as e:
-        logger.error("Error in main: %s", e)
-        if 'bot' in locals():
-            bot.stop()
+        logger.error(f"Error in main: {str(e)}")
         raise
+
 
 if __name__ == "__main__":
     main()

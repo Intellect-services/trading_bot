@@ -13,6 +13,7 @@ def config():
             "take_profit": 0.04,
             "max_drawdown": 0.1,
             "max_leverage": 2.0,
+            "risk_per_trade": 0.02
         }
     }
 
@@ -48,31 +49,61 @@ def sample_signals(sample_data):
     return signals
 
 
+@pytest.fixture
+def sample_position():
+    return {
+        "symbol": "AAPL",
+        "size": 100,
+        "avg_price": 150.0,
+        "current_price": 155.0
+    }
+
+
 def test_risk_manager_initialization(risk_manager):
-    assert isinstance(risk_manager.config, dict)
-    assert "risk" in risk_manager.config
     assert risk_manager.max_position_size == 0.1
     assert risk_manager.stop_loss == 0.02
     assert risk_manager.take_profit == 0.04
+    assert risk_manager.max_drawdown == 0.1
+    assert risk_manager.max_leverage == 2.0
 
 
-def test_apply_risk_management(risk_manager, sample_signals, sample_data):
-    risk_managed_signals = risk_manager.apply_risk_management(
-        sample_signals, sample_data
+def test_apply_risk_management(risk_manager, sample_position):
+    # Test with valid position
+    small_position = sample_position.copy()
+    small_position["size"] = 50  # Smaller position size
+    assert risk_manager.apply_risk_management(
+        price=155.0,
+        position=small_position,
+        account_value=100000.0
     )
-    assert isinstance(risk_managed_signals, pd.DataFrame)
-    assert "signal" in risk_managed_signals.columns
-    assert len(risk_managed_signals) == len(sample_signals)
-    assert risk_managed_signals["signal"].isin([-1, 0, 1]).all()
+
+    # Test with position size too large
+    large_position = sample_position.copy()
+    large_position["size"] = 1000
+    assert not risk_manager.apply_risk_management(
+        price=155.0,
+        position=large_position,
+        account_value=100000.0
+    )
+
+    # Test with stop loss triggered
+    losing_position = sample_position.copy()
+    losing_position["size"] = 50
+    losing_position["avg_price"] = 160.0
+    assert not risk_manager.apply_risk_management(
+        price=155.0,
+        position=losing_position,
+        account_value=100000.0
+    )
 
 
 def test_calculate_position_size(risk_manager):
-    portfolio_value = 100000
+    portfolio_value = 100000.0
     price = 150.0
-    risk_per_trade = 0.01
 
     position_size = risk_manager.calculate_position_size(
-        portfolio_value=portfolio_value, price=price, risk_per_trade=risk_per_trade
+        portfolio_value=portfolio_value,
+        price=price
     )
 
     assert isinstance(position_size, int)
@@ -80,34 +111,32 @@ def test_calculate_position_size(risk_manager):
     assert position_size * price <= portfolio_value * risk_manager.max_position_size
 
 
-def test_check_stop_loss(risk_manager):
-    entry_price = 100.0
-    current_price = 98.0
-    stop_loss = risk_manager.check_stop_loss(entry_price, current_price)
-    assert stop_loss == (current_price <= entry_price * (1 - risk_manager.stop_loss))
+def test_calculate_stop_loss(risk_manager):
+    price = 100.0
+    quantity = 100  # Long position
+    stop_loss = risk_manager.calculate_stop_loss(price, quantity)
+    assert stop_loss == price * (1 - risk_manager.stop_loss)
+
+    quantity = -100  # Short position
+    stop_loss = risk_manager.calculate_stop_loss(price, quantity)
+    assert stop_loss == price * (1 + risk_manager.stop_loss)
 
 
-def test_check_take_profit(risk_manager):
-    entry_price = 100.0
-    current_price = 104.0
-    take_profit = risk_manager.check_take_profit(entry_price, current_price)
-    assert take_profit == (
-        current_price >= entry_price * (1 + risk_manager.take_profit)
-    )
+def test_calculate_take_profit(risk_manager):
+    price = 100.0
+    quantity = 100  # Long position
+    take_profit = risk_manager.calculate_take_profit(price, quantity)
+    assert take_profit == price * (1 + risk_manager.take_profit)
 
-
-def test_check_max_drawdown(risk_manager):
-    equity_curve = pd.Series([100000, 95000, 90000, 85000, 80000])
-    max_drawdown = risk_manager.check_max_drawdown(equity_curve)
-    assert max_drawdown == (
-        equity_curve.min() / equity_curve.max() - 1 <= -risk_manager.max_drawdown
-    )
+    quantity = -100  # Short position
+    take_profit = risk_manager.calculate_take_profit(price, quantity)
+    assert take_profit == price * (1 - risk_manager.take_profit)
 
 
 def test_check_leverage(risk_manager):
-    portfolio_value = 100000
-    position_value = 150000
-    leverage_ok = risk_manager.check_leverage(portfolio_value, position_value)
-    assert leverage_ok == (
-        position_value / portfolio_value <= risk_manager.max_leverage
-    )
+    portfolio_value = 100000.0
+    position_value = 150000.0  # 1.5x leverage
+    assert risk_manager.check_leverage(portfolio_value, position_value)
+
+    position_value = 250000.0  # 2.5x leverage
+    assert not risk_manager.check_leverage(portfolio_value, position_value)

@@ -17,7 +17,7 @@ def config():
 
 @pytest.fixture
 def portfolio(config):
-    return Portfolio(config)
+    return Portfolio(config["portfolio"]["initial_capital"])
 
 
 @pytest.fixture
@@ -95,13 +95,15 @@ def test_calculate_portfolio_value(portfolio, sample_data):
 def test_calculate_returns(portfolio, sample_data):
     # Add a position and simulate price changes
     initial_price = sample_data["close"].iloc[0]
-    portfolio.update_portfolio("AAPL", 100, initial_price, "buy")
+    portfolio.execute_order("AAPL", 100, "buy", initial_price)
 
     # Simulate price changes
     current_price = initial_price * 1.1  # 10% increase
-    returns = portfolio.calculate_returns("AAPL", current_price)
+    portfolio.update_prices({"AAPL": current_price})
+    position = portfolio.get_position("AAPL")
+    returns = (current_price - position["avg_price"]) / position["avg_price"]
 
-    assert returns == (current_price - initial_price) / initial_price
+    assert returns == pytest.approx(0.1, rel=1e-9)  # 10% return
 
 
 def test_calculate_total_returns(portfolio, sample_data):

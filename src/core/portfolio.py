@@ -1,7 +1,7 @@
 """Portfolio management module."""
 
 from datetime import datetime
-from typing import Dict, List, Optional, Any
+from typing import Dict, List, Optional, Any, Union
 from src.utils.config import Config
 from src.utils.logger import setup_logger
 import pandas as pd
@@ -12,18 +12,18 @@ logger = setup_logger(__name__)
 class Portfolio:
     """Portfolio management for tracking positions and performance."""
 
-    def __init__(self, initial_capital: float):
+    def __init__(self, initial_capital: float) -> None:
         """Initialize portfolio with initial capital.
 
         Args:
             initial_capital: Initial capital amount
         """
-        self.initial_capital = initial_capital
-        self.current_balance = initial_capital
+        self.initial_capital = float(initial_capital)
+        self.current_balance = float(initial_capital)
         self.positions: Dict[str, Dict[str, Any]] = {}
         self.trades: List[Dict[str, Any]] = []
-        self.peak_value = initial_capital
-        logger.info("Portfolio initialized with capital: %.2f", initial_capital)
+        self.peak_value = float(initial_capital)
+        logger.info("Portfolio initialized with %.2f capital", initial_capital)
 
     def get_value(self) -> float:
         """Get current portfolio value.
@@ -192,3 +192,92 @@ class Portfolio:
         except Exception as e:
             logger.error(f"Error getting portfolio summary: {e}")
             return {}
+
+    def update_position(
+        self,
+        symbol: str,
+        quantity: float,
+        price: float,
+        action: str
+    ) -> bool:
+        """Update position for a symbol.
+
+        Args:
+            symbol: Trading symbol
+            quantity: Trade quantity
+            price: Trade price
+            action: Trade action (buy/sell)
+
+        Returns:
+            True if position updated successfully
+        """
+        try:
+            cost = quantity * price
+            commission = cost * 0.001  # 0.1% commission
+
+            if action == "buy":
+                total_cost = cost + commission
+                if total_cost > self.current_balance:
+                    logger.warning("Insufficient funds for trade")
+                    return False
+                self.current_balance -= total_cost
+                if symbol in self.positions:
+                    self.positions[symbol]["quantity"] += quantity
+                    self.positions[symbol]["cost_basis"] = (
+                        (self.positions[symbol]["cost_basis"] * self.positions[symbol]["quantity"] + cost)
+                        / (self.positions[symbol]["quantity"] + quantity)
+                    )
+                else:
+                    self.positions[symbol] = {
+                        "quantity": quantity,
+                        "cost_basis": price,
+                        "timestamp": datetime.now()
+                    }
+            else:  # sell
+                if symbol not in self.positions:
+                    logger.warning("No position to sell")
+                    return False
+                if quantity > self.positions[symbol]["quantity"]:
+                    logger.warning("Insufficient quantity to sell")
+                    return False
+                self.current_balance += cost - commission
+                self.positions[symbol]["quantity"] -= quantity
+                if self.positions[symbol]["quantity"] <= 0:
+                    del self.positions[symbol]
+
+            # Record trade
+            self.trades.append({
+                "timestamp": datetime.now(),
+                "symbol": symbol,
+                "action": action,
+                "quantity": quantity,
+                "price": price,
+                "commission": commission,
+                "balance": self.current_balance
+            })
+
+            # Update peak value
+            current_value = self.get_value()
+            if current_value > self.peak_value:
+                self.peak_value = current_value
+
+            logger.info(
+                "%s %s shares of %s at %.2f",
+                action.capitalize(),
+                quantity,
+                symbol,
+                price
+            )
+            return True
+
+        except Exception as e:
+            logger.error("Error updating position: %s", e)
+            return False
+
+    def get_returns(self) -> float:
+        """Get portfolio returns.
+
+        Returns:
+            Portfolio returns as decimal
+        """
+        return (self.current_balance - self.initial_capital) / self.initial_capital

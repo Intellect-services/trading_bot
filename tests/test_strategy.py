@@ -11,6 +11,7 @@ from src.core.data_feed import DataFeed
 class TestStrategy(Strategy):
     def __init__(self, config):
         super().__init__(config)
+        self.name = "TestStrategy"
         self.signals = []
 
     def generate_signals(self, data: pd.DataFrame) -> pd.DataFrame:
@@ -48,7 +49,14 @@ def sample_data():
 def config():
     return {
         "strategy": {"name": "TestStrategy", "parameters": {}},
-        "risk": {"max_position_size": 0.1, "stop_loss": 0.02, "take_profit": 0.04},
+        "risk": {
+            "max_position_size": 0.1,
+            "stop_loss": 0.02,
+            "take_profit": 0.04,
+            "max_drawdown": 0.1,
+            "max_leverage": 2.0,
+            "risk_per_trade": 0.02
+        }
     }
 
 
@@ -64,7 +72,7 @@ def risk_manager(config):
 
 @pytest.fixture
 def portfolio():
-    return Portfolio(initial_balance=100000)
+    return Portfolio(100000)
 
 
 @pytest.fixture
@@ -88,20 +96,38 @@ def test_generate_signals(strategy, sample_data):
 
 
 def test_strategy_with_risk_manager(strategy, risk_manager, sample_data):
-    signals = strategy.generate_signals(sample_data)
-    risk_managed_signals = risk_manager.apply_risk_management(signals, sample_data)
-    assert isinstance(risk_managed_signals, pd.DataFrame)
-    assert "signal" in risk_managed_signals.columns
-    assert len(risk_managed_signals) == len(signals)
+    # Create a sample position
+    position = {
+        "symbol": "AAPL",
+        "size": 50,  # Smaller position size
+        "avg_price": 150.0,
+        "current_price": 155.0
+    }
+
+    # Test risk management
+    assert risk_manager.apply_risk_management(
+        price=155.0,
+        position=position,
+        account_value=100000.0
+    )
+
+    # Test with position size too large
+    large_position = position.copy()
+    large_position["size"] = 1000
+    assert not risk_manager.apply_risk_management(
+        price=155.0,
+        position=large_position,
+        account_value=100000.0
+    )
 
 
 def test_strategy_with_portfolio(strategy, portfolio, sample_data):
-    initial_balance = portfolio.balance
-    signals = strategy.generate_signals(sample_data)
-
+    initial_capital = portfolio.initial_capital
+    
     # Simulate a trade
-    portfolio.update_position("AAPL", 100, 150.0, "buy")
-    assert portfolio.balance < initial_balance
+    portfolio.execute_order("AAPL", 100, "buy", 150.0)
+    
+    assert portfolio.current_balance < initial_capital
     assert "AAPL" in portfolio.positions
-    assert portfolio.positions["AAPL"].quantity == 100
-    assert portfolio.positions["AAPL"].avg_price == 150.0
+    assert portfolio.positions["AAPL"]["size"] == 100
+    assert portfolio.positions["AAPL"]["avg_price"] == 150.0

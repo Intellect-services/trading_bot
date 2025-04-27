@@ -4,6 +4,7 @@ import os
 from typing import Dict, Any, Optional
 from dotenv import load_dotenv
 from datetime import datetime, time
+import json
 
 from src.utils.logger import setup_logger
 
@@ -71,65 +72,88 @@ def validate_config(config: Dict[str, Any]) -> bool:
 class Config:
     """Configuration class for managing trading parameters."""
 
-    def __init__(self, config_dict: Optional[Dict[str, Any]] = None) -> None:
-        """Initialize configuration with optional dictionary override."""
-        # API Configuration
-        self.ALPACA_API_KEY = os.getenv('ALPACA_API_KEY', '')
-        self.ALPACA_SECRET_KEY = os.getenv('ALPACA_SECRET_KEY', '')
-        
+    def __init__(self, config_file: str = "config.json"):
+        """Initialize configuration.
+
+        Args:
+            config_file: Path to configuration file
+        """
+        self.config_file = config_file
+        self.config_data: Dict[str, Any] = {}
+        self.load_config()
+
+        # Trading settings
+        self.INITIAL_BALANCE: float = self.config_data.get("initial_balance", 10000.0)
+        self.PAPER_TRADING: bool = self.config_data.get("paper_trading", True)
+        self.COMMISSION: float = self.config_data.get("commission", 0.001)
+        self.SLIPPAGE: float = self.config_data.get("slippage", 0.0005)
+
+        # API keys
+        self.ALPACA_API_KEY: str = self.config_data.get("alpaca_api_key", os.getenv("ALPACA_API_KEY", ""))
+        self.ALPACA_SECRET_KEY: str = self.config_data.get("alpaca_secret_key", os.getenv("ALPACA_SECRET_KEY", ""))
+
+        # Risk management
+        self.RISK_FREE_RATE: float = self.config_data.get("risk_free_rate", 0.02)
+        self.RISK_MAX_POSITION_SIZE: float = self.config_data.get("risk_max_position_size", 0.1)
+        self.RISK_STOP_LOSS_PCT: float = self.config_data.get("risk_stop_loss_pct", 0.02)
+        self.RISK_MAX_DRAWDOWN: float = self.config_data.get("risk_max_drawdown", 0.1)
+        self.RISK_PER_TRADE: float = self.config_data.get("risk_per_trade", 0.01)
+        self.RISK_MAX_LEVERAGE: float = self.config_data.get("risk_max_leverage", 2.0)
+
+        # Strategy parameters
+        self.STRATEGY_PARAMS: Dict[str, Any] = self.config_data.get("strategy_params", {})
+
         # Market Configuration
-        self.MARKET_OPEN = datetime.strptime(os.getenv('MARKET_OPEN', '09:30'), '%H:%M').time()
-        self.MARKET_CLOSE = datetime.strptime(os.getenv('MARKET_CLOSE', '16:00'), '%H:%M').time()
-        
-        # Trading Configuration
-        self.DEFAULT_SYMBOL = os.getenv('DEFAULT_SYMBOL', 'SPY')
-        self.DEFAULT_TIMEFRAME = os.getenv('DEFAULT_TIMEFRAME', '1Min')
-        self.INITIAL_BALANCE = float(os.getenv('INITIAL_BALANCE', '100000.0'))
-        
-        # Risk Management Configuration
-        self.RISK_FREE_RATE = float(os.getenv('RISK_FREE_RATE', '0.02'))
-        self.RISK_MAX_POSITION_SIZE = float(os.getenv('RISK_MAX_POSITION_SIZE', '0.1'))
-        self.RISK_STOP_LOSS_PCT = float(os.getenv('RISK_STOP_LOSS_PCT', '0.02'))
-        self.RISK_MAX_DRAWDOWN = float(os.getenv('RISK_MAX_DRAWDOWN', '0.2'))
-        self.RISK_PER_TRADE = float(os.getenv('RISK_PER_TRADE', '0.01'))
-        self.RISK_MAX_LEVERAGE = float(os.getenv('RISK_MAX_LEVERAGE', '2.0'))
-        
+        self.MARKET_OPEN = time(9, 30)  # 9:30 AM ET
+        self.MARKET_CLOSE = time(16, 0)  # 4:00 PM ET
+        self.DEFAULT_SYMBOL = self.config_data.get("default_symbol", "SPY")
+        self.DEFAULT_TIMEFRAME = self.config_data.get("default_timeframe", "1Min")
+
         # Backtesting Configuration
         self.BACKTEST_START_DATE = datetime.strptime(
-            os.getenv('BACKTEST_START_DATE', '2023-01-01'),
+            self.config_data.get("backtest_start_date", "2020-01-01"),
             '%Y-%m-%d'
         )
         self.BACKTEST_END_DATE = datetime.strptime(
-            os.getenv('BACKTEST_END_DATE', '2023-12-31'),
+            self.config_data.get("backtest_end_date", "2020-12-31"),
             '%Y-%m-%d'
         )
-        
-        # Override with provided config
-        if config_dict:
-            for key, value in config_dict.items():
-                if hasattr(self, key):
-                    setattr(self, key, value)
-                    
+
         logger.info("Configuration initialized")
 
+    def load_config(self) -> None:
+        """Load configuration from file."""
+        try:
+            if os.path.exists(self.config_file):
+                with open(self.config_file, "r") as f:
+                    self.config_data = json.load(f)
+        except Exception as e:
+            logger.error(f"Error loading config file: {str(e)}")
+            self.config_data = {}
+
     def to_dict(self) -> Dict[str, str]:
-        """Convert config to dictionary format."""
+        """Convert config to dictionary format.
+
+        Returns:
+            Dictionary containing configuration values
+        """
         return {
             'ALPACA_API_KEY': self.ALPACA_API_KEY,
             'ALPACA_SECRET_KEY': self.ALPACA_SECRET_KEY,
-            'MARKET_OPEN': self.MARKET_OPEN.strftime('%H:%M'),
-            'MARKET_CLOSE': self.MARKET_CLOSE.strftime('%H:%M'),
-            'DEFAULT_SYMBOL': self.DEFAULT_SYMBOL,
-            'DEFAULT_TIMEFRAME': self.DEFAULT_TIMEFRAME,
             'INITIAL_BALANCE': str(self.INITIAL_BALANCE),
+            'PAPER_TRADING': str(self.PAPER_TRADING),
+            'COMMISSION': str(self.COMMISSION),
+            'SLIPPAGE': str(self.SLIPPAGE),
             'RISK_FREE_RATE': str(self.RISK_FREE_RATE),
-            'MAX_POSITION_SIZE': str(self.RISK_MAX_POSITION_SIZE),
-            'STOP_LOSS_PCT': str(self.RISK_STOP_LOSS_PCT),
-            'MAX_DRAWDOWN': str(self.RISK_MAX_DRAWDOWN),
+            'RISK_MAX_POSITION_SIZE': str(self.RISK_MAX_POSITION_SIZE),
+            'RISK_STOP_LOSS_PCT': str(self.RISK_STOP_LOSS_PCT),
+            'RISK_MAX_DRAWDOWN': str(self.RISK_MAX_DRAWDOWN),
             'RISK_PER_TRADE': str(self.RISK_PER_TRADE),
             'RISK_MAX_LEVERAGE': str(self.RISK_MAX_LEVERAGE),
+            'DEFAULT_SYMBOL': self.DEFAULT_SYMBOL,
+            'DEFAULT_TIMEFRAME': self.DEFAULT_TIMEFRAME,
             'BACKTEST_START_DATE': self.BACKTEST_START_DATE.strftime('%Y-%m-%d'),
-            'BACKTEST_END_DATE': self.BACKTEST_END_DATE.strftime('%Y-%m-%d')
+            'BACKTEST_END_DATE': self.BACKTEST_END_DATE.strftime('%Y-%m-%d'),
         }
 
     @classmethod
