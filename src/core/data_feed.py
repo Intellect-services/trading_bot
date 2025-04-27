@@ -139,6 +139,9 @@ class DataFeed:
             rs = gain / loss
             df['rsi'] = 100 - (100 / (1 + rs))
             
+            # Ensure RSI values are numeric
+            df['rsi'] = pd.to_numeric(df['rsi'], errors='coerce')
+            
             # Update stored data
             self.data[symbol] = df
         except Exception as e:
