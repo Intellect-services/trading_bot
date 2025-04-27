@@ -134,8 +134,10 @@ class DataFeed:
             
             # Calculate RSI
             delta = df['close'].diff()
-            gain = np.where(delta > 0, delta, 0).rolling(window=14).mean()
-            loss = np.where(delta < 0, -delta, 0).rolling(window=14).mean()
+            # Convert Series to numpy array for comparison
+            delta_values = delta.values
+            gain = pd.Series(np.where(delta_values > 0, delta_values, 0), index=delta.index).rolling(window=14).mean()
+            loss = pd.Series(np.where(delta_values < 0, -delta_values, 0), index=delta.index).rolling(window=14).mean()
             rs = gain / loss
             df['rsi'] = 100 - (100 / (1 + rs))
             
