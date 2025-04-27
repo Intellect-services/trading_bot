@@ -134,16 +134,13 @@ class DataFeed:
             
             # Calculate RSI
             delta = df['close'].diff()
-            gain = (delta.where(delta > 0, 0)).rolling(window=14).mean()
-            loss = (-delta.where(delta < 0, 0)).rolling(window=14).mean()
+            gain = np.where(delta > 0, delta, 0).rolling(window=14).mean()
+            loss = np.where(delta < 0, -delta, 0).rolling(window=14).mean()
             rs = gain / loss
             df['rsi'] = 100 - (100 / (1 + rs))
             
             # Ensure RSI values are numeric and handle NaN values
             df['rsi'] = pd.to_numeric(df['rsi'], errors='coerce').fillna(50)
-            
-            # Convert Series to float for comparison
-            df['rsi'] = df['rsi'].astype(float)
             
             # Update stored data
             self.data[symbol] = df
