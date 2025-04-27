@@ -6,6 +6,10 @@ from datetime import datetime, timedelta
 import pytz
 from alpaca.trading.client import TradingClient
 from alpaca.trading.requests import MarketOrderRequest, LimitOrderRequest, StopOrderRequest
+from alpaca.trading.models import TradeAccount, Position, Order
+from alpaca.data.historical import StockHistoricalDataClient
+from alpaca.data.requests import StockBarsRequest
+from alpaca.data.timeframe import TimeFrame
 
 from src.utils.config import Config
 from src.utils.logger import setup_logger
@@ -23,12 +27,16 @@ class AlpacaClient:
             config.ALPACA_SECRET_KEY,
             'https://paper-api.alpaca.markets' if config.PAPER_TRADING else 'https://api.alpaca.markets'
         )
+        self._data_client = StockHistoricalDataClient(
+            config.ALPACA_API_KEY,
+            config.ALPACA_SECRET_KEY
+        )
         self.logger = logger
 
     def get_account(self) -> Dict[str, Any]:
         """Get account information."""
         try:
-            account = self._client.get_account()
+            account = cast(TradeAccount, self._client.get_account())
             return {
                 'account_number': str(account.account_number),
                 'cash': float(account.cash),
@@ -56,7 +64,7 @@ class AlpacaClient:
     def get_position(self, symbol: str) -> Optional[Dict[str, Any]]:
         """Get position for a symbol."""
         try:
-            position = self._client.get_position(symbol)
+            position = cast(Position, self._client.get_open_position(symbol))
             if position is None:
                 return None
             return {
@@ -76,7 +84,7 @@ class AlpacaClient:
     def get_positions(self) -> List[Dict[str, Any]]:
         """Get all positions."""
         try:
-            positions = self._client.get_all_positions()
+            positions = cast(List[Position], self._client.get_all_positions())
             return [{
                 'symbol': str(p.symbol),
                 'qty': float(p.qty),
@@ -94,7 +102,12 @@ class AlpacaClient:
     def get_bars(self, symbol: str, timeframe: str = '1D', limit: int = 100) -> pd.DataFrame:
         """Get historical bars for a symbol."""
         try:
-            bars = self._client.get_bars(symbol, timeframe, limit=limit)
+            request = StockBarsRequest(
+                symbol_or_symbols=symbol,
+                timeframe=TimeFrame.Day if timeframe == '1D' else TimeFrame.Hour,
+                limit=limit
+            )
+            bars = self._data_client.get_stock_bars(request)
             if not bars:
                 return pd.DataFrame()
             
@@ -117,10 +130,10 @@ class AlpacaClient:
     def get_assets(self) -> List[Dict[str, Any]]:
         """Get list of tradable assets."""
         try:
-            assets = self._client.get_assets()
+            assets = self._client.get_all_assets()
             return [{k: getattr(asset, k) for k in dir(asset) if not k.startswith('_')} for asset in assets]
         except Exception as e:
-            logger.error(f"Error getting assets: {str(e)}")
+            logger.error(f"Error getting assets: {e}")
             return []
 
     def submit_order(self, symbol: str, qty: float, side: str, type: str = 'market',
@@ -128,6 +141,7 @@ class AlpacaClient:
                     stop_price: Optional[float] = None) -> Dict[str, Any]:
         """Submit an order."""
         try:
+            order_data: Union[MarketOrderRequest, LimitOrderRequest, StopOrderRequest]
             if type == 'market':
                 order_data = MarketOrderRequest(
                     symbol=symbol,
@@ -158,7 +172,7 @@ class AlpacaClient:
             else:
                 raise ValueError(f"Invalid order type: {type}")
 
-            order = self._client.submit_order(order_data)
+            order = cast(Order, self._client.submit_order(order_data))
             return {
                 'id': str(order.id),
                 'symbol': str(order.symbol),
@@ -180,19 +194,32 @@ class AlpacaClient:
     def cancel_order(self, order_id: str) -> bool:
         """Cancel an open order."""
         try:
-            self._client.cancel_order(order_id)
+            self._client.cancel_order_by_id(order_id)
             return True
         except Exception as e:
-            logger.error(f"Error cancelling order {order_id}: {str(e)}")
+            logger.error(f"Error cancelling order {order_id}: {e}")
             return False
 
     def get_order(self, order_id: str) -> Optional[Dict[str, Any]]:
         """Get order information."""
         try:
-            order = self._client.get_order(order_id)
+            order = cast(Order, self._client.get_order_by_id(order_id))
             if not order:
                 return None
-            return {k: getattr(order, k) for k in dir(order) if not k.startswith('_')}
+            return {
+                'id': str(order.id),
+                'symbol': str(order.symbol),
+                'qty': float(order.qty),
+                'filled_qty': float(order.filled_qty),
+                'type': str(order.type),
+                'side': str(order.side),
+                'time_in_force': str(order.time_in_force),
+                'status': str(order.status),
+                'limit_price': float(order.limit_price) if order.limit_price else None,
+                'stop_price': float(order.stop_price) if order.stop_price else None,
+                'filled_avg_price': float(order.filled_avg_price) if order.filled_avg_price else None,
+                'created_at': order.created_at.isoformat()
+            }
         except Exception as e:
-            logger.error(f"Error getting order {order_id}: {str(e)}")
+            logger.error(f"Error getting order {order_id}: {e}")
             return None 
