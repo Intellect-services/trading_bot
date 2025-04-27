@@ -219,7 +219,8 @@ class BacktestingEngine:
 
         # Calculate daily values and returns
         daily_values = trade_df['portfolio_value'].resample('D').last()
-        daily_values = daily_values.fillna(method='ffill')
+        # Forward fill missing values with the last known value
+        daily_values = daily_values.ffill()
         daily_returns = daily_values.pct_change().dropna()
 
         # Calculate metrics
