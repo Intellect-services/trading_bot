@@ -139,8 +139,8 @@ class DataFeed:
             rs = gain / loss
             df['rsi'] = 100 - (100 / (1 + rs))
             
-            # Ensure RSI values are numeric
-            df['rsi'] = pd.to_numeric(df['rsi'], errors='coerce')
+            # Ensure RSI values are numeric and handle NaN values
+            df['rsi'] = pd.to_numeric(df['rsi'], errors='coerce').fillna(50)
             
             # Update stored data
             self.data[symbol] = df
