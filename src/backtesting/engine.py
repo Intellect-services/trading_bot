@@ -130,16 +130,17 @@ class BacktestingEngine:
 
             # Execute trades based on signals
             if signals.get('action') == 'buy' and (not position or position['quantity'] <= 0):
-                self._execute_trade(symbol, 1.0, latest_price, 'buy')
+                self._execute_trade(symbol, 1.0, latest_price, 'buy', current_date)
             elif signals.get('action') == 'sell' and position and position['quantity'] > 0:
-                self._execute_trade(symbol, position['quantity'], latest_price, 'sell')
+                self._execute_trade(symbol, position['quantity'], latest_price, 'sell', current_date)
 
     def _execute_trade(
         self,
         symbol: str,
         quantity: float,
         price: float,
-        action: str
+        action: str,
+        current_date: datetime
     ) -> None:
         """Execute a simulated trade.
 
@@ -148,6 +149,7 @@ class BacktestingEngine:
             quantity: Trade quantity
             price: Execution price
             action: Trade action (buy/sell)
+            current_date: Current date of the trade
         """
         try:
             # Apply slippage

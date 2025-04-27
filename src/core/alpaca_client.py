@@ -5,13 +5,7 @@ import pandas as pd
 from datetime import datetime, timedelta
 import pytz
 from alpaca.trading.client import TradingClient
-from alpaca.data.historical import StockHistoricalDataClient
-from alpaca.data.requests import StockBarsRequest
 from alpaca.trading.requests import MarketOrderRequest, LimitOrderRequest, StopOrderRequest
-from alpaca.trading.enums import OrderSide, OrderType, TimeInForce
-from alpaca_trade_api.rest import REST
-from alpaca_trade_api.entity import Bar
-from alpaca_trade_api.entity_v2 import OrderRequest
 
 from src.utils.config import Config
 from src.utils.logger import setup_logger
@@ -24,7 +18,7 @@ class AlpacaClient:
     def __init__(self, config: Config) -> None:
         """Initialize Alpaca client."""
         self.config = config
-        self._client = REST(
+        self._client = TradingClient(
             config.ALPACA_API_KEY,
             config.ALPACA_SECRET_KEY,
             'https://paper-api.alpaca.markets' if config.PAPER_TRADING else 'https://api.alpaca.markets'
@@ -35,63 +29,89 @@ class AlpacaClient:
         """Get account information."""
         try:
             account = self._client.get_account()
-            return {k: getattr(account, k) for k in dir(account) if not k.startswith('_')}
+            return {
+                'account_number': str(account.account_number),
+                'cash': float(account.cash),
+                'buying_power': float(account.buying_power),
+                'equity': float(account.equity),
+                'last_equity': float(account.last_equity),
+                'created_at': account.created_at.isoformat(),
+                'currency': str(account.currency),
+                'daytrade_count': int(account.daytrade_count),
+                'initial_margin': float(account.initial_margin),
+                'maintenance_margin': float(account.maintenance_margin),
+                'pattern_day_trader': bool(account.pattern_day_trader),
+                'portfolio_value': float(account.portfolio_value),
+                'regt_buying_power': float(account.regt_buying_power),
+                'shorting_enabled': bool(account.shorting_enabled),
+                'status': str(account.status),
+                'trading_blocked': bool(account.trading_blocked),
+                'transfers_blocked': bool(account.transfers_blocked),
+                'account_blocked': bool(account.account_blocked)
+            }
         except Exception as e:
-            logger.error(f"Error getting account information: {str(e)}")
+            logger.error(f"Error getting account info: {e}")
             return {}
 
     def get_position(self, symbol: str) -> Optional[Dict[str, Any]]:
-        """Get position information for a symbol."""
+        """Get position for a symbol."""
         try:
             position = self._client.get_position(symbol)
-            if not position:
+            if position is None:
                 return None
-            return {k: getattr(position, k) for k in dir(position) if not k.startswith('_')}
+            return {
+                'symbol': str(position.symbol),
+                'qty': float(position.qty),
+                'avg_entry_price': float(position.avg_entry_price),
+                'current_price': float(position.current_price),
+                'market_value': float(position.market_value),
+                'unrealized_pl': float(position.unrealized_pl),
+                'unrealized_plpc': float(position.unrealized_plpc),
+                'side': str(position.side)
+            }
         except Exception as e:
-            logger.error(f"Error getting position for {symbol}: {str(e)}")
+            logger.error(f"Error getting position for {symbol}: {e}")
             return None
 
     def get_positions(self) -> List[Dict[str, Any]]:
         """Get all positions."""
         try:
-            positions = self._client.get_positions()
-            return [{k: getattr(pos, k) for k in dir(pos) if not k.startswith('_')} for pos in positions]
+            positions = self._client.get_all_positions()
+            return [{
+                'symbol': str(p.symbol),
+                'qty': float(p.qty),
+                'avg_entry_price': float(p.avg_entry_price),
+                'current_price': float(p.current_price),
+                'market_value': float(p.market_value),
+                'unrealized_pl': float(p.unrealized_pl),
+                'unrealized_plpc': float(p.unrealized_plpc),
+                'side': str(p.side)
+            } for p in positions]
         except Exception as e:
-            logger.error(f"Error getting positions: {str(e)}")
+            logger.error(f"Error getting positions: {e}")
             return []
 
-    def get_bars(
-        self,
-        symbol: str,
-        timeframe: str,
-        start: str,
-        end: str
-    ) -> pd.DataFrame:
-        """Get historical bars data."""
+    def get_bars(self, symbol: str, timeframe: str = '1D', limit: int = 100) -> pd.DataFrame:
+        """Get historical bars for a symbol."""
         try:
-            bars = self._client.get_bars(symbol, timeframe, start, end)
+            bars = self._client.get_bars(symbol, timeframe, limit=limit)
             if not bars:
                 return pd.DataFrame()
             
-            data = []
-            for bar in bars:
-                bar_dict = {
-                    'timestamp': pd.Timestamp(bar.t),
-                    'open': float(bar.o),
-                    'high': float(bar.h),
-                    'low': float(bar.l),
-                    'close': float(bar.c),
-                    'volume': int(bar.v)
-                }
-                data.append(bar_dict)
+            df = pd.DataFrame([{
+                'timestamp': b.timestamp,
+                'open': float(b.open),
+                'high': float(b.high),
+                'low': float(b.low),
+                'close': float(b.close),
+                'volume': int(b.volume)
+            } for b in bars])
             
-            df = pd.DataFrame(data)
-            if not df.empty:
-                df.set_index('timestamp', inplace=True)
-                df.sort_index(inplace=True)
+            df.set_index('timestamp', inplace=True)
+            df.sort_index(inplace=True)
             return df
         except Exception as e:
-            logger.error(f"Error fetching bars for {symbol}: {str(e)}")
+            logger.error(f"Error getting bars for {symbol}: {e}")
             return pd.DataFrame()
 
     def get_assets(self) -> List[Dict[str, Any]]:
@@ -103,43 +123,58 @@ class AlpacaClient:
             logger.error(f"Error getting assets: {str(e)}")
             return []
 
-    def submit_order(
-        self,
-        symbol: str,
-        qty: float,
-        side: str,
-        type: str,
-        time_in_force: str,
-        limit_price: Optional[float] = None,
-        stop_price: Optional[float] = None
-    ) -> Dict[str, Any]:
-        """Submit a trading order."""
+    def submit_order(self, symbol: str, qty: float, side: str, type: str = 'market',
+                    time_in_force: str = 'day', limit_price: Optional[float] = None,
+                    stop_price: Optional[float] = None) -> Dict[str, Any]:
+        """Submit an order."""
         try:
-            order_data: Dict[str, Any] = {
-                "symbol": symbol,
-                "qty": qty,
-                "side": side,
-                "type": type,
-                "time_in_force": time_in_force
-            }
-
-            if type == "limit" and limit_price is not None:
-                order_data["limit_price"] = limit_price
-                order_request = LimitOrderRequest(**order_data)
-            elif type == "stop" and stop_price is not None:
-                order_data["stop_price"] = stop_price
-                order_request = StopOrderRequest(**order_data)
+            if type == 'market':
+                order_data = MarketOrderRequest(
+                    symbol=symbol,
+                    qty=qty,
+                    side=side,
+                    time_in_force=time_in_force
+                )
+            elif type == 'limit':
+                if limit_price is None:
+                    raise ValueError("Limit price required for limit orders")
+                order_data = LimitOrderRequest(
+                    symbol=symbol,
+                    qty=qty,
+                    side=side,
+                    time_in_force=time_in_force,
+                    limit_price=limit_price
+                )
+            elif type == 'stop':
+                if stop_price is None:
+                    raise ValueError("Stop price required for stop orders")
+                order_data = StopOrderRequest(
+                    symbol=symbol,
+                    qty=qty,
+                    side=side,
+                    time_in_force=time_in_force,
+                    stop_price=stop_price
+                )
             else:
-                order_request = MarketOrderRequest(**order_data)
+                raise ValueError(f"Invalid order type: {type}")
 
-            order = self._client.submit_order(order_request)
+            order = self._client.submit_order(order_data)
             return {
-                "id": order.id,
-                "client_order_id": order.client_order_id,
-                "status": order.status
+                'id': str(order.id),
+                'symbol': str(order.symbol),
+                'qty': float(order.qty),
+                'filled_qty': float(order.filled_qty),
+                'type': str(order.type),
+                'side': str(order.side),
+                'time_in_force': str(order.time_in_force),
+                'status': str(order.status),
+                'limit_price': float(order.limit_price) if order.limit_price else None,
+                'stop_price': float(order.stop_price) if order.stop_price else None,
+                'filled_avg_price': float(order.filled_avg_price) if order.filled_avg_price else None,
+                'created_at': order.created_at.isoformat()
             }
         except Exception as e:
-            logger.error(f"Error submitting order: {str(e)}")
+            logger.error(f"Error submitting order: {e}")
             return {}
 
     def cancel_order(self, order_id: str) -> bool:
