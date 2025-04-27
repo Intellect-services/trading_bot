@@ -1,7 +1,7 @@
 """Trading bot module."""
 
 from datetime import datetime, timedelta
-from typing import Dict, List, Any, Optional, Callable
+from typing import Dict, List, Any, Optional, Callable, TypedDict
 import pandas as pd
 import logging
 from decimal import Decimal
