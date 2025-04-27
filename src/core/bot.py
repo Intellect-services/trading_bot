@@ -1,10 +1,13 @@
 """Trading bot module."""
 
-from datetime import datetime
-from typing import Dict, List, Any, Optional, Callable, Union, TypedDict, cast
+from datetime import datetime, timedelta
+from typing import Dict, List, Any, Optional, Callable
 import pandas as pd
 import logging
 from decimal import Decimal
+import pytz
+import threading
+import time
 
 from src.utils.config import Config
 from src.core.strategy import Strategy
@@ -12,6 +15,7 @@ from src.core.risk_manager import RiskManager
 from src.core.portfolio import Portfolio
 from src.core.data_feed import DataFeed
 from src.utils.logger import setup_logger
+from src.core.alpaca_client import AlpacaClient
 
 logger = setup_logger(__name__)
 
@@ -26,34 +30,134 @@ class Position(TypedDict):
 class TradingBot:
     """Trading bot for executing trading strategies."""
 
-    def __init__(
-        self,
-        config: Config,
-        strategy: Strategy,
-        risk_manager: RiskManager,
-        data_feed: Optional[DataFeed] = None,
-        portfolio: Optional[Portfolio] = None,
-        initial_capital: Optional[float] = None,
-    ):
-        """Initialize trading bot.
-
-        Args:
-            config: Configuration instance
-            strategy: Trading strategy instance
-            risk_manager: Risk management instance
-            data_feed: Optional data feed instance
-            portfolio: Optional portfolio instance
-            initial_capital: Optional initial capital amount (overrides config)
-        """
+    def __init__(self, config: Config) -> None:
+        """Initialize trading bot."""
         self.config = config
-        self.strategy = strategy
-        self.risk_manager = risk_manager
-        self.data_feed = data_feed or DataFeed(config)
-        self.portfolio = portfolio or Portfolio(initial_capital or config.INITIAL_BALANCE)
+        self.client = AlpacaClient(config)
+        self.data_feed = DataFeed(self.client)
+        self.portfolio = Portfolio(config.INITIAL_BALANCE)
+        self._running = False
+        self._thread: Optional[threading.Thread] = None
+        self.logger = logger
         self.positions: Dict[str, Position] = {}
         self.symbols: List[str] = []
-        self.running: bool = False
         logger.info("Trading bot initialized with capital: %s", self.portfolio.current_balance)
+
+    def start(self) -> None:
+        """Start the trading bot."""
+        if not self._running:
+            self._running = True
+            self.data_feed.start()
+            self._thread = threading.Thread(target=self._run)
+            self._thread.daemon = True
+            self._thread.start()
+            self.logger.info("Started trading bot")
+
+    def stop(self) -> None:
+        """Stop the trading bot."""
+        if self._running:
+            self._running = False
+            self.data_feed.stop()
+            if self._thread:
+                self._thread.join()
+            self.logger.info("Stopped trading bot")
+
+    def _run(self) -> None:
+        """Run the trading bot loop."""
+        while self._running:
+            try:
+                # Update portfolio
+                self._update_portfolio()
+                
+                # Generate signals
+                signals = self.generate_signals()
+                
+                # Execute trades based on signals
+                for symbol, action in signals.items():
+                    if action == 'buy':
+                        self._execute_buy(symbol)
+                    elif action == 'sell':
+                        self._execute_sell(symbol)
+                
+                time.sleep(60)  # Check every minute
+            except Exception as e:
+                self.logger.error(f"Error in trading bot loop: {e}")
+                time.sleep(60)  # Wait before retrying
+
+    def _update_portfolio(self) -> None:
+        """Update portfolio with latest prices."""
+        try:
+            positions = self.client.get_positions()
+            for position in positions:
+                symbol = position['symbol']
+                price = self.data_feed.get_latest_price(symbol)
+                if price is not None:
+                    self.portfolio.update_position(symbol, position['qty'], price)
+        except Exception as e:
+            self.logger.error(f"Error updating portfolio: {e}")
+
+    def _execute_buy(self, symbol: str) -> None:
+        """Execute a buy order."""
+        try:
+            price = self.data_feed.get_latest_price(symbol)
+            if price is None:
+                return
+            
+            # Calculate position size
+            position_size = self.portfolio.calculate_position_size(symbol, price)
+            if position_size <= 0:
+                return
+            
+            # Submit order
+            order = self.client.submit_order(
+                symbol=symbol,
+                qty=position_size,
+                side='buy',
+                type='market'
+            )
+            
+            if order:
+                self.logger.info(f"Executed buy order for {symbol}: {order}")
+        except Exception as e:
+            self.logger.error(f"Error executing buy order for {symbol}: {e}")
+
+    def _execute_sell(self, symbol: str) -> None:
+        """Execute a sell order."""
+        try:
+            position = self.portfolio.get_position(symbol)
+            if not position or position['quantity'] <= 0:
+                return
+            
+            # Submit order
+            order = self.client.submit_order(
+                symbol=symbol,
+                qty=position['quantity'],
+                side='sell',
+                type='market'
+            )
+            
+            if order:
+                self.logger.info(f"Executed sell order for {symbol}: {order}")
+        except Exception as e:
+            self.logger.error(f"Error executing sell order for {symbol}: {e}")
+
+    def generate_signals(self) -> Dict[str, str]:
+        """Generate trading signals."""
+        signals: Dict[str, str] = {}
+        try:
+            for symbol in self.data_feed.symbols:
+                df = self.data_feed.get_latest_data(symbol)
+                if df.empty:
+                    continue
+                
+                # Simple moving average crossover strategy
+                if df['sma_20'].iloc[-1] > df['sma_50'].iloc[-1] and df['sma_20'].iloc[-2] <= df['sma_50'].iloc[-2]:
+                    signals[symbol] = 'buy'
+                elif df['sma_20'].iloc[-1] < df['sma_50'].iloc[-1] and df['sma_20'].iloc[-2] >= df['sma_50'].iloc[-2]:
+                    signals[symbol] = 'sell'
+        except Exception as e:
+            self.logger.error(f"Error generating signals: {e}")
+        return signals
 
     def get_account_info(self) -> Dict[str, float]:
         """Get current account information.
@@ -160,8 +264,8 @@ class TradingBot:
 
         try:
             # Check risk management
-            position = cast(Dict[str, Any], self.positions.get(symbol, {}))
-            if not self.risk_manager.apply_risk_management(
+            position = self.positions.get(symbol)
+            if position and not self.risk_manager.apply_risk_management(
                 price=price,
                 position=position,
                 account_value=self.portfolio.current_balance,
@@ -203,24 +307,6 @@ class TradingBot:
         """
         return self.positions.get(symbol)
 
-    def generate_signals(self, data: pd.DataFrame) -> Dict[str, str]:
-        """Generate trading signals from data.
-
-        Args:
-            data: Market data DataFrame
-
-        Returns:
-            Dictionary of signal types and values
-        """
-        try:
-            signals = self.strategy.generate_signals(data)
-            if isinstance(signals, pd.DataFrame):
-                return signals.iloc[-1].to_dict()
-            return signals
-        except Exception as e:
-            logger.error(f"Error generating signals: {str(e)}")
-            return {}
-
     def add_symbol(self, symbol: str) -> None:
         """Add a symbol to track.
 
@@ -235,68 +321,6 @@ class TradingBot:
         except Exception as e:
             logger.error(f"Error adding symbol {symbol}: {str(e)}")
 
-    def start(self) -> None:
-        """Start the trading bot."""
-        try:
-            self.running = True
-            self.data_feed.add_callback(self._on_data_update_wrapper)
-            self.data_feed.start()
-            logger.info("Trading bot started")
-        except Exception as e:
-            logger.error(f"Error starting trading bot: {str(e)}")
-            self.running = False
-
-    def stop(self) -> None:
-        """Stop the trading bot."""
-        try:
-            self.running = False
-            self.data_feed.stop()
-            logger.info("Trading bot stopped")
-        except Exception as e:
-            logger.error(f"Error stopping trading bot: {str(e)}")
-
-    def _on_data_update_wrapper(self, symbol: str, data: pd.DataFrame) -> None:
-        """Wrapper for data update callback.
-
-        Args:
-            symbol: Trading symbol
-            data: Market data DataFrame
-        """
-        if not self.running:
-            return
-
-        try:
-            signals = self.generate_signals(data)
-            self._on_data_update(symbol, signals)
-        except Exception as e:
-            logger.error(f"Error in data update wrapper: {str(e)}")
-
-    def _on_data_update(self, symbol: str, signals: Dict[str, str]) -> None:
-        """Handle data updates and execute trades.
-
-        Args:
-            symbol: Trading symbol
-            signals: Dictionary of trading signals
-        """
-        try:
-            if not self.running:
-                return
-
-            position = self.get_position(symbol)
-            latest_price = self.data_feed.get_latest_price(symbol)
-
-            if not latest_price:
-                logger.warning(f"No price data available for {symbol}")
-                return
-
-            if signals.get('action') == 'buy' and (not position or position['quantity'] <= 0):
-                self.execute_trade(symbol, 1.0, latest_price, 'buy')
-            elif signals.get('action') == 'sell' and position and position['quantity'] > 0:
-                self.execute_trade(symbol, position['quantity'], latest_price, 'sell')
-
-        except Exception as e:
-            logger.error(f"Error handling data update: {str(e)}")
-
     def get_status(self) -> Dict[str, Any]:
         """Get current bot status.
 
@@ -304,7 +328,7 @@ class TradingBot:
             Dictionary containing bot status information
         """
         return {
-            "running": self.running,
+            "running": self._running,
             "symbols": self.symbols,
             "positions": self.positions,
             "portfolio_value": self.portfolio.current_balance,
