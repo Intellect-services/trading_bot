@@ -43,6 +43,8 @@ class BacktestingEngine:
         self.commission = commission
         self.slippage = slippage
         self.portfolio = Portfolio(initial_capital)
+        self.risk_manager = RiskManager(Config())
+        self.positions: Dict[str, Dict[str, Any]] = {}
         self.logger = logging.getLogger(__name__)
         self.trade_history: List[Dict[str, Any]] = []
 
@@ -64,8 +66,8 @@ class BacktestingEngine:
             for symbol in self.strategy.symbols:
                 data = self.data_feed.get_historical_data(
                     symbol=symbol,
-                    start=start_date.strftime('%Y-%m-%d'),
-                    end=end_date.strftime('%Y-%m-%d')
+                    start=start_date,
+                    end=end_date
                 )
                 if not data.empty:
                     historical_data[symbol] = data
