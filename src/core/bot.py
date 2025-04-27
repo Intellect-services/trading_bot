@@ -36,6 +36,7 @@ class TradingBot:
         self.client = AlpacaClient(config)
         self.data_feed = DataFeed(self.client)
         self.portfolio = Portfolio(config.INITIAL_BALANCE)
+        self.risk_manager = RiskManager(config)
         self._running = False
         self._thread: Optional[threading.Thread] = None
         self.logger = logger
@@ -92,7 +93,7 @@ class TradingBot:
                 symbol = position['symbol']
                 price = self.data_feed.get_latest_price(symbol)
                 if price is not None:
-                    self.portfolio.update_position(symbol, position['qty'], price)
+                    self.portfolio.update_position(symbol, position['qty'], price, 'update')
         except Exception as e:
             self.logger.error(f"Error updating portfolio: {e}")
 
@@ -104,7 +105,7 @@ class TradingBot:
                 return
             
             # Calculate position size
-            position_size = self.portfolio.calculate_position_size(symbol, price)
+            position_size = self.portfolio.calculate_position_size(price)
             if position_size <= 0:
                 return
             
