@@ -30,12 +30,12 @@ class Position(TypedDict):
 class TradingBot:
     """Trading bot for executing trading strategies."""
 
-    def __init__(self, config: Config) -> None:
+    def __init__(self, config: Dict[str, Any]) -> None:
         """Initialize trading bot."""
         self.config = config
         self.client = AlpacaClient(config)
         self.data_feed = DataFeed(self.client)
-        self.portfolio = Portfolio(config.INITIAL_BALANCE)
+        self.portfolio = Portfolio(config['INITIAL_BALANCE'])
         self.risk_manager = RiskManager(config)
         self._running = False
         self._thread: Optional[threading.Thread] = None
@@ -268,7 +268,7 @@ class TradingBot:
             position = self.positions.get(symbol)
             if position and not self.risk_manager.apply_risk_management(
                 price=price,
-                position=position,
+                position=dict(position),  # Convert TypedDict to dict
                 account_value=self.portfolio.current_balance,
             ):
                 logger.warning("Trade rejected by risk management")
