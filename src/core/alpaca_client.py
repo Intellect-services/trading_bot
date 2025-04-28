@@ -23,19 +23,49 @@ class AlpacaClient:
     def __init__(self, config: Config) -> None:
         """Initialize Alpaca client."""
         self.config = config
-        self._client = TradingClient(
-            config.ALPACA_API_KEY,
-            config.ALPACA_SECRET_KEY,
-            'https://paper-api.alpaca.markets' if config.PAPER_TRADING else 'https://api.alpaca.markets'
+        self._client = None
+        self._data_client = None
+        self._mocked_mode = config.PAPER_TRADING and (
+            config.ALPACA_API_KEY == 'mocked_api_key' or 
+            not config.ALPACA_API_KEY or 
+            not config.ALPACA_SECRET_KEY
         )
-        self._data_client = StockHistoricalDataClient(
-            config.ALPACA_API_KEY,
-            config.ALPACA_SECRET_KEY
-        )
+        
+        if not self._mocked_mode:
+            self._client = TradingClient(
+                config.ALPACA_API_KEY,
+                config.ALPACA_SECRET_KEY,
+                'https://paper-api.alpaca.markets' if config.PAPER_TRADING else 'https://api.alpaca.markets'
+            )
+            self._data_client = StockHistoricalDataClient(
+                config.ALPACA_API_KEY,
+                config.ALPACA_SECRET_KEY
+            )
         self.logger = logger
 
     def get_account(self) -> Dict[str, Any]:
         """Get account information."""
+        if self._mocked_mode:
+            return {
+                'account_number': 'MOCKED',
+                'cash': self.config.INITIAL_BALANCE,
+                'buying_power': self.config.INITIAL_BALANCE * 2,
+                'equity': self.config.INITIAL_BALANCE,
+                'last_equity': self.config.INITIAL_BALANCE,
+                'created_at': datetime.now().isoformat(),
+                'currency': 'USD',
+                'daytrade_count': 0,
+                'initial_margin': self.config.INITIAL_BALANCE,
+                'maintenance_margin': self.config.INITIAL_BALANCE * 0.25,
+                'pattern_day_trader': False,
+                'portfolio_value': self.config.INITIAL_BALANCE,
+                'regt_buying_power': self.config.INITIAL_BALANCE * 2,
+                'shorting_enabled': True,
+                'status': 'ACTIVE',
+                'trading_blocked': False,
+                'transfers_blocked': False,
+                'account_blocked': False
+            }
         try:
             account = cast(TradeAccount, self._client.get_account())
             return {
@@ -64,6 +94,8 @@ class AlpacaClient:
 
     def get_position(self, symbol: str) -> Optional[Dict[str, Any]]:
         """Get position for a symbol."""
+        if self._mocked_mode:
+            return None  # No positions in mocked mode initially
         try:
             position = cast(Position, self._client.get_open_position(symbol))
             if position is None:
@@ -84,6 +116,8 @@ class AlpacaClient:
 
     def get_positions(self) -> List[Dict[str, Any]]:
         """Get all positions."""
+        if self._mocked_mode:
+            return []  # No positions in mocked mode initially
         try:
             positions = cast(List[Position], self._client.get_all_positions())
             return [{
@@ -102,27 +136,33 @@ class AlpacaClient:
 
     def get_bars(self, symbol: str, timeframe: str = '1D', limit: int = 100) -> pd.DataFrame:
         """Get historical bars for a symbol."""
+        if self._mocked_mode:
+            # Generate mock data
+            end_date = datetime.now(pytz.UTC)
+            start_date = end_date - timedelta(days=limit)
+            dates = pd.date_range(start=start_date, end=end_date, freq=timeframe)
+            data = {
+                'open': [100.0] * len(dates),
+                'high': [105.0] * len(dates),
+                'low': [95.0] * len(dates),
+                'close': [100.0] * len(dates),
+                'volume': [1000000] * len(dates)
+            }
+            df = pd.DataFrame(data, index=dates)
+            return df
         try:
             request = StockBarsRequest(
                 symbol_or_symbols=symbol,
-                timeframe=TimeFrame.Day if timeframe == '1D' else TimeFrame.Hour,
-                limit=limit
+                timeframe=TimeFrame.Day if timeframe == '1D' else TimeFrame.Minute,
+                start=datetime.now(pytz.UTC) - timedelta(days=limit),
+                end=datetime.now(pytz.UTC)
             )
             bars = self._data_client.get_stock_bars(request)
             if not bars:
                 return pd.DataFrame()
-            
-            df = pd.DataFrame([{
-                'timestamp': b.timestamp,
-                'open': float(b.open) if b.open is not None else 0.0,
-                'high': float(b.high) if b.high is not None else 0.0,
-                'low': float(b.low) if b.low is not None else 0.0,
-                'close': float(b.close) if b.close is not None else 0.0,
-                'volume': int(b.volume) if b.volume is not None else 0
-            } for b in cast(List[Bar], bars)])
-            
-            df.set_index('timestamp', inplace=True)
-            df.sort_index(inplace=True)
+            df = bars.df
+            if isinstance(df.index, pd.MultiIndex):
+                df = df.xs(symbol, level=1)
             return df
         except Exception as e:
             logger.error(f"Error getting bars for {symbol}: {e}")
@@ -141,8 +181,21 @@ class AlpacaClient:
                     time_in_force: str = 'day', limit_price: Optional[float] = None,
                     stop_price: Optional[float] = None) -> Dict[str, Any]:
         """Submit an order."""
+        if self._mocked_mode:
+            # Return mock order response
+            return {
+                'id': 'mocked_order_id',
+                'symbol': symbol,
+                'qty': str(qty),
+                'side': side,
+                'type': type,
+                'time_in_force': time_in_force,
+                'status': 'filled',
+                'filled_at': datetime.now(pytz.UTC).isoformat(),
+                'filled_qty': str(qty),
+                'filled_avg_price': '100.0'
+            }
         try:
-            order_data: Union[MarketOrderRequest, LimitOrderRequest, StopOrderRequest]
             if type == 'market':
                 order_data = MarketOrderRequest(
                     symbol=symbol,
@@ -151,7 +204,7 @@ class AlpacaClient:
                     time_in_force=time_in_force
                 )
             elif type == 'limit':
-                if limit_price is None:
+                if not limit_price:
                     raise ValueError("Limit price required for limit orders")
                 order_data = LimitOrderRequest(
                     symbol=symbol,
@@ -161,7 +214,7 @@ class AlpacaClient:
                     limit_price=limit_price
                 )
             elif type == 'stop':
-                if stop_price is None:
+                if not stop_price:
                     raise ValueError("Stop price required for stop orders")
                 order_data = StopOrderRequest(
                     symbol=symbol,
@@ -171,22 +224,20 @@ class AlpacaClient:
                     stop_price=stop_price
                 )
             else:
-                raise ValueError(f"Invalid order type: {type}")
+                raise ValueError(f"Unsupported order type: {type}")
 
-            order = cast(Order, self._client.submit_order(order_data))
+            order = self._client.submit_order(order_data)
             return {
                 'id': str(order.id),
                 'symbol': str(order.symbol),
-                'qty': float(order.qty) if order.qty is not None else 0.0,
-                'filled_qty': float(order.filled_qty) if order.filled_qty is not None else 0.0,
-                'type': str(order.type),
+                'qty': str(order.qty),
                 'side': str(order.side),
+                'type': str(order.type),
                 'time_in_force': str(order.time_in_force),
                 'status': str(order.status),
-                'limit_price': float(order.limit_price) if order.limit_price is not None else None,
-                'stop_price': float(order.stop_price) if order.stop_price is not None else None,
-                'filled_avg_price': float(order.filled_avg_price) if order.filled_avg_price is not None else None,
-                'created_at': order.created_at.isoformat() if order.created_at is not None else ''
+                'filled_at': order.filled_at.isoformat() if order.filled_at else None,
+                'filled_qty': str(order.filled_qty) if order.filled_qty else None,
+                'filled_avg_price': str(order.filled_avg_price) if order.filled_avg_price else None
             }
         except Exception as e:
             logger.error(f"Error submitting order: {e}")

@@ -5,8 +5,8 @@ import logging
 import pandas as pd
 from datetime import datetime
 import numpy as np
-from src.utils.config import Config
-from src.utils.logger import setup_logger
+from utils.config import Config
+from utils.logger import setup_logger
 
 logger = setup_logger(__name__)
 
@@ -35,6 +35,7 @@ class Strategy:
         self.trades: List[Dict] = []
         self.current_position: Dict[str, Any] = {}
         self.data: Dict[str, pd.DataFrame] = {}
+        self.logger = logger
 
         logger.info("Initialized %s strategy", self.name)
 
@@ -153,16 +154,18 @@ class Strategy:
             self.current_position.get(symbol, "No position"),
         )
 
-    def calculate_position_size(self, price: float) -> float:
+    def calculate_position_size(self, price: float, account_value: float) -> float:
         """Calculate the position size based on risk parameters.
 
         Args:
             price (float): Current market price
+            account_value (float): Current account value
 
         Returns:
             float: Position size in base currency
         """
-        return self.config.RISK_MAX_POSITION_SIZE
+        max_position_size = self.config.get('max_position_size', 0.1)
+        return (account_value * max_position_size) / price
 
     @staticmethod
     def format_price(price: float, decimals: int = 2) -> str:

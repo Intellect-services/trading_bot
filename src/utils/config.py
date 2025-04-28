@@ -5,10 +5,11 @@ from typing import Dict, Any, Optional
 from dotenv import load_dotenv
 from datetime import datetime, time
 import json
+import logging
 
-from src.utils.logger import setup_logger
-
-logger = setup_logger(__name__)
+# Configure basic logging
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger(__name__)
 
 
 def get_config() -> Dict[str, Any]:
@@ -70,138 +71,105 @@ def validate_config(config: Dict[str, Any]) -> bool:
 
 
 class Config:
-    """Configuration class for managing trading parameters."""
-
-    def __init__(self, config_file: str = "config.json"):
-        """Initialize configuration.
-
-        Args:
-            config_file: Path to configuration file
-        """
-        self.config_file = config_file
-        self.config_data: Dict[str, Any] = {}
+    """Configuration manager for the trading bot."""
+    
+    def __init__(self):
+        """Initialize configuration."""
+        self.config_data = {}
         self.load_config()
-
-        # Trading settings
-        self.INITIAL_BALANCE: float = self.config_data.get("initial_balance", 10000.0)
-        self.PAPER_TRADING: bool = self.config_data.get("paper_trading", True)
-        self.COMMISSION: float = self.config_data.get("commission", 0.001)
-        self.SLIPPAGE: float = self.config_data.get("slippage", 0.0005)
-
-        # API keys
-        self.ALPACA_API_KEY: str = self.config_data.get("alpaca_api_key", os.getenv("ALPACA_API_KEY", ""))
-        self.ALPACA_SECRET_KEY: str = self.config_data.get("alpaca_secret_key", os.getenv("ALPACA_SECRET_KEY", ""))
-
-        # Risk management
-        self.RISK_FREE_RATE: float = self.config_data.get("risk_free_rate", 0.02)
-        self.RISK_MAX_POSITION_SIZE: float = self.config_data.get("risk_max_position_size", 0.1)
-        self.RISK_STOP_LOSS_PCT: float = self.config_data.get("risk_stop_loss_pct", 0.02)
-        self.RISK_MAX_DRAWDOWN: float = self.config_data.get("risk_max_drawdown", 0.1)
-        self.RISK_PER_TRADE: float = self.config_data.get("risk_per_trade", 0.01)
-        self.RISK_MAX_LEVERAGE: float = self.config_data.get("risk_max_leverage", 2.0)
-
-        # Strategy parameters
-        self.STRATEGY_PARAMS: Dict[str, Any] = self.config_data.get("strategy_params", {})
-
-        # Market Configuration
-        self.MARKET_OPEN = time(9, 30)  # 9:30 AM ET
-        self.MARKET_CLOSE = time(16, 0)  # 4:00 PM ET
-        self.DEFAULT_SYMBOL = self.config_data.get("default_symbol", "SPY")
-        self.DEFAULT_TIMEFRAME = self.config_data.get("default_timeframe", "1Min")
-
-        # Backtesting Configuration
-        self.BACKTEST_START_DATE = datetime.strptime(
-            self.config_data.get("backtest_start_date", "2020-01-01"),
-            '%Y-%m-%d'
-        )
-        self.BACKTEST_END_DATE = datetime.strptime(
-            self.config_data.get("backtest_end_date", "2020-12-31"),
-            '%Y-%m-%d'
-        )
-
-        logger.info("Configuration initialized")
-
-    def load_config(self) -> None:
-        """Load configuration from file."""
-        try:
-            if os.path.exists(self.config_file):
-                with open(self.config_file, "r") as f:
-                    self.config_data = json.load(f)
-        except Exception as e:
-            logger.error(f"Error loading config file: {str(e)}")
-            self.config_data = {}
-
-    def to_dict(self) -> Dict[str, str]:
-        """Convert config to dictionary format.
-
-        Returns:
-            Dictionary containing configuration values
-        """
-        return {
-            'ALPACA_API_KEY': self.ALPACA_API_KEY,
-            'ALPACA_SECRET_KEY': self.ALPACA_SECRET_KEY,
-            'INITIAL_BALANCE': str(self.INITIAL_BALANCE),
-            'PAPER_TRADING': str(self.PAPER_TRADING),
-            'COMMISSION': str(self.COMMISSION),
-            'SLIPPAGE': str(self.SLIPPAGE),
-            'RISK_FREE_RATE': str(self.RISK_FREE_RATE),
-            'RISK_MAX_POSITION_SIZE': str(self.RISK_MAX_POSITION_SIZE),
-            'RISK_STOP_LOSS_PCT': str(self.RISK_STOP_LOSS_PCT),
-            'RISK_MAX_DRAWDOWN': str(self.RISK_MAX_DRAWDOWN),
-            'RISK_PER_TRADE': str(self.RISK_PER_TRADE),
-            'RISK_MAX_LEVERAGE': str(self.RISK_MAX_LEVERAGE),
-            'DEFAULT_SYMBOL': self.DEFAULT_SYMBOL,
-            'DEFAULT_TIMEFRAME': self.DEFAULT_TIMEFRAME,
-            'BACKTEST_START_DATE': self.BACKTEST_START_DATE.strftime('%Y-%m-%d'),
-            'BACKTEST_END_DATE': self.BACKTEST_END_DATE.strftime('%Y-%m-%d'),
+        
+    def load_config(self):
+        """Load configuration from environment variables and .env file."""
+        # Load .env file
+        load_dotenv()
+        
+        # Set default values
+        self.config_data = {
+            # API Configuration
+            'alpaca_api_key': os.getenv('ALPACA_API_KEY', ''),
+            'alpaca_secret_key': os.getenv('ALPACA_SECRET_KEY', ''),
+            'ALPACA_API_KEY': os.getenv('ALPACA_API_KEY', ''),
+            'ALPACA_SECRET_KEY': os.getenv('ALPACA_SECRET_KEY', ''),
+            'API_KEY': os.getenv('ALPACA_API_KEY', ''),
+            'SECRET_KEY': os.getenv('ALPACA_SECRET_KEY', ''),
+            
+            # Trading Mode
+            'paper_trading': os.getenv('PAPER_TRADING', 'True').lower() == 'true',
+            'PAPER_TRADING': os.getenv('PAPER_TRADING', 'True').lower() == 'true',
+            'PAPER': os.getenv('PAPER_TRADING', 'True').lower() == 'true',
+            
+            # Account Settings
+            'initial_balance': float(os.getenv('INITIAL_BALANCE', '10000.0')),
+            'INITIAL_BALANCE': float(os.getenv('INITIAL_BALANCE', '10000.0')),
+            
+            # Risk Management
+            'max_position_size': float(os.getenv('MAX_POSITION_SIZE', '0.1')),
+            'stop_loss': float(os.getenv('STOP_LOSS', '0.02')),
+            'max_drawdown': float(os.getenv('MAX_DRAWDOWN', '0.20')),
+            'max_leverage': float(os.getenv('MAX_LEVERAGE', '2.00')),
+            'RISK_MAX_POSITION_SIZE': float(os.getenv('MAX_POSITION_SIZE', '0.1')),
+            'RISK_STOP_LOSS_PCT': float(os.getenv('STOP_LOSS', '0.02')),
+            'RISK_MAX_DRAWDOWN': float(os.getenv('MAX_DRAWDOWN', '0.20')),
+            'RISK_MAX_LEVERAGE': float(os.getenv('MAX_LEVERAGE', '2.00')),
+            
+            # Trading Parameters
+            'DEFAULT_SYMBOL': os.getenv('DEFAULT_SYMBOL', 'AAPL'),
+            'DEFAULT_TIMEFRAME': os.getenv('DEFAULT_TIMEFRAME', '1D'),
+            
+            # Market Hours
+            'MARKET_OPEN': os.getenv('MARKET_OPEN', '09:30'),
+            'MARKET_CLOSE': os.getenv('MARKET_CLOSE', '16:00'),
+            
+            # System Configuration
+            'UPDATE_INTERVAL': int(os.getenv('UPDATE_INTERVAL', '60')),
+            'ERROR_RETRY_INTERVAL': int(os.getenv('ERROR_RETRY_INTERVAL', '60')),
+            'LOG_LEVEL': os.getenv('LOG_LEVEL', 'INFO'),
         }
+        
+        logger.info("Configuration initialized")
+        
+    def get(self, key, default=None):
+        """Get a configuration value."""
+        return self.config_data.get(key, default)
+        
+    def __getattr__(self, name):
+        """Allow attribute access to config values."""
+        if name in self.config_data:
+            return self.config_data[name]
+        # Try uppercase version
+        if name.upper() in self.config_data:
+            return self.config_data[name.upper()]
+        raise AttributeError(f"'Config' object has no attribute '{name}'")
 
-    @classmethod
-    def get(cls, key: str, default: Any = None) -> Any:
-        """Get a configuration value by key.
-
-        Args:
-            key: The configuration key (e.g., 'risk.max_drawdown')
-            default: Default value if key is not found
-
-        Returns:
-            The configuration value
-        """
-        try:
-            # Handle nested keys (e.g., 'risk.max_drawdown')
-            parts = key.split(".")
-            if len(parts) == 2:
-                section, param = parts
-                attr_name = f"{section.upper()}_{param.upper()}"
-            else:
-                attr_name = key.upper()
-
-            return getattr(cls, attr_name, default)
-        except (AttributeError, ValueError):
-            return default
+    def to_dict(self) -> Dict[str, Any]:
+        """Convert config to dictionary format."""
+        return self.config_data.copy()
 
     @classmethod
     def get_trading_params(cls) -> Dict[str, float]:
         """Get trading parameters."""
+        config = cls()
         return {
-            "max_position_size": cls.RISK_MAX_POSITION_SIZE,
-            "risk_per_trade": cls.RISK_PER_TRADE,
-            "stop_loss_percent": cls.RISK_STOP_LOSS_PCT,
+            "max_position_size": config.get('RISK_MAX_POSITION_SIZE', 0.1),
+            "risk_per_trade": config.get('RISK_PER_TRADE', 0.01),
+            "stop_loss_percent": config.get('RISK_STOP_LOSS_PCT', 0.02),
         }
 
     @classmethod
     def get_backtest_params(cls) -> Dict[str, Any]:
         """Get backtesting parameters."""
+        config = cls()
         return {
-            "start_date": cls.BACKTEST_START_DATE.strftime('%Y-%m-%d'),
-            "end_date": cls.BACKTEST_END_DATE.strftime('%Y-%m-%d'),
-            "initial_capital": str(cls.INITIAL_BALANCE),
+            "start_date": config.get('BACKTEST_START_DATE', '2020-01-01'),
+            "end_date": config.get('BACKTEST_END_DATE', '2023-12-31'),
+            "initial_capital": str(config.get('INITIAL_BALANCE', 10000.0)),
         }
 
     @classmethod
     def get_risk_params(cls) -> Dict[str, float]:
         """Get risk management parameters."""
+        config = cls()
         return {
-            "max_drawdown": cls.RISK_MAX_DRAWDOWN,
-            "risk_per_trade": cls.RISK_PER_TRADE,
+            "max_drawdown": config.get('RISK_MAX_DRAWDOWN', 0.2),
+            "risk_per_trade": config.get('RISK_PER_TRADE', 0.01),
         }
