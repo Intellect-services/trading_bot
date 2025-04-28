@@ -2,15 +2,19 @@
 
 from typing import Any, Dict, List, Optional, Union
 from datetime import datetime, timedelta
-
 import pandas as pd
+
 from alpaca.trading.client import TradingClient
-from alpaca.trading.requests import MarketOrderRequest, LimitOrderRequest, StopOrderRequest
+from alpaca.trading.requests import (
+    MarketOrderRequest,
+    LimitOrderRequest,
+    StopOrderRequest
+)
 from alpaca.trading.enums import OrderSide, TimeInForce
 from alpaca.data.historical import StockHistoricalDataClient
 from alpaca.data.requests import StockBarsRequest
 from alpaca.data.timeframe import TimeFrame
-from alpaca.trading.models import Order, Position
+from alpaca.trading.models import Order, Position, Asset
 
 from src.utils.config import get_config
 from src.utils.logger import setup_logger
@@ -57,7 +61,10 @@ class AlpacaClient:
         """
         if self.trading_client is None:
             raise RuntimeError("Trading client not initialized")
-        return self.trading_client.get_account().dict()
+        account = self.trading_client.get_account()
+        if isinstance(account, dict):
+            return account
+        return account.dict()
 
     def get_position(self, symbol: str) -> Optional[Dict[str, Any]]:
         """
@@ -73,6 +80,8 @@ class AlpacaClient:
             raise RuntimeError("Trading client not initialized")
         try:
             position = self.trading_client.get_open_position(symbol)
+            if isinstance(position, dict):
+                return position
             return position.dict()
         except Exception:
             return None
@@ -87,7 +96,15 @@ class AlpacaClient:
         if self.trading_client is None:
             raise RuntimeError("Trading client not initialized")
         positions = self.trading_client.get_all_positions()
-        return {pos.symbol: pos.dict() for pos in positions}
+        result: Dict[str, Dict[str, Any]] = {}
+        for pos in positions:
+            if isinstance(pos, Position):
+                result[pos.symbol] = pos.dict()
+            elif isinstance(pos, dict):
+                result[pos['symbol']] = pos
+            else:
+                logger.warning(f"Unexpected position type: {type(pos)}")
+        return result
 
     def get_historical_data(
         self,
@@ -120,7 +137,7 @@ class AlpacaClient:
 
         request = StockBarsRequest(
             symbol_or_symbols=symbol,
-            timeframe=TimeFrame(timeframe),
+            timeframe=TimeFrame.Day,  # Use Day as the unit
             start=start,
             end=end,
             limit=limit
@@ -141,7 +158,15 @@ class AlpacaClient:
         if self.trading_client is None:
             raise RuntimeError("Trading client not initialized")
         assets = self.trading_client.get_all_assets()
-        return [asset.dict() for asset in assets]
+        result: List[Dict[str, Any]] = []
+        for asset in assets:
+            if isinstance(asset, Asset):
+                result.append(asset.dict())
+            elif isinstance(asset, dict):
+                result.append(asset)
+            else:
+                logger.warning(f"Unexpected asset type: {type(asset)}")
+        return result
 
     def submit_order(
         self,
@@ -153,8 +178,7 @@ class AlpacaClient:
         limit_price: Optional[float] = None,
         stop_price: Optional[float] = None
     ) -> Dict[str, Any]:
-        """
-        Submit an order.
+        """Submit an order.
 
         Args:
             symbol: Trading symbol.
@@ -204,6 +228,8 @@ class AlpacaClient:
             raise ValueError(f"Invalid order type: {order_type}")
 
         order = self.trading_client.submit_order(order_data)
+        if isinstance(order, dict):
+            return order
         return {
             "id": order.id,
             "symbol": order.symbol,
@@ -249,6 +275,12 @@ class AlpacaClient:
             raise RuntimeError("Trading client not initialized")
         try:
             order = self.trading_client.get_order_by_id(order_id)
-            return order.dict()
+            if isinstance(order, Order):
+                return order.dict()
+            elif isinstance(order, dict):
+                return order
+            else:
+                logger.warning(f"Unexpected order type: {type(order)}")
+                return None
         except Exception:
             return None 

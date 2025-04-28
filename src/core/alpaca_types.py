@@ -1,6 +1,6 @@
 """Type stubs for Alpaca modules."""
 
-from typing import Any, Dict, List, Optional, Union, Protocol
+from typing import Any, Dict, List, Optional, Union, Protocol, TypedDict
 from datetime import datetime
 
 # Type stubs for alpaca.trading.client
@@ -81,4 +81,81 @@ class Bar(Protocol):
     h: float
     l: float
     c: float
-    v: int 
+    v: int
+
+class Position(TypedDict):
+    """Position type definition."""
+    
+    symbol: str
+    qty: float
+    avg_entry_price: float
+    market_value: float
+    cost_basis: float
+    unrealized_pl: float
+    unrealized_plpc: float
+    current_price: float
+    lastday_price: float
+    change_today: float
+
+class Order(TypedDict):
+    """Order type definition."""
+    
+    id: str
+    client_order_id: str
+    created_at: str
+    updated_at: str
+    submitted_at: str
+    filled_at: Optional[str]
+    expired_at: Optional[str]
+    canceled_at: Optional[str]
+    failed_at: Optional[str]
+    replaced_at: Optional[str]
+    replaced_by: Optional[str]
+    replaces: Optional[str]
+    asset_id: str
+    symbol: str
+    asset_class: str
+    notional: Optional[str]
+    qty: Optional[float]
+    filled_qty: float
+    filled_avg_price: Optional[float]
+    order_class: str
+    order_type: str
+    type: str
+    side: str
+    time_in_force: str
+    limit_price: Optional[float]
+    stop_price: Optional[float]
+    status: str
+    extended_hours: bool
+    legs: Optional[List]
+    trail_percent: Optional[float]
+    trail_price: Optional[float]
+    hwm: Optional[float]
+
+class Asset(TypedDict):
+    """Asset type definition."""
+    
+    id: str
+    class_: str
+    exchange: str
+    symbol: str
+    name: str
+    status: str
+    tradable: bool
+    marginable: bool
+    shortable: bool
+    easy_to_borrow: bool
+    fractionable: bool
+
+class Bar(TypedDict):
+    """Bar type definition."""
+    
+    timestamp: str
+    open: float
+    high: float
+    low: float
+    close: float
+    volume: int
+    trade_count: int
+    vwap: float 

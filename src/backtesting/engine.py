@@ -1,266 +1,207 @@
-"""Backtesting engine module."""
+"""Backtesting engine implementation."""
 
-from typing import Dict, List, Any, Optional
+from typing import Dict, List, Optional
+from datetime import datetime
 import pandas as pd
-from datetime import datetime, timedelta
-import numpy as np
-import logging
 
-from src.utils.config import Config
-from src.core.strategy import Strategy
-from src.core.risk_manager import RiskManager
-from src.core.portfolio import Portfolio
 from src.core.data_feed import DataFeed
+from src.core.portfolio import Portfolio
+from src.core.risk_manager import RiskManager
 from src.utils.logger import setup_logger
-from src.strategies.base_strategy import BaseStrategy
 
 logger = setup_logger(__name__)
 
 
 class BacktestingEngine:
-    """Engine for backtesting trading strategies."""
+    """Engine for running backtests."""
 
     def __init__(
         self,
-        data_feed: DataFeed,
-        strategy: BaseStrategy,
+        symbols: List[str],
+        start_date: datetime,
+        end_date: datetime,
         initial_capital: float = 100000.0,
-        commission: float = 0.0,
-        slippage: float = 0.0
     ) -> None:
         """Initialize backtesting engine.
 
         Args:
-            data_feed: Data feed instance
-            strategy: Trading strategy instance
-            initial_capital: Initial capital for the portfolio
-            commission: Trading commission
-            slippage: Trading slippage
+            symbols: List of symbols to trade
+            start_date: Start date for backtest
+            end_date: End date for backtest
+            initial_capital: Initial capital for backtest
         """
-        self.data_feed = data_feed
-        self.strategy = strategy
+        self.symbols = symbols
+        self.start_date = start_date
+        self.end_date = end_date
         self.initial_capital = initial_capital
-        self.commission = commission
-        self.slippage = slippage
+        
         self.portfolio = Portfolio(initial_capital)
-        self.risk_manager = RiskManager({
-            'RISK_FREE_RATE': 0.02,
-            'RISK_MAX_POSITION_SIZE': 0.1,
-            'RISK_STOP_LOSS_PCT': 0.02,
-            'RISK_MAX_DRAWDOWN': 0.1,
-            'RISK_PER_TRADE': 0.01
-        })
-        self.positions: Dict[str, Dict[str, Any]] = {}
-        self.logger = logging.getLogger(__name__)
-        self.trade_history: List[Dict[str, Any]] = []
+        self.risk_manager = RiskManager()
+        self.data_feed = DataFeed()
+        
+        self._initialize_data()
 
-    def run(self, start_date: datetime, end_date: datetime) -> Dict[str, Any]:
-        """Run backtest simulation.
+    def _initialize_data(self) -> None:
+        """Initialize historical data for backtesting."""
+        for symbol in self.symbols:
+            data = self.data_feed.get_historical_data(
+                symbol=symbol,
+                start=self.start_date,
+                end=self.end_date
+            )
+            if data.empty:
+                logger.warning("No data found for %s", symbol)
+                continue
+            
+            # Calculate technical indicators
+            self._calculate_indicators(data)
+            
+            # Store data
+            self.data[symbol] = data
+
+    def _calculate_indicators(self, data: pd.DataFrame) -> None:
+        """Calculate technical indicators for strategy.
 
         Args:
-            start_date: Start date of the backtest
-            end_date: End date of the backtest
+            data: DataFrame containing price data
+        """
+        # Calculate moving averages
+        data['sma_20'] = data['close'].rolling(window=20).mean()
+        data['sma_50'] = data['close'].rolling(window=50).mean()
+        
+        # Calculate RSI
+        delta = data['close'].diff()
+        gain = (delta.where(delta > 0, 0)).rolling(window=14).mean()
+        loss = (-delta.where(delta < 0, 0)).rolling(window=14).mean()
+        rs = gain / loss
+        data['rsi'] = 100 - (100 / (1 + rs))
+
+    def run(self) -> Dict[str, float]:
+        """Run backtest.
 
         Returns:
             Dictionary containing backtest results
         """
-        try:
-            logger.info("Starting backtest simulation")
-
-            # Get historical data for all symbols
-            historical_data = {}
-            for symbol in self.strategy.symbols:
-                data = self.data_feed.get_historical_data(
-                    symbol=symbol,
-                    start=start_date,
-                    end=end_date
-                )
-                if not data.empty:
-                    historical_data[symbol] = data
-
-            if not historical_data:
-                raise ValueError("No historical data available for backtesting")
-
-            # Run backtest
-            current_date = start_date
-            while current_date <= end_date:
-                self._process_trading_day(current_date, historical_data)
-                current_date += timedelta(days=1)
-
-            # Calculate and return performance metrics
-            metrics = self._calculate_performance_metrics()
-            logger.info("Backtest simulation completed")
-            return {
-                'metrics': metrics,
-                'trade_history': self.trade_history
-            }
-
-        except Exception as e:
-            logger.error(f"Error during backtesting: {str(e)}")
-            return {
-                'metrics': {
-                    'total_return': 0.0,
-                    'sharpe_ratio': 0.0,
-                    'max_drawdown': 0.0
-                },
-                'trade_history': []
-            }
-
-    def _process_trading_day(self, current_date: datetime, historical_data: Dict[str, pd.DataFrame]) -> None:
-        """Process a single trading day."""
-        # Update data and generate signals
-        for symbol, data in historical_data.items():
-            # Get data up to current time
-            mask = data.index <= current_date
-            current_df = data[mask].copy()
-            if current_df.empty:
-                continue
-
-            # Generate signals
-            signals = self.strategy.generate_signals(current_df)
-            if not signals:
-                continue
-
-            # Get latest data
-            latest_data = current_df.iloc[-1]
-            latest_price = float(latest_data['close'])
-
-            # Get current position
-            position = self.positions.get(symbol, {})
-
-            # Check risk management
-            if not self.risk_manager.apply_risk_management(
-                price=latest_price,
-                position=position,
-                account_value=self.portfolio.current_balance
-            ):
-                continue
-
-            # Execute trades based on signals
-            if signals.get('action') == 'buy' and (not position or position['quantity'] <= 0):
-                self._execute_trade(symbol, 1.0, latest_price, 'buy', current_date)
-            elif signals.get('action') == 'sell' and position and position['quantity'] > 0:
-                self._execute_trade(symbol, position['quantity'], latest_price, 'sell', current_date)
-
-    def _execute_trade(
-        self,
-        symbol: str,
-        quantity: float,
-        price: float,
-        action: str,
-        current_date: datetime
-    ) -> None:
-        """Execute a simulated trade.
-
-        Args:
-            symbol: Trading symbol
-            quantity: Trade quantity
-            price: Execution price
-            action: Trade action (buy/sell)
-            current_date: Current date of the trade
-        """
-        try:
-            # Apply slippage
-            adjusted_price = price * (1 + self.slippage if action == 'buy' else -self.slippage)
-
-            # Update portfolio
-            if not self.portfolio.execute_order(
-                symbol=symbol,
-                qty=quantity,
-                side=action,
-                price=adjusted_price
-            ):
-                return
-
-            # Update positions
-            if action == 'buy':
-                self.positions[symbol] = {
-                    'quantity': quantity,
-                    'entry_price': adjusted_price,
-                    'timestamp': current_date
-                }
-            else:
-                if symbol in self.positions:
-                    del self.positions[symbol]
-
-            # Record trade
-            self.trade_history.append({
-                'symbol': symbol,
-                'action': action,
-                'quantity': quantity,
-                'price': adjusted_price,
-                'timestamp': current_date,
-                'portfolio_value': self.portfolio.current_balance
-            })
-
-            logger.info(
-                f"Executed {action} trade: {quantity} {symbol} @ {adjusted_price}"
-            )
-
-        except Exception as e:
-            logger.error(f"Error executing trade: {str(e)}")
-
-    def _calculate_performance_metrics(self) -> Dict[str, float]:
-        """Calculate performance metrics for the backtest.
-
-        Returns:
-            Dictionary containing performance metrics
-        """
-        if not self.trade_history:
-            return {
-                'total_return': 0.0,
-                'sharpe_ratio': 0.0,
-                'max_drawdown': 0.0
-            }
-
-        trade_df = pd.DataFrame(self.trade_history)
-        trade_df['timestamp'] = pd.to_datetime(trade_df['timestamp'])
-        trade_df.set_index('timestamp', inplace=True)
-
-        # Calculate daily values and returns
-        daily_values = trade_df['portfolio_value'].resample('D').last()
-        # Forward fill missing values with the last known value
-        daily_values = daily_values.ffill()
-        daily_returns = daily_values.pct_change().dropna()
-
-        # Calculate metrics
-        total_return = (daily_values.iloc[-1] - self.initial_capital) / self.initial_capital
-        sharpe_ratio = self._calculate_sharpe_ratio(daily_returns)
-        max_drawdown = self._calculate_max_drawdown(daily_values)
-
-        return {
-            'total_return': float(total_return),
-            'sharpe_ratio': float(sharpe_ratio),
-            'max_drawdown': float(max_drawdown)
+        results = {
+            'total_return': 0.0,
+            'sharpe_ratio': 0.0,
+            'max_drawdown': 0.0,
+            'win_rate': 0.0
         }
+        
+        try:
+            # Iterate through each day
+            dates = pd.date_range(self.start_date, self.end_date)
+            for date in dates:
+                # Update portfolio values
+                self._update_portfolio(date)
+                
+                # Generate signals
+                signals = self._generate_signals(date)
+                
+                # Execute trades
+                for symbol, signal in signals.items():
+                    if signal == 'buy':
+                        self._execute_buy(symbol, date)
+                    elif signal == 'sell':
+                        self._execute_sell(symbol, date)
+            
+            # Calculate final results
+            results = self._calculate_results()
+            
+        except Exception as e:
+            logger.error("Error running backtest: %s", e)
+        
+        return results
 
-    def _calculate_sharpe_ratio(self, returns: pd.Series) -> float:
-        """Calculate Sharpe ratio.
+    def _update_portfolio(self, date: datetime) -> None:
+        """Update portfolio values for given date.
 
         Args:
-            returns: Series of returns
-
-        Returns:
-            Sharpe ratio value
+            date: Date to update portfolio for
         """
-        if returns.empty or returns.std() == 0:
-            return 0.0
-        risk_free_rate = 0.02  # Assuming 2% annual risk-free rate
-        daily_rf = (1 + risk_free_rate) ** (1/252) - 1
-        excess_returns = returns - daily_rf
-        return float((excess_returns.mean() / returns.std()) * (252 ** 0.5))
+        for symbol in self.symbols:
+            if symbol not in self.data:
+                continue
+            
+            price = self.data[symbol].loc[date, 'close']
+            self.portfolio.update_position_value(symbol, price)
 
-    def _calculate_max_drawdown(self, values: pd.Series) -> float:
-        """Calculate maximum drawdown.
+    def _execute_buy(self, symbol: str, date: datetime) -> bool:
+        """Execute buy order.
 
         Args:
-            values: Series of portfolio values
+            symbol: Symbol to buy
+            date: Date of execution
 
         Returns:
-            Maximum drawdown value
+            True if order executed successfully
         """
-        if values.empty:
-            return 0.0
-        rolling_max = values.expanding().max()
-        drawdowns = values / rolling_max - 1.0
-        return float(abs(drawdowns.min()))
+        try:
+            price = self.data[symbol].loc[date, 'close']
+            position = self.portfolio.get_position(symbol)
+            
+            # Check risk management
+            if not self.risk_manager.check_position_risk(
+                price=price,
+                position=position,
+                portfolio_value=self.portfolio.total_value
+            ):
+                return False
+            
+            # Calculate position size
+            size = self.position_sizer.calculate_position_size(
+                price=price,
+                portfolio_value=self.portfolio.total_value
+            )
+            
+            # Execute trade
+            return self.portfolio.execute_buy(
+                symbol=symbol,
+                quantity=size,
+                price=price
+            )
+            
+        except Exception as e:
+            logger.error("Error executing buy for %s: %s", symbol, e)
+            return False
+
+    def _execute_sell(self, symbol: str, date: datetime) -> bool:
+        """Execute sell order.
+
+        Args:
+            symbol: Symbol to sell
+            date: Date of execution
+
+        Returns:
+            True if order executed successfully
+        """
+        try:
+            price = self.data[symbol].loc[date, 'close']
+            position = self.portfolio.get_position(symbol)
+            
+            if not position:
+                return False
+            
+            return self.portfolio.execute_sell(
+                symbol=symbol,
+                quantity=position['quantity'],
+                price=price
+            )
+            
+        except Exception as e:
+            logger.error("Error executing sell for %s: %s", symbol, e)
+            return False
+
+    def _calculate_results(self) -> Dict[str, float]:
+        """Calculate backtest results.
+
+        Returns:
+            Dictionary containing backtest metrics
+        """
+        return {
+            'total_return': self.portfolio.total_return,
+            'sharpe_ratio': self.portfolio.sharpe_ratio,
+            'max_drawdown': self.portfolio.max_drawdown,
+            'win_rate': self.portfolio.win_rate
+        }

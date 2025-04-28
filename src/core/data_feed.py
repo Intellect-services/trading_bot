@@ -1,10 +1,8 @@
 """Data feed module for fetching and processing market data."""
 
-from typing import Dict, List, Any, Optional, Callable
+from typing import Dict, List, Optional, Callable
 import pandas as pd
-import numpy as np
 from datetime import datetime, timedelta
-import pytz
 import threading
 import time
 from src.core.alpaca_client import AlpacaClient
@@ -41,45 +39,60 @@ class DataFeed:
         try:
             if symbol not in self.symbols:
                 self.symbols.append(symbol)
-                self.logger.info(f"Added symbol {symbol} to data feed")
+                self.logger.info("Added symbol %s to data feed", symbol)
                 return True
             return False
         except Exception as e:
-            self.logger.error(f"Error adding symbol {symbol}: {str(e)}")
+            self.logger.error("Error adding symbol %s: %s", symbol, str(e))
             return False
 
-    def get_historical_data(self, symbol: str, start: datetime, end: datetime) -> pd.DataFrame:
+    def get_historical_data(
+        self,
+        symbol: str,
+        start: datetime,
+        end: datetime
+    ) -> pd.DataFrame:
         """Get historical data for a symbol."""
         try:
-            # Convert datetime to string format expected by Alpaca
-            start_str = start.strftime('%Y-%m-%d')
-            end_str = end.strftime('%Y-%m-%d')
-            
             # Calculate number of days between start and end
             days = (end - start).days
             if days <= 0:
                 days = 1
             
             # Get data from Alpaca
-            df = self.client.get_bars(symbol, '1D', limit=days)
+            df = self.client.get_historical_data(
+                symbol=symbol,
+                timeframe='1D',
+                start=start,
+                end=end,
+                limit=days
+            )
             if df.empty:
-                self.logger.warning(f"No historical data found for {symbol}")
+                self.logger.warning("No historical data found for %s", symbol)
                 return pd.DataFrame()
             
             # Set timestamp as index
             df.index = pd.to_datetime(df.index)
             return df
         except Exception as e:
-            self.logger.error(f"Error getting historical data for {symbol}: {e}")
+            self.logger.error("Error getting historical data for %s: %s", symbol, e)
             return pd.DataFrame()
 
     def get_latest_data(self, symbol: str) -> pd.DataFrame:
         """Get latest data for a symbol."""
         try:
             # Get last 100 bars
-            df = self.client.get_bars(symbol, '1D', limit=100)
+            end = datetime.now()
+            start = end - timedelta(days=100)
+            df = self.client.get_historical_data(
+                symbol=symbol,
+                timeframe='1D',
+                start=start,
+                end=end,
+                limit=100
+            )
             if df.empty:
-                self.logger.warning(f"No data found for {symbol}")
+                self.logger.warning("No data found for %s", symbol)
                 return pd.DataFrame()
             
             # Update stored data
@@ -94,7 +107,7 @@ class DataFeed:
             
             return df
         except Exception as e:
-            self.logger.error(f"Error getting latest data for {symbol}: {e}")
+            self.logger.error("Error getting latest data for %s: %s", symbol, e)
             return pd.DataFrame()
 
     def get_latest_price(self, symbol: str) -> Optional[float]:

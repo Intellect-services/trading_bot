@@ -10,12 +10,13 @@ import threading
 import time
 
 from src.utils.config import Config
-from src.core.strategy import Strategy
+from src.core.strategy import Strategy  # noqa: F401
 from src.core.risk_manager import RiskManager
 from src.core.portfolio import Portfolio
 from src.core.data_feed import DataFeed
 from src.utils.logger import setup_logger
 from src.core.alpaca_client import AlpacaClient
+from alpaca.trading.enums import OrderSide
 
 logger = setup_logger(__name__)
 
@@ -43,7 +44,7 @@ class TradingBot:
         }
         config_obj.load_config()
         
-        self.client = AlpacaClient(config_obj)
+        self.client = AlpacaClient()
         self.data_feed = DataFeed(self.client)
         self.portfolio = Portfolio(config['INITIAL_BALANCE'])
         self.risk_manager = RiskManager(config)
@@ -92,15 +93,14 @@ class TradingBot:
                 
                 time.sleep(60)  # Check every minute
             except Exception as e:
-                self.logger.error(f"Error in trading bot loop: {e}")
+                self.logger.error("Error in trading bot loop: %s", e)
                 time.sleep(60)  # Wait before retrying
 
     def _update_portfolio(self) -> None:
         """Update portfolio with latest prices."""
         try:
-            positions = self.client.get_positions()
-            for position in positions:
-                symbol = position['symbol']
+            positions = self.client.get_all_positions()
+            for symbol, position in positions.items():
                 price = self.data_feed.get_latest_price(symbol)
                 if price is not None:
                     self.portfolio.update_position(symbol, position['qty'], price, 'update')
@@ -123,8 +123,8 @@ class TradingBot:
             order = self.client.submit_order(
                 symbol=symbol,
                 qty=position_size,
-                side='buy',
-                type='market'
+                side=OrderSide.BUY,
+                order_type="market"
             )
             
             if order:
@@ -143,8 +143,8 @@ class TradingBot:
             order = self.client.submit_order(
                 symbol=symbol,
                 qty=position['quantity'],
-                side='sell',
-                type='market'
+                side=OrderSide.SELL,
+                order_type="market"
             )
             
             if order:
@@ -162,12 +162,17 @@ class TradingBot:
                     continue
                 
                 # Simple moving average crossover strategy
-                if df['sma_20'].iloc[-1] > df['sma_50'].iloc[-1] and df['sma_20'].iloc[-2] <= df['sma_50'].iloc[-2]:
+                sma_20 = df['sma_20'].iloc[-1]
+                sma_50 = df['sma_50'].iloc[-1]
+                sma_20_prev = df['sma_20'].iloc[-2]
+                sma_50_prev = df['sma_50'].iloc[-2]
+                
+                if sma_20 > sma_50 and sma_20_prev <= sma_50_prev:
                     signals[symbol] = 'buy'
-                elif df['sma_20'].iloc[-1] < df['sma_50'].iloc[-1] and df['sma_20'].iloc[-2] >= df['sma_50'].iloc[-2]:
+                elif sma_20 < sma_50 and sma_20_prev >= sma_50_prev:
                     signals[symbol] = 'sell'
         except Exception as e:
-            self.logger.error(f"Error generating signals: {e}")
+            self.logger.error("Error generating signals: %s", e)
         return signals
 
     def get_account_info(self) -> Dict[str, float]:
@@ -186,12 +191,7 @@ class TradingBot:
             logger.error("Error getting account info: %s", e)
             return {"equity": 0.0, "cash": 0.0, "buying_power": 0.0}
 
-    def _validate_trade_params(
-        self,
-        quantity: float,
-        price: float,
-        action: str,
-    ) -> bool:
+    def _validate_trade_params(self, quantity: float, price: float, action: str) -> bool:
         """Validate trade parameters.
 
         Args:
@@ -276,11 +276,13 @@ class TradingBot:
         try:
             # Check risk management
             position = self.positions.get(symbol)
-            if position and not self.risk_manager.apply_risk_management(
+            risk_check = self.risk_manager.apply_risk_management(
                 price=price,
-                position=dict(position),  # Convert TypedDict to dict
+                position=dict(position) if position else None,
                 account_value=self.portfolio.current_balance,
-            ):
+            )
+            
+            if position and not risk_check:
                 logger.warning("Trade rejected by risk management")
                 return False
 
@@ -297,10 +299,7 @@ class TradingBot:
             # Update positions
             self._update_position(symbol, quantity, price, action)
 
-            logger.info(
-                "Executed %s trade: %s %s @ %s",
-                action, quantity, symbol, price
-            )
+            logger.info("Executed %s trade: %s %s @ %s", action, quantity, symbol, price)
             return True
 
         except Exception as e:

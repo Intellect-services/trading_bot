@@ -111,12 +111,12 @@ def validate_config(config: Dict[str, Any]) -> bool:
 class Config:
     """Configuration manager for the trading bot."""
     
-    def __init__(self):
+    def __init__(self) -> None:
         """Initialize configuration."""
-        self.config_data = {}
+        self.config_data: Dict[str, Any] = {}
         self.load_config()
         
-    def load_config(self):
+    def load_config(self) -> None:
         """Load configuration from environment variables and .env file."""
         # Load .env file
         load_dotenv()
@@ -166,11 +166,11 @@ class Config:
         
         logger.info("Configuration initialized")
         
-    def get(self, key, default=None):
+    def get(self, key: str, default: Any = None) -> Any:
         """Get a configuration value."""
         return self.config_data.get(key, default)
         
-    def __getattr__(self, name):
+    def __getattr__(self, name: str) -> Any:
         """Allow attribute access to config values."""
         if name in self.config_data:
             return self.config_data[name]
