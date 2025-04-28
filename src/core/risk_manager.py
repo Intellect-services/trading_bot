@@ -38,19 +38,23 @@ class RiskManager:
     def apply_risk_management(
         self,
         price: float,
-        position: Dict[str, float],
+        position: Optional[Dict[str, float]],
         account_value: float
     ) -> bool:
         """Apply risk management rules to a position.
 
         Args:
             price: Current price
-            position: Position details
+            position: Position details (optional)
             account_value: Account value
 
         Returns:
             True if position meets risk criteria, False otherwise
         """
+        # If no position, return True as there's no risk
+        if position is None:
+            return True
+
         # Check position size
         position_value = position['size'] * price
         if position_value / account_value > self.max_position_size:

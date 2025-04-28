@@ -1,13 +1,14 @@
 """Trading bot module."""
 
 from datetime import datetime, timedelta
-from typing import Dict, List, Any, Optional, Callable, TypedDict
+from typing import Dict, List, Any, Optional, Callable, TypedDict, cast
 import pandas as pd
 import logging
 from decimal import Decimal
 import pytz
 import threading
 import time
+import numpy as np
 
 from src.utils.config import Config
 from src.core.strategy import Strategy  # noqa: F401
@@ -31,29 +32,46 @@ class Position(TypedDict):
 class TradingBot:
     """Trading bot for executing trading strategies."""
 
-    def __init__(self, config: Dict[str, Any]) -> None:
-        """Initialize trading bot."""
-        self.config = config
-        # Create Config object with required parameters
-        config_obj = Config()
-        config_obj.config_data = {
-            'alpaca_api_key': config['API_KEY'],
-            'alpaca_secret_key': config['SECRET_KEY'],
-            'paper_trading': config.get('PAPER', True),
-            'initial_balance': config.get('INITIAL_BALANCE', 10000.0)
-        }
-        config_obj.load_config()
-        
+    def __init__(
+        self,
+        strategy: Strategy,
+        symbols: List[str],
+        initial_capital: float = 100000.0
+    ) -> None:
+        """Initialize trading bot.
+
+        Args:
+            strategy: Trading strategy
+            symbols: List of symbols to trade
+            initial_capital: Initial capital
+        """
+        self.strategy = strategy
+        self.symbols = symbols
+        self.portfolio = Portfolio(initial_capital)
+        self.risk_manager = RiskManager()
         self.client = AlpacaClient()
         self.data_feed = DataFeed(self.client)
-        self.portfolio = Portfolio(config['INITIAL_BALANCE'])
-        self.risk_manager = RiskManager()
-        self._running = False
-        self._thread: Optional[threading.Thread] = None
         self.logger = logger
+        self._running: bool = False
+        self._thread: Optional[threading.Thread] = None
         self.positions: Dict[str, Position] = {}
-        self.symbols: List[str] = []
-        logger.info("Trading bot initialized with capital: %s", self.portfolio.current_balance)
+        
+        # Initialize data storage
+        self.data: Dict[str, pd.DataFrame] = {}
+        self._initialize_data()
+
+    def _initialize_data(self) -> None:
+        """Initialize historical data."""
+        for symbol in self.symbols:
+            data = self.data_feed.get_historical_data(
+                symbol,
+                start=datetime.now() - pd.Timedelta(days=100),
+                end=datetime.now()
+            )
+            if data.empty:
+                self.logger.warning("No data found for %s", symbol)
+                continue
+            self.data[symbol] = data
 
     def start(self) -> None:
         """Start the trading bot."""
@@ -303,10 +321,10 @@ class TradingBot:
             current_prices = {symbol: self.data_feed.get_latest_price(symbol) or 0.0 for symbol in self.positions}
             portfolio_value = self.portfolio.calculate_portfolio_value(current_prices)
             
-            risk_check = self.risk_manager.check_position_risk(
+            risk_check = self.risk_manager.apply_risk_management(
                 price=price,
                 position=position_dict,
-                portfolio_value=portfolio_value
+                account_value=portfolio_value
             )
             
             if position and not risk_check:
@@ -379,3 +397,41 @@ class TradingBot:
             Current portfolio value
         """
         return self.portfolio.current_balance
+
+    def _check_risk_management(self, symbol: str, price: float) -> bool:
+        """Check if trade meets risk management criteria.
+
+        Args:
+            symbol: Trading symbol
+            price: Current price
+
+        Returns:
+            True if trade meets risk criteria, False otherwise
+        """
+        try:
+            # Get current position
+            position = self.portfolio.get_position(symbol)
+            
+            # Get current portfolio value
+            current_prices = {
+                sym: float(self.data[sym].iloc[-1]['close'])
+                for sym in self.symbols
+                if not self.data[sym].empty
+            }
+            portfolio_value = self.portfolio.calculate_portfolio_value(current_prices)
+            
+            # Check risk management
+            position_dict = None if position is None else {
+                'size': float(position['quantity']),
+                'avg_price': float(position['entry_price'])
+            }
+            
+            return self.risk_manager.apply_risk_management(
+                price=price,
+                position=position_dict,
+                account_value=portfolio_value
+            )
+            
+        except Exception as e:
+            self.logger.error("Error checking risk management: %s", e)
+            return False
