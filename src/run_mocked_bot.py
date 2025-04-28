@@ -114,7 +114,8 @@ def main():
         
         # Start web server
         logger.info("Starting web server on http://127.0.0.1:5050")
-        socketio.run(app, host='127.0.0.1', port=5050, debug=True)
+        debug_mode = os.environ.get('FLASK_DEBUG', 'false').lower() == 'true'
+        socketio.run(app, host='127.0.0.1', port=5050, debug=debug_mode)
         
     except KeyboardInterrupt:
         logger.info("Stopping mocked trading bot...")
