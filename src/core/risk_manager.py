@@ -26,6 +26,8 @@ class RiskManager:
             self.max_drawdown = float(risk_config.get('max_drawdown', 0.1))
             self.risk_per_trade = float(risk_config.get('risk_per_trade', 0.01))
             self.max_leverage = float(risk_config.get('max_leverage', 2.0))
+            self.trailing_stop = float(risk_config.get('trailing_stop', 0.01))  # New: trailing stop percentage
+            self.trailing_stop_activation = float(risk_config.get('trailing_stop_activation', 0.02))  # New: activation threshold
         else:
             self.max_position_size = float(get_config('RISK_MAX_POSITION_SIZE', 0.1))
             self.stop_loss = float(get_config('RISK_STOP_LOSS_PCT', 0.02))  # Renamed for test compatibility
@@ -33,7 +35,11 @@ class RiskManager:
             self.max_drawdown = float(get_config('RISK_MAX_DRAWDOWN', 0.1))
             self.risk_per_trade = float(get_config('RISK_PER_TRADE', 0.01))
             self.max_leverage = float(get_config('RISK_MAX_LEVERAGE', 2.0))
+            self.trailing_stop = float(get_config('RISK_TRAILING_STOP', 0.01))  # New: trailing stop percentage
+            self.trailing_stop_activation = float(get_config('RISK_TRAILING_STOP_ACTIVATION', 0.02))  # New: activation threshold
         self.logger = logger
+        self.highest_prices: Dict[str, float] = {}  # New: track highest prices for trailing stops
+        self.lowest_prices: Dict[str, float] = {}   # New: track lowest prices for trailing stops
 
     def apply_risk_management(
         self,
@@ -189,3 +195,63 @@ class RiskManager:
         except Exception as e:
             logger.error("Error validating trade: %s", e)
             return False
+
+    def update_trailing_stops(self, symbol: str, current_price: float, position_type: str = 'long') -> Optional[float]:
+        """Update trailing stops for a position.
+
+        Args:
+            symbol: Trading symbol
+            current_price: Current price
+            position_type: Position type ('long' or 'short')
+
+        Returns:
+            Trailing stop price if triggered, None otherwise
+        """
+        try:
+            if position_type == 'long':
+                # For long positions
+                if symbol not in self.highest_prices:
+                    self.highest_prices[symbol] = current_price
+                elif current_price > self.highest_prices[symbol]:
+                    self.highest_prices[symbol] = current_price
+
+                # Calculate profit percentage
+                profit_pct = (current_price - self.highest_prices[symbol]) / self.highest_prices[symbol]
+
+                # Check if trailing stop should be activated
+                if profit_pct >= self.trailing_stop_activation:
+                    trailing_stop_price = self.highest_prices[symbol] * (1 - self.trailing_stop)
+                    if current_price <= trailing_stop_price:
+                        return trailing_stop_price
+            else:
+                # For short positions
+                if symbol not in self.lowest_prices:
+                    self.lowest_prices[symbol] = current_price
+                elif current_price < self.lowest_prices[symbol]:
+                    self.lowest_prices[symbol] = current_price
+
+                # Calculate profit percentage
+                profit_pct = (self.lowest_prices[symbol] - current_price) / self.lowest_prices[symbol]
+
+                # Check if trailing stop should be activated
+                if profit_pct >= self.trailing_stop_activation:
+                    trailing_stop_price = self.lowest_prices[symbol] * (1 + self.trailing_stop)
+                    if current_price >= trailing_stop_price:
+                        return trailing_stop_price
+
+            return None
+
+        except Exception as e:
+            self.logger.error("Error updating trailing stops: %s", e)
+            return None
+
+    def reset_trailing_stop(self, symbol: str) -> None:
+        """Reset trailing stop tracking for a symbol.
+
+        Args:
+            symbol: Trading symbol
+        """
+        if symbol in self.highest_prices:
+            del self.highest_prices[symbol]
+        if symbol in self.lowest_prices:
+            del self.lowest_prices[symbol]

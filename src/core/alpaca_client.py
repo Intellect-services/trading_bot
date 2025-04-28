@@ -3,6 +3,7 @@
 from typing import Any, Dict, List, Optional, Union
 from datetime import datetime, timedelta
 import pandas as pd
+import os
 
 from alpaca.trading.client import TradingClient
 from alpaca.trading.requests import (
@@ -26,9 +27,9 @@ class AlpacaClient:
 
     def __init__(self) -> None:
         """Initialize Alpaca client with API credentials."""
-        self.api_key = get_config('API_KEY')
-        self.secret_key = get_config('SECRET_KEY')
-        self.paper = get_config('PAPER', True)
+        self.api_key = os.environ.get('ALPACA_API_KEY', get_config('API_KEY'))
+        self.secret_key = os.environ.get('ALPACA_SECRET_KEY', get_config('SECRET_KEY'))
+        self.paper = os.environ.get('ALPACA_PAPER', 'true').lower() == 'true'
         
         self.trading_client: Optional[TradingClient] = None
         self.historical_client: Optional[StockHistoricalDataClient] = None

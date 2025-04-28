@@ -12,10 +12,11 @@ import logging
 project_root = str(Path(__file__).parent.parent)
 sys.path.append(project_root)
 
-from flask import Flask, render_template
+from flask import Flask, render_template, send_from_directory
 from flask_socketio import SocketIO
 from dotenv import load_dotenv
 from src.core.bot import TradingBot
+from src.core.strategy import Strategy
 from src.utils.config import get_config
 from src.utils.logger import setup_logger
 
@@ -33,15 +34,18 @@ socketio = SocketIO(app)
 
 # Initialize bot with mocked configuration
 config = get_config()
-bot = TradingBot({
-    'API_KEY': 'mocked_key',
-    'SECRET_KEY': 'mocked_secret',
-    'PAPER': True,
-    'INITIAL_BALANCE': config.get('INITIAL_BALANCE', 100000.0)
-})
+strategy = Strategy(config)
 
-# Add trading symbols
-bot.add_symbol(config['DEFAULT_SYMBOL'])
+# Set up mock environment variables
+os.environ['ALPACA_API_KEY'] = 'mock_key'  # nosec
+os.environ['ALPACA_SECRET_KEY'] = 'mock_secret'  # nosec
+os.environ['ALPACA_PAPER'] = 'true'
+
+bot = TradingBot(
+    strategy=strategy,
+    symbols=[config['DEFAULT_SYMBOL']],
+    initial_capital=float(config.get('INITIAL_BALANCE', 100000.0))
+)
 
 def format_runtime(seconds):
     """Format runtime in HH:MM:SS"""
@@ -62,6 +66,11 @@ def run_bot():
 def index():
     """Render the dashboard"""
     return render_template('index.html', default_symbol=config['DEFAULT_SYMBOL'])
+
+@app.route('/static/<path:filename>')
+def serve_static(filename):
+    """Serve static files"""
+    return send_from_directory(static_dir, filename)
 
 def emit_updates():
     """Continuously emit updates to the web interface"""

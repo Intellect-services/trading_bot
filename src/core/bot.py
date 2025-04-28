@@ -59,6 +59,7 @@ class TradingBot:
         # Initialize data storage
         self.data: Dict[str, pd.DataFrame] = {}
         self._initialize_data()
+        self.active_trailing_stops: Dict[str, str] = {}  # symbol -> position_type
 
     def _initialize_data(self) -> None:
         """Initialize historical data."""
@@ -99,15 +100,20 @@ class TradingBot:
                 # Update portfolio
                 self._update_portfolio()
                 
+                # Check trailing stops
+                self._check_trailing_stops()
+                
                 # Generate signals
                 signals = self.generate_signals()
                 
                 # Execute trades based on signals
-                for symbol, action in signals.items():
-                    if action == 'buy':
-                        self._execute_buy(symbol)
-                    elif action == 'sell':
-                        self._execute_sell(symbol)
+                for signal in signals:
+                    self.execute_trade(
+                        symbol=signal['symbol'],
+                        quantity=signal['quantity'],
+                        price=signal['price'],
+                        action=signal['action']
+                    )
                 
                 time.sleep(60)  # Check every minute
             except Exception as e:
@@ -117,13 +123,12 @@ class TradingBot:
     def _update_portfolio(self) -> None:
         """Update portfolio with latest prices."""
         try:
-            positions = self.client.get_all_positions()
-            for symbol, position in positions.items():
+            for symbol in self.positions:
                 price = self.data_feed.get_latest_price(symbol)
                 if price is not None:
-                    self.portfolio.update_position(symbol, position['qty'], price, 'update')
+                    self.portfolio.update_prices({symbol: price})
         except Exception as e:
-            self.logger.error(f"Error updating portfolio: {e}")
+            self.logger.error("Error updating portfolio: %s", e)
 
     def _execute_buy(self, symbol: str) -> None:
         """Execute a buy order."""
@@ -170,9 +175,13 @@ class TradingBot:
         except Exception as e:
             self.logger.error(f"Error executing sell order for {symbol}: {e}")
 
-    def generate_signals(self) -> Dict[str, str]:
-        """Generate trading signals."""
-        signals: Dict[str, str] = {}
+    def generate_signals(self) -> List[Dict[str, Any]]:
+        """Generate trading signals.
+        
+        Returns:
+            List of dictionaries containing trade parameters (symbol, quantity, price, action)
+        """
+        signals: List[Dict[str, Any]] = []
         try:
             for symbol in self.data_feed.symbols:
                 df = self.data_feed.get_latest_data(symbol)
@@ -185,10 +194,31 @@ class TradingBot:
                 sma_20_prev = df['sma_20'].iloc[-2]
                 sma_50_prev = df['sma_50'].iloc[-2]
                 
+                current_price = self.data_feed.get_latest_price(symbol)
+                if current_price is None:
+                    continue
+                    
+                # Calculate position size based on risk management
+                position_size = self.risk_manager.calculate_position_size(
+                    portfolio_value=self.portfolio.current_balance,
+                    price=current_price,
+                    risk_factor=1.0
+                )
+                
                 if sma_20 > sma_50 and sma_20_prev <= sma_50_prev:
-                    signals[symbol] = 'buy'
+                    signals.append({
+                        'symbol': symbol,
+                        'quantity': position_size,
+                        'price': current_price,
+                        'action': 'buy'
+                    })
                 elif sma_20 < sma_50 and sma_20_prev >= sma_50_prev:
-                    signals[symbol] = 'sell'
+                    signals.append({
+                        'symbol': symbol,
+                        'quantity': position_size,
+                        'price': current_price,
+                        'action': 'sell'
+                    })
         except Exception as e:
             self.logger.error("Error generating signals: %s", e)
         return signals
@@ -345,6 +375,13 @@ class TradingBot:
             self._update_position(symbol, quantity, price, action)
 
             logger.info("Executed %s trade: %s %s @ %s", action, quantity, symbol, price)
+
+            # Update trailing stop tracking
+            if action == 'buy':
+                self.active_trailing_stops[symbol] = 'long'
+            elif action == 'sell':
+                self.active_trailing_stops[symbol] = 'short'
+
             return True
 
         except Exception as e:
@@ -435,3 +472,74 @@ class TradingBot:
         except Exception as e:
             self.logger.error("Error checking risk management: %s", e)
             return False
+
+    def _check_trailing_stops(self) -> None:
+        """Check and update trailing stops for all positions."""
+        for symbol, position_type in list(self.active_trailing_stops.items()):
+            current_price = self.data_feed.get_latest_price(symbol)
+            if current_price is None:
+                continue
+
+            position = self.get_position(symbol)
+            if position is None:
+                self.active_trailing_stops.pop(symbol)
+                continue
+
+            if position_type == 'long':
+                # For long positions, close if price falls below trailing stop
+                if current_price <= self.risk_manager.calculate_stop_loss(position['entry_price'], position['quantity']):
+                    self._close_position(symbol, current_price)
+            else:  # short position
+                # For short positions, close if price rises above trailing stop
+                if current_price >= self.risk_manager.calculate_stop_loss(position['entry_price'], -position['quantity']):
+                    self._close_position(symbol, current_price)
+
+    def _close_position(self, symbol: str, price: float) -> None:
+        """Close a position at the given price.
+
+        Args:
+            symbol: Trading symbol
+            price: Current price
+        """
+        position = self.get_position(symbol)
+        if position is None:
+            return
+
+        # Execute sell order to close position
+        self.portfolio.execute_order(
+            symbol=symbol,
+            qty=abs(position['quantity']),
+            side='sell' if position['quantity'] > 0 else 'buy',
+            price=price
+        )
+
+        # Update internal position tracking
+        self._update_position(symbol, abs(position['quantity']), price, 'sell' if position['quantity'] > 0 else 'buy')
+        
+        # Remove trailing stop
+        self.active_trailing_stops.pop(symbol, None)
+
+    def run(self) -> None:
+        """Run the trading bot."""
+        try:
+            while True:
+                # Check trailing stops for active positions
+                self._check_trailing_stops()
+                
+                # Generate signals and execute trades
+                signals = self.generate_signals()
+                for signal in signals:
+                    self.execute_trade(
+                        symbol=signal['symbol'],
+                        quantity=signal['quantity'],
+                        price=signal['price'],
+                        action=signal['action']
+                    )
+                    
+                time.sleep(60)  # Check every minute
+                
+        except KeyboardInterrupt:
+            self.logger.info("Trading bot stopped by user")
+        except Exception as e:
+            self.logger.error("Error running trading bot: %s", e)
+            raise
