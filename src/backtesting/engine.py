@@ -1,6 +1,6 @@
 """Backtesting engine implementation."""
 
-from typing import Dict, List, Optional, Any
+from typing import Dict, List, Optional, Any, cast
 from datetime import datetime
 import pandas as pd
 import numpy as np
@@ -101,15 +101,19 @@ class BacktestingEngine:
                 continue
                 
             # Get current values
-            sma_20 = float(df.loc[date, 'sma_20'])
-            sma_50 = float(df.loc[date, 'sma_50'])
+            sma_20_series = df.loc[date, 'sma_20']
+            sma_50_series = df.loc[date, 'sma_50']
+            sma_20 = float(sma_20_series) if not pd.isna(sma_20_series) else 0.0
+            sma_50 = float(sma_50_series) if not pd.isna(sma_50_series) else 0.0
             
             # Get previous values
             prev_idx = df.index.get_loc(date) - 1
             if prev_idx >= 0:
                 prev_date = df.index[prev_idx]
-                sma_20_prev = float(df.loc[prev_date, 'sma_20'])
-                sma_50_prev = float(df.loc[prev_date, 'sma_50'])
+                sma_20_prev_series = df.loc[prev_date, 'sma_20']
+                sma_50_prev_series = df.loc[prev_date, 'sma_50']
+                sma_20_prev = float(sma_20_prev_series) if not pd.isna(sma_20_prev_series) else 0.0
+                sma_50_prev = float(sma_50_prev_series) if not pd.isna(sma_50_prev_series) else 0.0
                 
                 # Generate signals based on moving average crossover
                 if sma_20 > sma_50 and sma_20_prev <= sma_50_prev:
@@ -170,7 +174,8 @@ class BacktestingEngine:
                 continue
             
             if date in self.data[symbol].index:
-                price = float(self.data[symbol].loc[date, 'close'])
+                price_series = self.data[symbol].loc[date, 'close']
+                price = float(price_series) if not pd.isna(price_series) else 0.0
                 current_prices[symbol] = price
                 
                 # Update position
@@ -197,7 +202,8 @@ class BacktestingEngine:
             if date not in self.data[symbol].index:
                 return False
                 
-            price = float(self.data[symbol].loc[date, 'close'])
+            price_series = self.data[symbol].loc[date, 'close']
+            price = float(price_series) if not pd.isna(price_series) else 0.0
             position = self.portfolio.get_position(symbol)
             
             # Calculate current portfolio value
@@ -255,7 +261,8 @@ class BacktestingEngine:
             if date not in self.data[symbol].index:
                 return False
                 
-            price = float(self.data[symbol].loc[date, 'close'])
+            price_series = self.data[symbol].loc[date, 'close']
+            price = float(price_series) if not pd.isna(price_series) else 0.0
             position = self.portfolio.get_position(symbol)
             
             if not position:
