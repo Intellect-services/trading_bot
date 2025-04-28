@@ -1,6 +1,6 @@
 """Risk management module."""
 
-from typing import Dict, Optional
+from typing import Dict, Optional, Any
 from decimal import Decimal
 
 from src.utils.config import get_config
@@ -12,98 +12,137 @@ logger = setup_logger(__name__)
 class RiskManager:
     """Risk management class."""
 
-    def __init__(self) -> None:
-        """Initialize risk manager."""
-        self.max_position_size = float(get_config('RISK_MAX_POSITION_SIZE', 0.1))
-        self.stop_loss_pct = float(get_config('RISK_STOP_LOSS_PCT', 0.02))
-        self.max_drawdown = float(get_config('RISK_MAX_DRAWDOWN', 0.1))
-        self.risk_per_trade = float(get_config('RISK_PER_TRADE', 0.01))
+    def __init__(self, config: Optional[Dict[str, Any]] = None) -> None:
+        """Initialize risk manager.
+        
+        Args:
+            config: Configuration dictionary (optional)
+        """
+        if config and 'risk' in config:
+            risk_config = config['risk']
+            self.max_position_size = float(risk_config.get('max_position_size', 0.1))
+            self.stop_loss = float(risk_config.get('stop_loss_pct', 0.02))  # Renamed for test compatibility
+            self.take_profit = float(risk_config.get('take_profit', 0.04))  # Added for test compatibility
+            self.max_drawdown = float(risk_config.get('max_drawdown', 0.1))
+            self.risk_per_trade = float(risk_config.get('risk_per_trade', 0.01))
+            self.max_leverage = float(risk_config.get('max_leverage', 2.0))
+        else:
+            self.max_position_size = float(get_config('RISK_MAX_POSITION_SIZE', 0.1))
+            self.stop_loss = float(get_config('RISK_STOP_LOSS_PCT', 0.02))  # Renamed for test compatibility
+            self.take_profit = float(get_config('RISK_TAKE_PROFIT', 0.04))  # Added for test compatibility
+            self.max_drawdown = float(get_config('RISK_MAX_DRAWDOWN', 0.1))
+            self.risk_per_trade = float(get_config('RISK_PER_TRADE', 0.01))
+            self.max_leverage = float(get_config('RISK_MAX_LEVERAGE', 2.0))
         self.logger = logger
 
-    def check_position_risk(
+    def apply_risk_management(
         self,
         price: float,
-        position: Optional[Dict[str, float]],
-        portfolio_value: float
+        position: Dict[str, float],
+        account_value: float
     ) -> bool:
-        """Check if position meets risk management criteria.
+        """Apply risk management rules to a position.
 
         Args:
-            price: Current price of the asset
-            position: Current position details
-            portfolio_value: Current portfolio value
+            price: Current price
+            position: Position details
+            account_value: Account value
 
         Returns:
             True if position meets risk criteria, False otherwise
         """
-        try:
-            # Check position size
-            if position:
-                position_value = position['quantity'] * price
-                if position_value / portfolio_value > self.max_position_size:
-                    logger.warning(
-                        "Position size exceeds maximum: %s",
-                        position_value / portfolio_value
-                    )
-                    return False
+        # Check position size
+        position_value = position['size'] * price
+        if position_value / account_value > self.max_position_size:
+            return False
 
-            # Check stop loss
-            if position and position['entry_price']:
-                loss_pct = (price - position['entry_price']) / position['entry_price']
-                if loss_pct < -self.stop_loss_pct:
-                    logger.warning("Stop loss triggered: %s", loss_pct)
-                    return False
+        # Check leverage
+        if not self.check_leverage(account_value, position_value):
+            return False
 
-            # Check drawdown
-            if position:
-                drawdown = (price - position['entry_price']) / position['entry_price']
-                if abs(drawdown) > self.max_drawdown:
-                    logger.warning("Maximum drawdown exceeded: %s", drawdown)
-                    return False
-
-            # Check risk per trade
-            trade_value = price * (position['quantity'] if position else 1.0)
-            if trade_value / portfolio_value > self.risk_per_trade:
-                logger.warning(
-                    "Trade risk exceeds maximum: %s",
-                    trade_value / portfolio_value
-                )
+        # Check stop loss
+        if 'avg_price' in position:
+            loss_pct = (price - position['avg_price']) / position['avg_price']
+            if loss_pct < -self.stop_loss:
                 return False
 
-            return True
-
-        except Exception as e:
-            logger.error("Error checking position risk: %s", e)
-            return False
+        return True
 
     def calculate_position_size(
         self,
-        price: float,
         portfolio_value: float,
+        price: float,
         risk_factor: float = 1.0
-    ) -> float:
+    ) -> int:
         """Calculate position size based on risk parameters.
 
         Args:
-            price: Current price of the asset
             portfolio_value: Current portfolio value
+            price: Current price
             risk_factor: Risk factor multiplier (default: 1.0)
 
         Returns:
-            Position size in units
+            Position size in units (as integer)
         """
         try:
             # Calculate maximum position value
             max_position_value = portfolio_value * self.max_position_size * risk_factor
             
-            # Calculate position size in units
-            position_size = max_position_value / price
+            # Calculate position size in units and round down to nearest integer
+            position_size = int(max_position_value / price)
             
             return position_size
 
         except Exception as e:
             logger.error("Error calculating position size: %s", e)
-            return 0.0
+            return 0
+
+    def calculate_stop_loss(self, price: float, quantity: float) -> float:
+        """Calculate stop loss price.
+
+        Args:
+            price: Current price
+            quantity: Position quantity
+
+        Returns:
+            Stop loss price
+        """
+        # For long positions, stop loss is below entry price
+        # For short positions, stop loss is above entry price
+        if quantity > 0:
+            return price * (1 - self.stop_loss)
+        else:
+            return price * (1 + self.stop_loss)
+
+    def calculate_take_profit(self, price: float, quantity: float) -> float:
+        """Calculate take profit price.
+
+        Args:
+            price: Current price
+            quantity: Position quantity
+
+        Returns:
+            Take profit price
+        """
+        # For long positions, take profit is above entry price
+        # For short positions, take profit is below entry price
+        if quantity > 0:
+            return price * (1 + self.take_profit)
+        else:
+            return price * (1 - self.take_profit)
+
+    def check_leverage(self, portfolio_value: float, position_value: float) -> bool:
+        """Check if leverage is within limits.
+
+        Args:
+            portfolio_value: Current portfolio value
+            position_value: Position value
+
+        Returns:
+            True if leverage is within limits, False otherwise
+        """
+        leverage = position_value / portfolio_value
+        return leverage <= self.max_leverage
 
     def validate_trade(
         self,
