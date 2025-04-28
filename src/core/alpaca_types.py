@@ -41,7 +41,7 @@ class TimeInForce:
     GTC: str = "gtc"
 
 # Type stubs for alpaca.trading.models
-class Order(Protocol):
+class OrderModel(Protocol):
     id: str
     client_order_id: str
     created_at: datetime
@@ -75,7 +75,7 @@ class Order(Protocol):
     hwm: Optional[float]
 
 # Type stubs for alpaca.data.models
-class Bar(Protocol):
+class BarModel(Protocol):
     t: datetime
     o: float
     h: float

@@ -47,7 +47,7 @@ class TradingBot:
         self.client = AlpacaClient()
         self.data_feed = DataFeed(self.client)
         self.portfolio = Portfolio(config['INITIAL_BALANCE'])
-        self.risk_manager = RiskManager(config)
+        self.risk_manager = RiskManager()
         self._running = False
         self._thread: Optional[threading.Thread] = None
         self.logger = logger
@@ -202,19 +202,35 @@ class TradingBot:
         Returns:
             True if parameters are valid, False otherwise
         """
-        if not isinstance(quantity, (int, float)) or quantity <= 0:
-            logger.error("Invalid quantity: %s", quantity)
+        try:
+            # Check if quantity is positive
+            if quantity <= 0:
+                self.logger.warning("Invalid quantity: %s", quantity)
+                return False
+
+            # Check if price is positive
+            if price <= 0:
+                self.logger.warning("Invalid price: %s", price)
+                return False
+
+            # Check if action is valid
+            if action not in ['buy', 'sell']:
+                self.logger.warning("Invalid action: %s", action)
+                return False
+
+            # Use risk_manager's validate_trade method
+            current_prices = {symbol: self.data_feed.get_latest_price(symbol) or 0.0 for symbol in self.positions}
+            portfolio_value = self.portfolio.calculate_portfolio_value(current_prices)
+            return self.risk_manager.validate_trade(
+                symbol="",  # Symbol not needed for basic validation
+                quantity=quantity,
+                price=price,
+                portfolio_value=portfolio_value
+            )
+
+        except Exception as e:
+            self.logger.error("Error validating trade parameters: %s", e)
             return False
-            
-        if not isinstance(price, (int, float)) or price <= 0:
-            logger.error("Invalid price: %s", price)
-            return False
-            
-        if action not in ["buy", "sell"]:
-            logger.error("Invalid action: %s", action)
-            return False
-            
-        return True
 
     def _update_position(
         self,
@@ -276,10 +292,21 @@ class TradingBot:
         try:
             # Check risk management
             position = self.positions.get(symbol)
-            risk_check = self.risk_manager.apply_risk_management(
+            if position:
+                position_dict = {
+                    'quantity': position['quantity'],
+                    'entry_price': position['entry_price']
+                }
+            else:
+                position_dict = None
+
+            current_prices = {symbol: self.data_feed.get_latest_price(symbol) or 0.0 for symbol in self.positions}
+            portfolio_value = self.portfolio.calculate_portfolio_value(current_prices)
+            
+            risk_check = self.risk_manager.check_position_risk(
                 price=price,
-                position=dict(position) if position else None,
-                account_value=self.portfolio.current_balance,
+                position=position_dict,
+                portfolio_value=portfolio_value
             )
             
             if position and not risk_check:
