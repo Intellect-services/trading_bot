@@ -173,7 +173,8 @@ def main():
         logger.info("Starting web server on http://0.0.0.0:5051")
         # Run the Flask application
         app.run(
-            host=os.getenv('FLASK_HOST', '0.0.0.0'),
+            # Default to localhost for security, only bind to all interfaces when explicitly configured
+            host=os.getenv('FLASK_HOST', '127.0.0.1'),  # nosec
             port=5051,
             debug=os.getenv('FLASK_DEBUG', 'False').lower() == 'true',
             use_reloader=False,
