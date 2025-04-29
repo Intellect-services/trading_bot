@@ -5,11 +5,15 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Trading Bot Dashboard</title>
     <link
-      href="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/css/bootstrap.min.css"
+      href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css"
       rel="stylesheet"
     />
     <link
       href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css"
+      rel="stylesheet"
+    />
+    <link
+      href="{{ url_for('static', filename='style.css') }}"
       rel="stylesheet"
     />
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
@@ -22,84 +26,37 @@
         --dark-blue: #0d47a1;
         --success-green: #34a853;
         --danger-red: #ea4335;
+        --warning-yellow: #fbbc05;
+        --dark-gray: #202124;
+        --light-gray: #f8f9fa;
+        --text-gray: #5f6368;
       }
 
       body {
-        background-color: #f8f9fa;
+        background-color: var(--light-gray);
         font-family: "Segoe UI", Tahoma, Geneva, Verdana, sans-serif;
-        margin: 0;
-        padding: 20px;
+        color: var(--dark-gray);
       }
 
-      .container {
-        max-width: 1400px;
-        margin: 0 auto;
-      }
-
-      /* Login Page Styles */
       .login-container {
         max-width: 400px;
         margin: 100px auto;
         padding: 2rem;
         background: white;
-        border-radius: 15px;
-        box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+        border-radius: 8px;
+        box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
       }
 
-      .login-header {
-        text-align: center;
-        margin-bottom: 2rem;
-      }
-
-      .login-header h1 {
+      .login-title {
         color: var(--primary-blue);
-        font-size: 2rem;
-        margin-bottom: 0.5rem;
-      }
-
-      .login-header p {
-        color: #6c757d;
-      }
-
-      .social-login {
-        display: flex;
-        justify-content: center;
-        gap: 1rem;
-        margin: 1.5rem 0;
-      }
-
-      .social-btn {
-        width: 40px;
-        height: 40px;
-        border-radius: 50%;
-        display: flex;
-        align-items: center;
-        justify-content: center;
-        color: white;
-        text-decoration: none;
-        transition: transform 0.3s ease;
-      }
-
-      .social-btn:hover {
-        transform: translateY(-3px);
-      }
-
-      .google-btn {
-        background-color: #db4437;
-      }
-
-      .facebook-btn {
-        background-color: #4267b2;
-      }
-
-      .github-btn {
-        background-color: #333;
+        margin-bottom: 1.5rem;
+        text-align: center;
       }
 
       .form-control {
-        border-radius: 10px;
-        padding: 0.75rem 1rem;
-        border: 1px solid #dee2e6;
+        border-radius: 4px;
+        padding: 0.75rem;
+        border: 1px solid #ddd;
       }
 
       .form-control:focus {
@@ -107,50 +64,61 @@
         box-shadow: 0 0 0 0.2rem rgba(26, 115, 232, 0.25);
       }
 
-      .btn-primary {
+      .btn-login {
         background-color: var(--primary-blue);
         border: none;
-        border-radius: 10px;
-        padding: 0.75rem 1.5rem;
+        border-radius: 4px;
+        padding: 0.75rem;
         font-weight: 500;
+        width: 100%;
+        transition: all 0.2s;
       }
 
-      .btn-primary:hover {
+      .btn-login:hover {
         background-color: var(--dark-blue);
       }
 
-      .divider {
+      .dashboard {
+        display: none;
+      }
+
+      .header {
+        background: linear-gradient(
+          135deg,
+          var(--primary-blue),
+          var(--dark-blue)
+        );
+        color: white;
+        padding: 1.5rem 2rem;
+        margin-bottom: 2rem;
+        box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+      }
+
+      .header-content {
+        max-width: 1400px;
+        margin: 0 auto;
         display: flex;
+        justify-content: space-between;
         align-items: center;
-        text-align: center;
-        margin: 1.5rem 0;
       }
 
-      .divider::before,
-      .divider::after {
-        content: "";
-        flex: 1;
-        border-bottom: 1px solid #dee2e6;
+      .header-title {
+        font-size: 1.5rem;
+        font-weight: 600;
+        margin: 0;
       }
 
-      .divider span {
-        padding: 0 1rem;
-        color: #6c757d;
-      }
-
-      /* User Profile Styles */
-      .header-profile {
+      .user-profile {
         display: flex;
         align-items: center;
         gap: 1rem;
-        margin-left: auto;
-        padding: 0.5rem 1rem;
         background: rgba(255, 255, 255, 0.1);
+        padding: 0.5rem 1rem;
         border-radius: 25px;
         transition: all 0.3s ease;
       }
 
-      .header-profile:hover {
+      .user-profile:hover {
         background: rgba(255, 255, 255, 0.2);
       }
 
@@ -164,17 +132,11 @@
         justify-content: center;
         color: white;
         font-weight: bold;
-        transition: transform 0.3s ease;
-      }
-
-      .user-avatar:hover {
-        transform: scale(1.1);
       }
 
       .user-info {
         display: flex;
         flex-direction: column;
-        color: white;
       }
 
       .user-name {
@@ -189,548 +151,789 @@
         margin: 0;
       }
 
-      .logout-btn {
-        background: none;
-        border: none;
-        color: white;
-        cursor: pointer;
-        padding: 0.5rem;
-        transition: color 0.3s ease;
-      }
-
-      .logout-btn:hover {
-        color: rgba(255, 255, 255, 0.8);
-        transform: scale(1.1);
-      }
-
-      /* Existing styles... */
-      .dashboard-header {
-        background: linear-gradient(
-          135deg,
-          var(--primary-blue),
-          var(--dark-blue)
-        );
-        color: white;
-        padding: 2rem;
-        margin-bottom: 2rem;
-        border-radius: 15px;
-        box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
-        display: flex;
-        align-items: center;
-        justify-content: space-between;
-      }
-
-      .header-content {
-        flex: 1;
+      .main-container {
+        max-width: 1400px;
+        margin: 0 auto;
+        padding: 0 2rem;
       }
 
       .card {
         background: white;
         border: none;
-        border-radius: 15px;
-        box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+        border-radius: 12px;
+        box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
         margin-bottom: 1.5rem;
-        transition: transform 0.3s ease;
+        transition: transform 0.2s;
       }
 
       .card:hover {
-        transform: translateY(-5px);
+        transform: translateY(-2px);
       }
 
       .card-header {
-        background-color: var(--light-blue);
+        background: var(--light-blue);
         border-bottom: none;
-        border-radius: 15px 15px 0 0 !important;
+        border-radius: 12px 12px 0 0;
         padding: 1rem 1.5rem;
       }
 
-      .card-body {
-        padding: 1.5rem;
-      }
-
       .status-badge {
-        font-size: 0.9em;
-        padding: 0.5em 1em;
+        display: inline-flex;
+        align-items: center;
+        padding: 0.5rem 1rem;
         border-radius: 20px;
+        font-weight: 500;
       }
 
-      .price-change {
-        font-weight: bold;
-        font-size: 1.1em;
-      }
-
-      .price-up {
+      .status-badge.running {
+        background: rgba(52, 168, 83, 0.1);
         color: var(--success-green);
       }
 
-      .price-down {
+      .status-badge.stopped {
+        background: rgba(234, 67, 53, 0.1);
         color: var(--danger-red);
       }
 
+      .status-badge.error {
+        background: rgba(251, 188, 5, 0.1);
+        color: var(--warning-yellow);
+      }
+
       .metric-value {
-        font-size: 1.5em;
-        font-weight: bold;
+        font-size: 1.5rem;
+        font-weight: 600;
         color: var(--primary-blue);
       }
 
       .metric-label {
-        color: #6c757d;
-        font-size: 0.9em;
+        color: var(--text-gray);
+        font-size: 0.9rem;
+      }
+
+      .btn {
+        font-weight: 500;
+        padding: 0.75rem 1.5rem;
+        border-radius: 8px;
+        transition: all 0.2s ease-in-out;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        gap: 0.5rem;
+      }
+
+      .btn-primary {
+        background-color: var(--primary-blue);
+        border: 2px solid var(--primary-blue);
+        color: white;
+      }
+
+      .btn-primary:hover {
+        background-color: var(--dark-blue);
+        border-color: var(--dark-blue);
+        transform: translateY(-1px);
+        box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+      }
+
+      .btn-primary:active {
+        transform: translateY(0);
+        box-shadow: none;
+      }
+
+      .btn-primary:disabled {
+        background-color: #e0e0e0;
+        border-color: #e0e0e0;
+        color: #9e9e9e;
+        cursor: not-allowed;
+        transform: none;
+        box-shadow: none;
+      }
+
+      .btn-secondary {
+        background-color: transparent;
+        border: 2px solid var(--primary-blue);
+        color: var(--primary-blue);
+      }
+
+      .btn-secondary:hover {
+        background-color: rgba(26, 115, 232, 0.1);
+        transform: translateY(-1px);
+        box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+      }
+
+      .btn-secondary:active {
+        transform: translateY(0);
+        box-shadow: none;
+      }
+
+      .btn-secondary:disabled {
+        border-color: #e0e0e0;
+        color: #9e9e9e;
+        cursor: not-allowed;
+        transform: none;
+        box-shadow: none;
+      }
+
+      .btn-lg {
+        padding: 1rem 2rem;
+        font-size: 1.1rem;
+      }
+
+      .btn-icon {
+        font-size: 1.2rem;
       }
 
       .chart-container {
         position: relative;
         height: 300px;
+        margin: 1rem 0;
+        display: flex;
+        flex-direction: column;
+      }
+
+      .chart-wrapper {
+        flex: 1;
+        position: relative;
+        min-height: 0; /* Important for flex child */
+      }
+
+      .chart-description {
+        color: var(--text-gray);
+        font-size: 0.9rem;
+        margin-top: 0.5rem;
+        padding: 0.5rem;
+        background-color: var(--light-gray);
+        border-radius: 4px;
+        max-width: 100%;
+        word-wrap: break-word;
+      }
+
+      .grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+        gap: 1.5rem;
+        margin-bottom: 1.5rem;
+      }
+
+      .alert {
+        border-radius: 8px;
         margin-bottom: 1rem;
       }
 
-      .position-card {
-        background-color: var(--light-blue);
-        border-radius: 10px;
-        padding: 1rem;
-        margin-bottom: 0.5rem;
+      .form-control {
+        border-radius: 8px;
+        padding: 0.75rem 1rem;
+        border: 1px solid rgba(0, 0, 0, 0.1);
+      }
+
+      .form-control:focus {
+        border-color: var(--primary-blue);
+        box-shadow: 0 0 0 0.2rem rgba(26, 115, 232, 0.25);
       }
 
       .logs-container {
         height: 300px;
         overflow-y: auto;
-        background-color: #f8f9fa;
-        border-radius: 10px;
+        background: var(--light-gray);
+        border-radius: 8px;
         padding: 1rem;
       }
 
       .log-entry {
         padding: 0.5rem;
-        border-bottom: 1px solid #dee2e6;
-        font-size: 0.9em;
+        border-bottom: 1px solid rgba(0, 0, 0, 0.1);
+        font-size: 0.9rem;
       }
 
       .log-entry:last-child {
         border-bottom: none;
       }
 
-      .market-status {
-        display: inline-flex;
-        align-items: center;
-        gap: 0.5rem;
+      .position-card {
+        background: var(--light-gray);
+        border-radius: 8px;
+        padding: 1rem;
+        margin-bottom: 0.5rem;
       }
 
-      .market-status i {
-        font-size: 1.2em;
-      }
+      @media (max-width: 768px) {
+        .main-container {
+          padding: 0 1rem;
+        }
 
-      .positive {
-        color: #28a745;
-      }
-
-      .negative {
-        color: #dc3545;
-      }
-
-      .grid {
-        display: grid;
-        grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
-        gap: 20px;
-        margin-bottom: 20px;
-      }
-
-      /* Hide dashboard content when not logged in */
-      .dashboard-content {
-        display: none;
+        .grid {
+          grid-template-columns: 1fr;
+        }
       }
     </style>
   </head>
   <body>
     <!-- Login Page -->
-    <div id="login-page" class="login-container">
-      <div class="login-header">
-        <h1><i class="fas fa-chart-line me-2"></i>Trading Bot</h1>
-        <p>Sign in to access your trading dashboard</p>
-      </div>
-
-      <form id="login-form">
-        <div class="mb-3">
-          <label for="username" class="form-label">Username</label>
-          <input type="text" class="form-control" id="username" required />
+    <div id="login-page" class="login-page">
+      <header class="login-header">
+        <h1 class="login-header-title">
+          <i class="fas fa-chart-line"></i>
+          Trading Bot
+        </h1>
+      </header>
+      <main class="login-main">
+        <div class="login-container">
+          <div class="login-box">
+            <div class="login-form-header">
+              <div class="login-logo">
+                <i class="fas fa-chart-line"></i>
+              </div>
+              <h2 class="login-title">Welcome Back</h2>
+              <p class="login-subtitle">
+                Sign in to access your trading dashboard
+              </p>
+            </div>
+            <form id="login-form" class="login-form">
+              <div class="form-floating mb-3">
+                <input
+                  type="email"
+                  class="form-control"
+                  id="username"
+                  placeholder="name@example.com"
+                  required
+                />
+                <label for="username">Email address</label>
+              </div>
+              <div class="form-floating mb-3">
+                <input
+                  type="password"
+                  class="form-control"
+                  id="password"
+                  placeholder="Password"
+                  required
+                />
+                <label for="password">Password</label>
+              </div>
+              <div class="d-grid mb-3">
+                <button type="submit" class="btn btn-primary btn-lg">
+                  <i class="fas fa-sign-in-alt me-2"></i>Sign in
+                </button>
+              </div>
+              <div class="text-center mb-3">
+                <a href="#" class="text-decoration-none">Forgot password?</a>
+              </div>
+              <div class="social-login">
+                <div class="divider">
+                  <span>Or continue with</span>
+                </div>
+                <div class="social-buttons">
+                  <button type="button" class="social-btn google">
+                    <i class="fab fa-google"></i>
+                  </button>
+                  <button type="button" class="social-btn github">
+                    <i class="fab fa-github"></i>
+                  </button>
+                </div>
+              </div>
+            </form>
+          </div>
         </div>
-        <div class="mb-3">
-          <label for="password" class="form-label">Password</label>
-          <input type="password" class="form-control" id="password" required />
-        </div>
-        <div class="d-grid">
-          <button type="submit" class="btn btn-primary">Sign In</button>
-        </div>
-      </form>
-
-      <div class="divider">
-        <span>or continue with</span>
-      </div>
-
-      <div class="social-login">
-        <a href="#" class="social-btn google-btn" id="google-login">
-          <i class="fab fa-google"></i>
-        </a>
-        <a href="#" class="social-btn facebook-btn" id="facebook-login">
-          <i class="fab fa-facebook-f"></i>
-        </a>
-        <a href="#" class="social-btn github-btn" id="github-login">
-          <i class="fab fa-github"></i>
-        </a>
-      </div>
+      </main>
+      <footer class="login-footer">
+        <div class="text-center">© 2024 Trading Bot. All rights reserved.</div>
+      </footer>
     </div>
 
-    <!-- Dashboard Content (Hidden by default) -->
-    <div id="dashboard-content" class="dashboard-content">
-      <div class="dashboard-header">
+    <!-- Dashboard -->
+    <div id="dashboard" class="dashboard" style="display: none">
+      <!-- Header -->
+      <header class="header">
         <div class="header-content">
-          <h1><i class="fas fa-chart-line me-2"></i>Trading Bot Dashboard</h1>
-          <p class="mb-0">Real-time trading bot monitoring and analytics</p>
-        </div>
-        <div class="header-profile">
-          <div class="user-avatar" id="user-avatar">A</div>
-          <div class="user-info">
-            <p class="user-name" id="user-name">Admin</p>
-            <p class="user-email" id="user-email">admin@example.com</p>
-          </div>
-          <button class="logout-btn" id="logout-btn">
-            <i class="fas fa-sign-out-alt"></i>
-          </button>
-        </div>
-      </div>
-
-      <div class="container">
-        <div class="grid">
-          <div class="card">
-            <div class="card-header">
-              <h5 class="mb-0"><i class="fas fa-robot me-2"></i>Bot Status</h5>
+          <h1 class="header-title">
+            <i class="fas fa-chart-line"></i>
+            Trading Bot Dashboard
+          </h1>
+          <div class="user-profile" style="display: none">
+            <div class="user-avatar"></div>
+            <div class="user-info">
+              <p class="user-name"></p>
+              <p class="user-email"></p>
             </div>
-            <div class="card-body">
-              <div
-                class="d-flex justify-content-between align-items-center mb-3"
-              >
-                <span class="metric-label">Runtime</span>
-                <span class="metric-value" id="runtime">00:00:00</span>
-              </div>
-              <div class="d-flex justify-content-between align-items-center">
-                <span class="metric-label">Market Status</span>
-                <span class="market-status" id="market-status">
-                  <i class="fas fa-circle"></i>
-                  <span>Checking...</span>
-                </span>
-              </div>
-            </div>
-          </div>
-
-          <div class="card">
-            <div class="card-header">
-              <h5 class="mb-0">
-                <i class="fas fa-wallet me-2"></i>Account Information
-              </h5>
-            </div>
-            <div class="card-body">
-              <div
-                class="d-flex justify-content-between align-items-center mb-3"
-              >
-                <span class="metric-label">Equity</span>
-                <span class="metric-value" id="equity">$0.00</span>
-              </div>
-              <div
-                class="d-flex justify-content-between align-items-center mb-3"
-              >
-                <span class="metric-label">Cash</span>
-                <span class="metric-value" id="cash">$0.00</span>
-              </div>
-              <div class="d-flex justify-content-between align-items-center">
-                <span class="metric-label">Buying Power</span>
-                <span class="metric-value" id="buying-power">$0.00</span>
-              </div>
-            </div>
-          </div>
-
-          <div class="card">
-            <div class="card-header">
-              <h5 class="mb-0">
-                <i class="fas fa-chart-bar me-2"></i>Price Information
-              </h5>
-            </div>
-            <div class="card-body">
-              <div
-                class="d-flex justify-content-between align-items-center mb-3"
-              >
-                <span class="metric-label">{{ default_symbol }}</span>
-                <span class="metric-value" id="latest-price">$0.00</span>
-              </div>
-              <div class="d-flex justify-content-between align-items-center">
-                <span class="metric-label">24h Change</span>
-                <span class="price-change" id="price-change">0.00%</span>
-              </div>
-            </div>
+            <button id="logout-btn" class="btn btn-link text-white">
+              <i class="fas fa-sign-out-alt"></i>
+            </button>
           </div>
         </div>
+      </header>
 
-        <div class="card">
-          <div class="card-header">
-            <h5 class="mb-0">
-              <i class="fas fa-chart-line me-2"></i>Price Chart
-            </h5>
-          </div>
-          <div class="card-body">
-            <div class="chart-container">
-              <canvas id="priceChart"></canvas>
-            </div>
-          </div>
-        </div>
-
-        <div class="grid">
-          <div class="card">
-            <div class="card-header">
-              <h5 class="mb-0">
-                <i class="fas fa-briefcase me-2"></i>Positions
-              </h5>
-            </div>
-            <div class="card-body">
-              <div id="positions">
-                <p class="text-muted">No positions</p>
+      <!-- Main Content -->
+      <main class="dashboard-content">
+        <div class="row g-4">
+          <!-- Bot Status Card -->
+          <div class="col-md-4">
+            <div class="card h-100">
+              <div class="card-header">
+                <h5 class="card-title mb-0">Bot Status</h5>
+              </div>
+              <div class="card-body">
+                <div class="status-item">
+                  <span class="status-label">Status:</span>
+                  <span id="bot-status" class="status-value">Stopped</span>
+                </div>
+                <div class="status-item">
+                  <span class="status-label">Runtime:</span>
+                  <span id="runtime" class="status-value">00:00:00</span>
+                </div>
+                <div class="status-item">
+                  <span class="status-label">Market Status:</span>
+                  <span id="market-status" class="status-value">Closed</span>
+                </div>
+                <div class="d-grid gap-2 mt-3">
+                  <button id="start-bot" class="btn btn-primary btn-lg">
+                    <i class="fas fa-play btn-icon"></i> Start Bot
+                  </button>
+                  <button id="stop-bot" class="btn btn-secondary btn-lg">
+                    <i class="fas fa-stop btn-icon"></i> Stop Bot
+                  </button>
+                </div>
               </div>
             </div>
           </div>
 
-          <div class="card">
-            <div class="card-header">
-              <h5 class="mb-0"><i class="fas fa-list me-2"></i>Recent Logs</h5>
+          <!-- Configuration Card -->
+          <div class="col-md-4">
+            <div class="card h-100">
+              <div class="card-header">
+                <h5 class="card-title mb-0">Configuration</h5>
+              </div>
+              <div class="card-body">
+                <form id="config-form">
+                  <div class="mb-3">
+                    <label for="symbols" class="form-label"
+                      >Trading Symbols</label
+                    >
+                    <input
+                      type="text"
+                      class="form-control"
+                      id="symbols"
+                      placeholder="AAPL,GOOGL,MSFT"
+                    />
+                  </div>
+                  <div class="mb-3">
+                    <label for="initial-capital" class="form-label"
+                      >Initial Capital ($)</label
+                    >
+                    <input
+                      type="number"
+                      class="form-control"
+                      id="initial-capital"
+                      placeholder="100000"
+                    />
+                  </div>
+                  <button type="submit" class="btn btn-primary w-100">
+                    <i class="fas fa-save btn-icon"></i> Save Configuration
+                  </button>
+                </form>
+              </div>
             </div>
-            <div class="card-body">
-              <div class="logs-container" id="logs"></div>
+          </div>
+
+          <!-- Performance Card -->
+          <div class="col-md-4">
+            <div class="card h-100">
+              <div class="card-header">
+                <h5 class="card-title mb-0">Performance</h5>
+              </div>
+              <div class="card-body">
+                <div class="status-item">
+                  <span class="status-label">Initial Capital:</span>
+                  <span id="initial-capital-value" class="status-value"
+                    >$100,000.00</span
+                  >
+                </div>
+                <div class="status-item">
+                  <span class="status-label">Current Capital:</span>
+                  <span id="current-capital" class="status-value"
+                    >$100,000.00</span
+                  >
+                </div>
+                <div class="status-item">
+                  <span class="status-label">Active Positions:</span>
+                  <span id="active-positions" class="status-value">0</span>
+                </div>
+              </div>
             </div>
           </div>
         </div>
-      </div>
+
+        <!-- Charts -->
+        <div class="row mt-4 g-4">
+          <div class="col-md-6">
+            <div class="card h-100">
+              <div class="card-header">
+                <h5 class="card-title mb-0">Returns</h5>
+              </div>
+              <div class="card-body">
+                <div class="chart-container">
+                  <div class="chart-wrapper">
+                    <canvas id="returns-chart"></canvas>
+                  </div>
+                  <div class="chart-description">
+                    Shows the percentage returns of the trading bot over time
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+          <div class="col-md-6">
+            <div class="card h-100">
+              <div class="card-header">
+                <h5 class="card-title mb-0">Positions</h5>
+              </div>
+              <div class="card-body">
+                <div class="chart-container">
+                  <div class="chart-wrapper">
+                    <canvas id="positions-chart"></canvas>
+                  </div>
+                  <div class="chart-description">
+                    Displays the number of active trading positions over time
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Logs -->
+        <div class="row mt-4">
+          <div class="col-12">
+            <div class="card">
+              <div class="card-header">
+                <h5 class="card-title mb-0">System Logs</h5>
+              </div>
+              <div class="card-body">
+                <div id="logs" class="logs-container"></div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </main>
+
+      <!-- Footer -->
+      <footer class="footer">
+        <div class="footer-content">
+          <p class="footer-text">© 2024 Trading Bot. All rights reserved.</p>
+          <div class="footer-links">
+            <a href="#" class="footer-link">Privacy Policy</a>
+            <a href="#" class="footer-link">Terms of Service</a>
+            <a href="#" class="footer-link">Contact Support</a>
+          </div>
+        </div>
+      </footer>
     </div>
 
+    <!-- Error Message -->
+    <div
+      id="error-message"
+      class="alert alert-danger"
+      style="display: none"
+    ></div>
+
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <script src="https://cdn.socket.io/4.0.1/socket.io.min.js"></script>
+    <script src="{{ url_for('static', filename='script.js') }}"></script>
     <script>
-      // Login functionality
+      // Initialize Socket.IO connection
+      const socket = io();
+
+      // DOM Elements
       const loginForm = document.getElementById("login-form");
       const loginPage = document.getElementById("login-page");
-      const dashboardContent = document.getElementById("dashboard-content");
-      const logoutBtn = document.getElementById("logout-btn");
+      const dashboard = document.getElementById("dashboard");
+      const startBotBtn = document.getElementById("start-bot");
+      const stopBotBtn = document.getElementById("stop-bot");
+      const botStatus = document.getElementById("bot-status");
+      const runtime = document.getElementById("runtime");
+      const marketStatus = document.getElementById("market-status");
+      const initialCapital = document.getElementById("initial-capital-value");
+      const currentCapital = document.getElementById("current-capital");
+      const activePositions = document.getElementById("active-positions");
+      const logs = document.getElementById("logs");
+      const errorMessage = document.getElementById("error-message");
 
-      // Mock social login buttons
-      document.getElementById("google-login").addEventListener("click", (e) => {
-        e.preventDefault();
-        mockLogin("Google");
+      // Initialize charts
+      let returnsChart, positionsChart;
+
+      // Socket.IO event handlers
+      socket.on("connect", () => {
+        console.log("Connected to server");
+        fetchInitialStatus();
       });
 
-      document
-        .getElementById("facebook-login")
-        .addEventListener("click", (e) => {
-          e.preventDefault();
-          mockLogin("Facebook");
-        });
-
-      document.getElementById("github-login").addEventListener("click", (e) => {
-        e.preventDefault();
-        mockLogin("GitHub");
+      socket.on("disconnect", () => {
+        console.log("Disconnected from server");
+        showError("Lost connection to server");
       });
 
-      // Handle form submission
-      loginForm.addEventListener("submit", (e) => {
-        e.preventDefault();
-        const username = document.getElementById("username").value;
-        const password = document.getElementById("password").value;
+      socket.on("status_update", (data) => {
+        console.log("Status update received:", data); // Debug log
 
-        if (username === "admin" && password === "admin") {
-          showDashboard();
+        // Update bot status and runtime
+        updateBotStatus(data.status);
+        updateRuntime(data.runtime);
+        updateMarketStatus(data.market_status);
+        updateMetrics(data.metrics);
+        addLog(data.log);
+
+        // Update button states based on status
+        if (data.status === "running") {
+          startBotBtn.disabled = true;
+          stopBotBtn.disabled = false;
+          startRuntimeCounter();
         } else {
-          alert("Invalid credentials");
+          startBotBtn.disabled = false;
+          stopBotBtn.disabled = true;
+          stopRuntimeCounter();
         }
       });
 
-      // Handle logout
-      logoutBtn.addEventListener("click", () => {
-        showLoginPage();
-      });
-
-      // Mock social login
-      function mockLogin(provider) {
-        alert(`Mock ${provider} login successful!`);
-        showDashboard();
-      }
-
-      // Show dashboard
-      function showDashboard() {
-        loginPage.style.display = "none";
-        dashboardContent.style.display = "block";
-      }
-
-      // Show login page
-      function showLoginPage() {
-        loginPage.style.display = "block";
-        dashboardContent.style.display = "none";
-        loginForm.reset();
-      }
-
-      // Initialize socket and chart when dashboard is shown
-      const socket = io();
-      let priceChart;
-      let priceData = [];
-      let timeData = [];
-
-      // Initialize price chart
-      function initChart() {
-        const ctx = document.getElementById("priceChart").getContext("2d");
-        priceChart = new Chart(ctx, {
-          type: "line",
-          data: {
-            labels: timeData,
-            datasets: [
-              {
-                label: "Price",
-                data: priceData,
-                borderColor: "#1a73e8",
-                backgroundColor: "rgba(26, 115, 232, 0.1)",
-                borderWidth: 2,
-                fill: true,
-                tension: 0.4,
-              },
-            ],
-          },
-          options: {
-            responsive: true,
-            maintainAspectRatio: false,
-            plugins: {
-              legend: {
-                display: false,
-              },
-              tooltip: {
-                mode: "index",
-                intersect: false,
-              },
+      // Button event handlers
+      startBotBtn.addEventListener("click", async () => {
+        try {
+          const response = await fetch("/api/start", {
+            method: "POST",
+            headers: {
+              "Content-Type": "application/json",
             },
-            scales: {
-              x: {
-                grid: {
-                  display: false,
-                },
-              },
-              y: {
-                grid: {
-                  color: "rgba(0, 0, 0, 0.1)",
-                },
-              },
-            },
-          },
-        });
-      }
+          });
+          const data = await response.json();
+          console.log("Start response:", data);
 
-      // Format time for chart
-      function formatTime(timestamp) {
-        const date = new Date(timestamp);
-        return date.toLocaleTimeString();
-      }
-
-      socket.on("update", function (data) {
-        // Update runtime
-        document.getElementById("runtime").textContent = data.runtime;
-
-        // Update market status
-        const marketStatus = document.getElementById("market-status");
-        const statusIcon = marketStatus.querySelector("i");
-        const statusText = marketStatus.querySelector("span");
-
-        statusText.textContent = data.market_open ? "Open" : "Closed";
-        statusIcon.className = `fas fa-circle ${
-          data.market_open ? "text-success" : "text-danger"
-        }`;
-
-        // Update account info
-        document.getElementById(
-          "equity"
-        ).textContent = `$${data.account_info.equity.toFixed(2)}`;
-        document.getElementById(
-          "cash"
-        ).textContent = `$${data.account_info.cash.toFixed(2)}`;
-        document.getElementById(
-          "buying-power"
-        ).textContent = `$${data.account_info.buying_power.toFixed(2)}`;
-
-        // Update price info
-        const priceElement = document.getElementById("latest-price");
-        const changeElement = document.getElementById("price-change");
-
-        priceElement.textContent = `$${data.latest_price.toFixed(2)}`;
-        changeElement.textContent = `${data.price_change.toFixed(2)}%`;
-        changeElement.className = `price-change ${
-          data.price_change >= 0 ? "price-up" : "price-down"
-        }`;
-
-        // Update chart
-        const timestamp = new Date().getTime();
-        priceData.push(data.latest_price);
-        timeData.push(formatTime(timestamp));
-
-        // Keep only last 50 data points
-        if (priceData.length > 50) {
-          priceData.shift();
-          timeData.shift();
-        }
-
-        if (priceChart) {
-          priceChart.update();
-        }
-
-        // Update positions
-        const positionsDiv = document.getElementById("positions");
-        if (Object.keys(data.positions).length === 0) {
-          positionsDiv.innerHTML = '<p class="text-muted">No positions</p>';
-        } else {
-          let positionsHtml = "";
-          for (const [symbol, position] of Object.entries(data.positions)) {
-            const profitLoss = (
-              ((data.latest_price - position.entry_price) /
-                position.entry_price) *
-              100
-            ).toFixed(2);
-            positionsHtml += `
-              <div class="position-card">
-                <div class="d-flex justify-content-between align-items-center">
-                  <span class="metric-label">${symbol}</span>
-                  <span class="metric-value">${position.quantity} shares</span>
-                </div>
-                <div class="d-flex justify-content-between align-items-center">
-                  <span class="metric-label">Entry Price</span>
-                  <span class="metric-value">$${position.entry_price.toFixed(
-                    2
-                  )}</span>
-                </div>
-                <div class="d-flex justify-content-between align-items-center">
-                  <span class="metric-label">P/L</span>
-                  <span class="price-change ${
-                    profitLoss >= 0 ? "price-up" : "price-down"
-                  }">
-                    ${profitLoss}%
-                  </span>
-                </div>
-              </div>
-            `;
+          if (data.success) {
+            // Status will be updated by the socket event
+            startBotBtn.disabled = true;
+            stopBotBtn.disabled = false;
+          } else {
+            showError(data.error || "Failed to start bot");
           }
-          positionsDiv.innerHTML = positionsHtml;
+        } catch (error) {
+          showError("Error starting bot: " + error);
         }
       });
 
-      socket.on("log", function (data) {
-        const logsDiv = document.getElementById("logs");
+      stopBotBtn.addEventListener("click", async () => {
+        try {
+          const response = await fetch("/api/stop", {
+            method: "POST",
+            headers: {
+              "Content-Type": "application/json",
+            },
+          });
+          const data = await response.json();
+          console.log("Stop response:", data);
+
+          if (data.success) {
+            // Status will be updated by the socket event
+            startBotBtn.disabled = false;
+            stopBotBtn.disabled = true;
+          } else {
+            showError(data.error || "Failed to stop bot");
+          }
+        } catch (error) {
+          showError("Error stopping bot: " + error);
+        }
+      });
+
+      // Runtime counter management
+      let runtimeInterval;
+      let startTime;
+
+      function startRuntimeCounter() {
+        if (runtimeInterval) {
+          clearInterval(runtimeInterval);
+        }
+        startTime = new Date();
+        runtimeInterval = setInterval(() => {
+          const currentTime = new Date();
+          const diff = currentTime - startTime;
+          const hours = Math.floor(diff / 3600000);
+          const minutes = Math.floor((diff % 3600000) / 60000);
+          const seconds = Math.floor((diff % 60000) / 1000);
+          updateRuntime(
+            `${hours.toString().padStart(2, "0")}:${minutes
+              .toString()
+              .padStart(2, "0")}:${seconds.toString().padStart(2, "0")}`
+          );
+        }, 1000);
+      }
+
+      function stopRuntimeCounter() {
+        if (runtimeInterval) {
+          clearInterval(runtimeInterval);
+          runtimeInterval = null;
+        }
+        updateRuntime("00:00:00");
+      }
+
+      // Helper functions
+      function updateBotStatus(status) {
+        botStatus.textContent =
+          status.charAt(0).toUpperCase() + status.slice(1);
+        botStatus.className = "status-value bot-" + status;
+      }
+
+      function updateRuntime(time) {
+        runtime.textContent = time;
+      }
+
+      function updateMarketStatus(status) {
+        marketStatus.textContent =
+          status.charAt(0).toUpperCase() + status.slice(1);
+        marketStatus.className = "status-value market-" + status.toLowerCase();
+      }
+
+      function updateMetrics(metrics) {
+        if (metrics.initial_capital) {
+          initialCapital.textContent = `$${metrics.initial_capital.toFixed(2)}`;
+        }
+        if (metrics.current_capital) {
+          currentCapital.textContent = `$${metrics.current_capital.toFixed(2)}`;
+        }
+        if (metrics.active_positions !== undefined) {
+          activePositions.textContent = metrics.active_positions;
+        }
+      }
+
+      function addLog(message) {
         const logEntry = document.createElement("div");
         logEntry.className = "log-entry";
-        logEntry.innerHTML = `
-          <span class="text-muted">[${new Date().toLocaleTimeString()}]</span>
-          <span>${data.message}</span>
-        `;
-        logsDiv.appendChild(logEntry);
-        logsDiv.scrollTop = logsDiv.scrollHeight;
-      });
+        logEntry.textContent = `[${new Date().toLocaleTimeString()}] ${message}`;
+        logs.appendChild(logEntry);
+        logs.scrollTop = logs.scrollHeight;
+      }
 
-      // Initialize chart when page loads
-      document.addEventListener("DOMContentLoaded", initChart);
+      function showError(message) {
+        errorMessage.textContent = message;
+        errorMessage.style.display = "block";
+        setTimeout(() => {
+          errorMessage.style.display = "none";
+        }, 5000);
+      }
+
+      async function fetchInitialStatus() {
+        try {
+          const response = await fetch("/api/status");
+          const data = await response.json();
+          console.log("Initial status:", data); // Debug log
+
+          if (data.success) {
+            updateBotStatus(data.status);
+            updateRuntime(data.runtime);
+            updateMarketStatus(data.market_status);
+            updateMetrics(data.metrics);
+
+            if (data.status === "running") {
+              startBotBtn.disabled = true;
+              stopBotBtn.disabled = false;
+              startRuntimeCounter();
+            } else {
+              startBotBtn.disabled = false;
+              stopBotBtn.disabled = true;
+              stopRuntimeCounter();
+            }
+          }
+        } catch (error) {
+          showError("Error fetching initial status: " + error);
+        }
+      }
+
+      // Initialize the page
+      document.addEventListener("DOMContentLoaded", () => {
+        // Initialize charts
+        initializeCharts();
+
+        // Get initial status
+        fetchInitialStatus();
+
+        // Handle login form submission
+        loginForm.addEventListener("submit", async (e) => {
+          e.preventDefault();
+          const username = document.getElementById("username").value;
+          const password = document.getElementById("password").value;
+
+          try {
+            const response = await fetch("/api/login", {
+              method: "POST",
+              headers: {
+                "Content-Type": "application/json",
+              },
+              body: JSON.stringify({ username, password }),
+            });
+
+            const data = await response.json();
+
+            if (data.success) {
+              loginPage.style.display = "none";
+              dashboard.style.display = "block";
+              // Get initial status after login
+              fetchInitialStatus();
+            } else {
+              showError(data.error || "Login failed");
+            }
+          } catch (error) {
+            showError("Error during login: " + error);
+          }
+        });
+
+        // Handle logout
+        document.getElementById("logout-btn").addEventListener("click", () => {
+          // Reset all states
+          bot_state = {
+            status: "stopped",
+            start_time: null,
+            runtime: "00:00:00",
+          };
+
+          // Stop any running timers
+          stopRuntimeCounter();
+
+          // Clear logs
+          logs.innerHTML = "";
+
+          // Reset form values
+          document.getElementById("username").value = "";
+          document.getElementById("password").value = "";
+
+          // Hide dashboard and show login page
+          dashboard.style.display = "none";
+          loginPage.style.display = "flex"; // Changed to flex to maintain layout
+
+          // Reset user profile
+          const userProfile = document.querySelector(".user-profile");
+          userProfile.style.display = "none";
+
+          // Reset charts
+          if (returnsChart) {
+            returnsChart.destroy();
+          }
+          if (positionsChart) {
+            positionsChart.destroy();
+          }
+
+          // Reset status indicators
+          updateBotStatus("stopped");
+          updateRuntime("00:00:00");
+          updateMarketStatus("closed");
+          updateMetrics({
+            initial_capital: 0,
+            current_capital: 0,
+            active_positions: 0,
+          });
+
+          // Reset buttons
+          startBotBtn.disabled = true;
+          stopBotBtn.disabled = true;
+
+          // Show success message
+          showError("Logged out successfully", "success");
+        });
+      });
     </script>
   </body>
 </html>

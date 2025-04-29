@@ -2,6 +2,7 @@
 
 from typing import Dict, List, Optional, Callable
 import pandas as pd
+import numpy as np
 from datetime import datetime, timedelta
 import threading
 import time
@@ -187,3 +188,156 @@ class DataFeed:
             except Exception as e:
                 self.logger.error(f"Error in data feed loop: {e}")
                 time.sleep(60)  # Wait before retrying
+
+class MockDataFeed(DataFeed):
+    """Mock data feed for testing purposes."""
+
+    def __init__(self, client: Optional[AlpacaClient] = None) -> None:
+        """Initialize mock data feed.
+
+        Args:
+            client: Optional Alpaca client instance (not used in mock)
+        """
+        super().__init__(client or AlpacaClient())
+        self._mock_data: Dict[str, pd.DataFrame] = {}
+        self._mock_prices: Dict[str, float] = {}
+        self._mock_trends: Dict[str, str] = {}  # 'up', 'down', or 'sideways'
+        self._mock_volatility: Dict[str, float] = {}  # Price volatility factor
+
+    def add_symbol(self, symbol: str) -> bool:
+        """Add a symbol to track with mock data.
+
+        Args:
+            symbol: Trading symbol to add
+
+        Returns:
+            True if symbol was added successfully, False otherwise
+        """
+        try:
+            if symbol not in self.symbols:
+                self.symbols.append(symbol)
+                self._mock_prices[symbol] = 100.0  # Initial price
+                self._mock_trends[symbol] = 'sideways'
+                self._mock_volatility[symbol] = 0.02  # 2% daily volatility
+                self._generate_mock_data(symbol)
+                self.logger.info("Added mock symbol %s to data feed", symbol)
+                return True
+            return False
+        except Exception as e:
+            self.logger.error("Error adding mock symbol %s: %s", symbol, str(e))
+            return False
+
+    def _generate_mock_data(self, symbol: str) -> None:
+        """Generate mock historical data for a symbol."""
+        try:
+            # Generate 100 days of mock data
+            dates = pd.date_range(end=datetime.now(), periods=100, freq='D')
+            base_price = self._mock_prices[symbol]
+            volatility = self._mock_volatility[symbol]
+            
+            # Generate random walk prices
+            np.random.seed(hash(symbol) % 2**32)  # Consistent random data per symbol
+            returns = np.random.normal(0, volatility, len(dates))
+            prices = base_price * (1 + returns).cumprod()
+            
+            # Create DataFrame
+            df = pd.DataFrame({
+                'open': prices * (1 + np.random.normal(0, volatility/2, len(dates))),
+                'high': prices * (1 + np.abs(np.random.normal(0, volatility, len(dates)))),
+                'low': prices * (1 - np.abs(np.random.normal(0, volatility, len(dates)))),
+                'close': prices,
+                'volume': np.random.randint(1000000, 5000000, len(dates))
+            }, index=dates)
+            
+            # Calculate indicators
+            self._calculate_indicators(symbol)
+            
+            # Store mock data
+            self._mock_data[symbol] = df
+            self.data[symbol] = df
+            
+        except Exception as e:
+            self.logger.error("Error generating mock data for %s: %s", symbol, str(e))
+
+    def get_historical_data(
+        self,
+        symbol: str,
+        start: datetime,
+        end: datetime
+    ) -> pd.DataFrame:
+        """Get mock historical data for a symbol."""
+        try:
+            if symbol not in self._mock_data:
+                return pd.DataFrame()
+            
+            df = self._mock_data[symbol]
+            mask = (df.index >= start) & (df.index <= end)
+            return df[mask]
+        except Exception as e:
+            self.logger.error("Error getting mock historical data for %s: %s", symbol, str(e))
+            return pd.DataFrame()
+
+    def get_latest_data(self, symbol: str) -> pd.DataFrame:
+        """Get latest mock data for a symbol."""
+        try:
+            if symbol not in self._mock_data:
+                return pd.DataFrame()
+            
+            # Update mock price based on trend
+            current_price = self._mock_prices[symbol]
+            volatility = self._mock_volatility[symbol]
+            
+            if self._mock_trends[symbol] == 'up':
+                new_price = current_price * (1 + np.random.normal(0.001, volatility))
+            elif self._mock_trends[symbol] == 'down':
+                new_price = current_price * (1 + np.random.normal(-0.001, volatility))
+            else:  # sideways
+                new_price = current_price * (1 + np.random.normal(0, volatility))
+            
+            self._mock_prices[symbol] = new_price
+            
+            # Update mock data
+            self._generate_mock_data(symbol)
+            
+            # Get latest data
+            df = self._mock_data[symbol].iloc[-1:]
+            
+            # Notify callbacks
+            for callback in self.callbacks:
+                callback(symbol, df)
+            
+            return df
+        except Exception as e:
+            self.logger.error("Error getting latest mock data for %s: %s", symbol, str(e))
+            return pd.DataFrame()
+
+    def get_latest_price(self, symbol: str) -> Optional[float]:
+        """Get latest mock price for a symbol."""
+        try:
+            if symbol in self._mock_prices:
+                return self._mock_prices[symbol]
+            return None
+        except Exception as e:
+            self.logger.error("Error getting latest mock price for %s: %s", symbol, str(e))
+            return None
+
+    def set_mock_trend(self, symbol: str, trend: str) -> None:
+        """Set the trend for a mock symbol.
+
+        Args:
+            symbol: Trading symbol
+            trend: 'up', 'down', or 'sideways'
+        """
+        if trend in ['up', 'down', 'sideways']:
+            self._mock_trends[symbol] = trend
+            self.logger.info("Set mock trend for %s to %s", symbol, trend)
+
+    def set_mock_volatility(self, symbol: str, volatility: float) -> None:
+        """Set the volatility for a mock symbol.
+
+        Args:
+            symbol: Trading symbol
+            volatility: Daily volatility factor (e.g., 0.02 for 2%)
+        """
+        self._mock_volatility[symbol] = volatility
+        self.logger.info("Set mock volatility for %s to %.2f%%", symbol, volatility * 100)
