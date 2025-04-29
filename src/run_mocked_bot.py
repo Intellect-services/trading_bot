@@ -170,12 +170,12 @@ def main():
         socketio.start_background_task(send_updates)
         
         # Start web server
-        logger.info("Starting web server on http://127.0.0.1:5051")
-        socketio.run(
-            app,
-            host='127.0.0.1',
+        logger.info("Starting web server on http://0.0.0.0:5051")
+        # Run the Flask application
+        app.run(
+            host=os.getenv('FLASK_HOST', '0.0.0.0'),
             port=5051,
-            debug=True,
+            debug=os.getenv('FLASK_DEBUG', 'False').lower() == 'true',
             use_reloader=False,
             log_output=True
         )
