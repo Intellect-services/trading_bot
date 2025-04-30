@@ -1,116 +1,47 @@
-"""Main module for trading bot."""
+"""Main entry point for the trading bot."""
 
-import json
-import os
-import signal
-import sys
-from typing import Any, Dict, Optional
 import logging
+import os
 from datetime import datetime
+from typing import Any, Dict, Optional
 
-from src.core.alpaca_client import AlpacaClient
-from src.core.alpaca_service import AlpacaService
-from src.core.bot import TradingBot
-from src.core.data_feed import DataFeed
-from src.core.portfolio import Portfolio
-from src.core.risk_manager import RiskManager
-from src.strategies.moving_average import MovingAverageCrossover
-from src.utils.config import Config
-from src.utils.logger import setup_logger
+from .core.alpaca_service import AlpacaService
+from .core.trading_bot import TradingBot
+from .utils.config import Config
+from .utils.logger import setup_logger
 
 # Configure logging
 logging.basicConfig(level=logging.DEBUG)
 logger = logging.getLogger(__name__)
 
 
-def load_config(config_file: str = "config.json") -> Config:
-    """Load configuration from file.
-
-    Args:
-        config_file: Path to configuration file
-
-    Returns:
-        Configuration object
-    """
-    try:
-        with open(config_file, "r") as f:
-            config_data = json.load(f)
-        return Config(config_data)
-    except Exception as e:
-        logger.error(f"Error loading configuration: {e}")
-        raise
-
-
-def initialize_bot(config_data: Dict[str, Any]) -> TradingBot:
-    """Initialize trading bot with configuration.
-
-    Args:
-        config_data: Configuration data dictionary
-
-    Returns:
-        Initialized trading bot instance
-    """
-    try:
-        # Set environment variables for Alpaca API
-        os.environ["ALPACA_API_KEY"] = config_data.get("ALPACA_API_KEY", "")
-        os.environ["ALPACA_API_SECRET"] = config_data.get("ALPACA_SECRET_KEY", "")
-
-        # Initialize services
-        alpaca_client = AlpacaClient(
-            api_key=config_data.get("ALPACA_API_KEY", ""),
-            secret_key=config_data.get("ALPACA_SECRET_KEY", ""),
-            paper=config_data.get("ALPACA_PAPER", True),
-        )
-        alpaca_service = AlpacaService()
-        strategy = MovingAverageCrossover()
-        bot = TradingBot(alpaca_service, strategy)
-        return bot
-    except Exception as e:
-        logger.error(f"Error initializing bot: {e}")
-        raise
-
-
-def handle_shutdown(bot: TradingBot) -> None:
-    """Handle graceful shutdown.
-
-    Args:
-        bot: Trading bot instance
-    """
-
-    def signal_handler(signum: int, frame: Any) -> None:
-        """Handle shutdown signal.
-
-        Args:
-            signum: Signal number
-            frame: Current stack frame
-        """
-        logger.info("Shutting down...")
-        bot.stop()
-        sys.exit(0)
-
-    signal.signal(signal.SIGINT, signal_handler)
-    signal.signal(signal.SIGTERM, signal_handler)
-
-
 def main() -> None:
-    """Main entry point for the trading bot."""
+    """Main function to run the trading bot."""
     try:
         # Load configuration
-        config = load_config()
+        config_data = {
+            "RISK_MAX_POSITION_SIZE": 0.1,
+            "RISK_STOP_LOSS_PCT": 0.02,
+            "RISK_MAX_DRAWDOWN": 0.1,
+            "RISK_MAX_LEVERAGE": 2.0,
+            "RISK_PER_TRADE": 0.01,
+            "INITIAL_BALANCE": 10000.0,
+            "ALPACA_API_KEY": os.getenv("ALPACA_API_KEY", ""),
+            "ALPACA_SECRET_KEY": os.getenv("ALPACA_API_SECRET", ""),
+            "ALPACA_PAPER": True,
+        }
+        config = Config(config_data)
 
-        # Initialize Alpaca service
+        # Initialize services
         alpaca_service = AlpacaService()
-        strategy = MovingAverageCrossover()
+        trading_bot = TradingBot(alpaca_service)
 
-        # Initialize and start trading bot
-        bot = TradingBot(alpaca_service, strategy)
-        handle_shutdown(bot)
-
-        # Start the bot
-        bot.start()
+        # Start bot
+        logger.info("Starting trading bot...")
+        trading_bot.start()
 
     except Exception as e:
-        logger.error(f"Error in main: {str(e)}")
+        logger.error(f"Error running bot: {e}")
         raise
 
 

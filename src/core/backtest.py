@@ -1,20 +1,31 @@
 """Backtesting engine for trading strategies."""
 
+import logging
 from datetime import datetime, timedelta
-from typing import Dict, List, Optional, Union
+from typing import Any, Dict, List, Optional, Union
 
 import numpy as np
 import pandas as pd
 
-from ..types import BacktestResult, BacktestMetrics
+from ..types import BacktestMetrics, BacktestResult
 from ..utils.logger import setup_logger
+
+logger = setup_logger(__name__)
 
 
 class Backtest:
+    """Backtesting engine for trading strategies."""
+
     def __init__(self, strategy, initial_capital: float = 100000.0):
+        """Initialize backtesting engine.
+
+        Args:
+            strategy: Trading strategy to backtest
+            initial_capital: Initial capital for backtesting
+        """
         self.strategy = strategy
         self.initial_capital = initial_capital
-        self.logger = setup_logger(__name__)
+        self.logger = logger
 
     def run(
         self,
@@ -22,7 +33,16 @@ class Backtest:
         start_date: Optional[datetime] = None,
         end_date: Optional[datetime] = None,
     ) -> BacktestResult:
-        """Run backtest on historical data."""
+        """Run backtest on historical data.
+
+        Args:
+            data: Historical price data
+            start_date: Optional start date for backtest
+            end_date: Optional end date for backtest
+
+        Returns:
+            Backtest results including portfolio and metrics
+        """
         try:
             # Filter data by date range if specified
             if start_date and end_date:
@@ -72,7 +92,14 @@ class Backtest:
         current_time: datetime,
         portfolio: Dict,
     ):
-        """Execute trades based on strategy signals."""
+        """Execute trades based on strategy signals.
+
+        Args:
+            signals: Trading signals from strategy
+            current_bar: Current price bar
+            current_time: Current timestamp
+            portfolio: Portfolio state
+        """
         for symbol, signal in signals.items():
             if signal > 0:  # Buy signal
                 if symbol not in portfolio["positions"]:
@@ -121,14 +148,27 @@ class Backtest:
                     )
 
     def _update_portfolio_value(self, portfolio: Dict, current_bar: pd.Series):
-        """Update portfolio value based on current prices."""
+        """Update portfolio value based on current prices.
+
+        Args:
+            portfolio: Portfolio state
+            current_bar: Current price bar
+        """
         portfolio["value"] = portfolio["cash"]
         for symbol, position in portfolio["positions"].items():
             if symbol in current_bar.index:
                 portfolio["value"] += position["shares"] * current_bar["close"]
 
     def _calculate_metrics(self, portfolio: Dict, data: pd.DataFrame) -> BacktestMetrics:
-        """Calculate backtest performance metrics."""
+        """Calculate backtest performance metrics.
+
+        Args:
+            portfolio: Portfolio state
+            data: Historical price data
+
+        Returns:
+            Performance metrics
+        """
         # Calculate returns
         returns = []
         for i in range(1, len(data)):

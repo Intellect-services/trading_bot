@@ -8,16 +8,21 @@ from datetime import datetime
 from functools import wraps
 from typing import Any, Callable, Dict, List, Optional, TypeVar, Union, cast
 
-from authlib.integrations.flask_client import OAuth  # type: ignore
-from flask import Flask, Response, jsonify, redirect, render_template, request, session, url_for
-from flask_socketio import SocketIO, emit  # type: ignore
+from authlib.integrations.flask_client import OAuth
+from flask import (
+    Flask,
+    Response,
+    jsonify,
+    redirect,
+    render_template,
+    request,
+    session,
+    url_for,
+)
+from flask_socketio import SocketIO, emit
 from werkzeug.wrappers.response import Response as WerkzeugResponse
 
-from .core.alpaca_client import AlpacaClient
 from .core.alpaca_service import AlpacaService
-from .core.data_feed import DataFeed
-from .core.portfolio import Portfolio
-from .core.risk_manager import RiskManager
 from .core.trading_bot import TradingBot
 from .strategies.moving_average import MovingAverageCrossover
 from .utils.config import Config
@@ -27,6 +32,7 @@ from .utils.logger import setup_logger
 logging.basicConfig(level=logging.DEBUG)
 logger = logging.getLogger(__name__)
 
+# Initialize Flask app
 app = Flask(__name__)
 app.secret_key = os.getenv("FLASK_SECRET_KEY", "your-secret-key")
 socketio = SocketIO(app, cors_allowed_origins="*")
@@ -102,6 +108,9 @@ linkedin = oauth.register(
     client_kwargs={"scope": "r_liteprofile r_emailaddress"},
 )
 
+# Type variable for decorators
+F = TypeVar("F", bound=Callable[..., Any])
+
 
 def format_runtime(seconds: int) -> str:
     """Format runtime in seconds to HH:MM:SS format."""
@@ -109,9 +118,6 @@ def format_runtime(seconds: int) -> str:
     minutes = (seconds % 3600) // 60
     seconds = seconds % 60
     return f"{hours:02d}:{minutes:02d}:{seconds:02d}"
-
-
-F = TypeVar("F", bound=Callable[..., Any])
 
 
 def login_required(f: F) -> F:
