@@ -2,8 +2,9 @@
 
 from datetime import datetime, timedelta
 from typing import Dict, List, Optional, Union
-import pandas as pd
+
 import numpy as np
+import pandas as pd
 
 from ..types import BacktestResult, BacktestMetrics
 from ..utils.logger import setup_logger

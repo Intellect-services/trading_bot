@@ -6,12 +6,12 @@ from datetime import datetime, timedelta
 from typing import Any, Dict, List, Optional, Union, cast
 from uuid import UUID
 
+import pandas as pd
 from alpaca.data.historical import StockHistoricalDataClient
 from alpaca.trading.client import TradingClient
 from alpaca.trading.enums import OrderSide, QueryOrderStatus, TimeInForce
 from alpaca.trading.models import Asset, Calendar, Clock, Order, Position, TradeAccount
 from alpaca.trading.requests import GetOrdersRequest, MarketOrderRequest
-import pandas as pd
 
 from ..utils.logger import setup_logger
 

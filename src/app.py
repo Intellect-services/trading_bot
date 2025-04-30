@@ -6,10 +6,10 @@ import threading
 import time
 from datetime import datetime
 from functools import wraps
-from typing import Any, Dict, List, Optional, Union, Callable, TypeVar, cast
+from typing import Any, Callable, Dict, List, Optional, TypeVar, Union, cast
 
 from authlib.integrations.flask_client import OAuth  # type: ignore
-from flask import Flask, jsonify, redirect, render_template, request, session, url_for, Response
+from flask import Flask, Response, jsonify, redirect, render_template, request, session, url_for
 from flask_socketio import SocketIO, emit  # type: ignore
 from werkzeug.wrappers.response import Response as WerkzeugResponse
 

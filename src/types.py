@@ -1,7 +1,8 @@
 """Type definitions for the trading bot."""
 
-from typing import Any, Callable, Dict, Optional, Union
 from datetime import datetime
+from typing import Any, Callable, Dict, Optional, Union
+
 from flask import Response
 from flask_socketio import SocketIO
 
