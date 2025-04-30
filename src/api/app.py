@@ -32,49 +32,49 @@ def create_app(bot_service: BotService) -> Flask:
     def start_bot() -> Dict[str, Any]:
         """Start the bot."""
         success = bot_service.start()
-        return jsonify({
-            "success": success,
-            "status": bot_service.status.name,
-            "error": bot_service.error_message,
-        })
+        return jsonify(
+            {
+                "success": success,
+                "status": bot_service.status.name,
+                "error": bot_service.error_message,
+            }
+        )
 
     @app.route("/api/stop", methods=["POST"])
     def stop_bot() -> Dict[str, Any]:
         """Stop the bot."""
         success = bot_service.stop()
-        return jsonify({
-            "success": success,
-            "status": bot_service.status.name,
-            "error": bot_service.error_message,
-        })
+        return jsonify(
+            {
+                "success": success,
+                "status": bot_service.status.name,
+                "error": bot_service.error_message,
+            }
+        )
 
     @app.route("/api/config", methods=["GET"])
     def get_config() -> Dict[str, Any]:
         """Get bot configuration."""
-        return jsonify({
-            "symbols": bot_service.symbols,
-            "initial_capital": bot_service.initial_capital,
-            "strategy": str(bot_service.strategy),
-        })
+        return jsonify(
+            {
+                "symbols": bot_service.symbols,
+                "initial_capital": bot_service.initial_capital,
+                "strategy": str(bot_service.strategy),
+            }
+        )
 
     @app.route("/api/config", methods=["PUT"])
     def update_config() -> Dict[str, Any]:
         """Update bot configuration."""
         if bot_service.status != BotStatus.STOPPED:
             return (
-                jsonify({
-                    "success": False,
-                    "error": "Cannot update config while bot is running"
-                }),
+                jsonify({"success": False, "error": "Cannot update config while bot is running"}),
                 400,
             )
 
         data = request.get_json()
         if not data:
-            return jsonify({
-                "success": False,
-                "error": "No configuration provided"
-            }), 400
+            return jsonify({"success": False, "error": "No configuration provided"}), 400
 
         try:
             if "symbols" in data:
@@ -82,18 +82,17 @@ def create_app(bot_service: BotService) -> Flask:
             if "initial_capital" in data:
                 bot_service.initial_capital = float(data["initial_capital"])
 
-            return jsonify({
-                "success": True,
-                "config": {
-                    "symbols": bot_service.symbols,
-                    "initial_capital": bot_service.initial_capital,
-                },
-            })
+            return jsonify(
+                {
+                    "success": True,
+                    "config": {
+                        "symbols": bot_service.symbols,
+                        "initial_capital": bot_service.initial_capital,
+                    },
+                }
+            )
 
         except Exception as e:
-            return jsonify({
-                "success": False,
-                "error": str(e)
-            }), 400
+            return jsonify({"success": False, "error": str(e)}), 400
 
     return app
