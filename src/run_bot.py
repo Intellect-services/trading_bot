@@ -5,7 +5,16 @@ from datetime import datetime
 from typing import Any, Dict, Optional, Tuple, Union
 
 from dotenv import load_dotenv
-from flask import Flask, Response, jsonify, redirect, render_template, request, session, url_for
+from flask import (
+    Flask,
+    Response,
+    jsonify,
+    redirect,
+    render_template,
+    request,
+    session,
+    url_for,
+)
 from flask_socketio import SocketIO, emit
 
 from app import app, socketio

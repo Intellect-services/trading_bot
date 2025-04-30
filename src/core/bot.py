@@ -12,7 +12,8 @@ from alpaca.data.requests import StockBarsRequest
 from alpaca.data.timeframe import TimeFrame
 from alpaca.trading.client import TradingClient
 from alpaca.trading.enums import OrderSide, TimeInForce
-from alpaca.trading.models import Order, Position as AlpacaPosition
+from alpaca.trading.models import Order
+from alpaca.trading.models import Position as AlpacaPosition
 from alpaca.trading.requests import MarketOrderRequest
 
 from src.core.portfolio import Portfolio
