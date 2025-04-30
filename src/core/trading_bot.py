@@ -1,20 +1,20 @@
 import logging
 from datetime import datetime
-from typing import Dict, List, Optional
+from typing import Dict, List, Optional, Any
 
 from .alpaca_service import AlpacaService
 
 
 class TradingBot:
-    def __init__(self, alpaca_service: AlpacaService):
+    def __init__(self, alpaca_service: AlpacaService) -> None:
         self.alpaca_service = alpaca_service
         self.logger = logging.getLogger(__name__)
-        self.is_running = False
-        self.start_time = None
-        self.total_trades = 0
-        self.winning_trades = 0
-        self.initial_capital = 0
-        self.current_capital = 0
+        self.is_running: bool = False
+        self.start_time: Optional[datetime] = None
+        self.total_trades: int = 0
+        self.winning_trades: int = 0
+        self.initial_capital: float = 0.0
+        self.current_capital: float = 0.0
         self.logger.info("TradingBot initialized")
 
     def start(self) -> bool:
@@ -87,7 +87,7 @@ class TradingBot:
             return 0.0
         return ((self.current_capital - self.initial_capital) / self.initial_capital) * 100
 
-    def update_metrics(self) -> Dict:
+    def update_metrics(self) -> Dict[str, Any]:
         """Update and return current metrics."""
         try:
             account = self.alpaca_service.get_account()

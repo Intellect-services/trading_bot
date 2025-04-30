@@ -14,85 +14,79 @@ logger = logging.getLogger(__name__)
 
 
 class BaseStrategy(ABC):
-    """Abstract base class for trading strategies."""
+    """Abstract base class for all trading strategies."""
 
-    def __init__(self, config: Config):
-        """Initialize the strategy.
-
-        Args:
-            config: Configuration object
-        """
-        self.config = config
-        self.symbols = config.STRATEGY_PARAMS["symbols"]
-        self.timeframe = config.STRATEGY_PARAMS["timeframe"]
-        self.parameters = config.STRATEGY_PARAMS["parameters"]
-        self.name = self.__class__.__name__
-        logger.info(f"Strategy initialized: {self.name}")
+    def __init__(self) -> None:
+        """Initialize the strategy."""
+        self.logger = logging.getLogger(self.__class__.__name__)
+        self.logger.info(f"Initializing {self.__class__.__name__}")
 
     @abstractmethod
-    def generate_signals(self, data: Dict[str, Any]) -> Dict[str, str]:
-        """Generate trading signals based on the given data.
+    def generate_signals(self, data: pd.DataFrame) -> Optional[pd.DataFrame]:
+        """Generate trading signals based on the strategy logic.
 
         Args:
-            data: Dictionary containing market data
+            data: DataFrame containing market data
 
         Returns:
-            Dictionary mapping symbols to signals ('buy', 'sell', or 'hold')
+            DataFrame with signals or None if signals cannot be generated
         """
         pass
 
-    @abstractmethod
-    def calculate_position_size(self, symbol: str, price: float) -> float:
-        """Calculate the position size for a given symbol and price.
+    def calculate_position_size(self, signal: float, available_capital: float) -> float:
+        """Calculate the position size for a trade.
 
         Args:
-            symbol: Trading symbol
-            price: Current price
+            signal: The trading signal (-1, 0, or 1)
+            available_capital: Amount of capital available for the trade
 
         Returns:
-            Number of shares to trade
+            Position size as a float
         """
-        pass
+        return signal * available_capital
 
+    @abstractmethod
     def get_required_data(self) -> List[str]:
         """Get the list of required data fields for the strategy.
 
         Returns:
-            List of required data field names
+            List of required column names
         """
-        return ["open", "high", "low", "close", "volume"]
+        return ["timestamp", "open", "high", "low", "close", "volume"]
 
-    def validate_data(self, data: Dict[str, Any]) -> bool:
-        """Validate the input data.
+    def validate_data(self, data: pd.DataFrame) -> bool:
+        """Validate that the input data contains all required fields.
 
         Args:
-            data: Dictionary containing market data
+            data: DataFrame to validate
 
         Returns:
             True if data is valid, False otherwise
         """
-        required_fields = self.get_required_data()
-        return all(field in data for field in required_fields)
+        required_columns = self.get_required_data()
+        return all(col in data.columns for col in required_columns)
 
-    def preprocess_data(self, data: Dict[str, Any]) -> Dict[str, Any]:
-        """Preprocess the input data.
+    def preprocess_data(self, data: pd.DataFrame) -> pd.DataFrame:
+        """Preprocess the input data before generating signals.
 
         Args:
-            data: Dictionary containing market data
+            data: Raw input data
 
         Returns:
-            Preprocessed data dictionary
+            Preprocessed DataFrame
         """
-        return data
+        if not self.validate_data(data):
+            return pd.DataFrame()
+        return data.copy()
 
-    def postprocess_signals(self, signals: Dict[str, str]) -> Dict[str, str]:
-        """Postprocess the generated signals.
+    def postprocess_signals(self, signals: pd.DataFrame) -> pd.DataFrame:
+        """Post-process the generated signals.
 
         Args:
-            signals: Dictionary mapping symbols to signals
+            signals: DataFrame containing raw signals
 
         Returns:
-            Postprocessed signals dictionary
+            DataFrame with processed signals
         """
         return signals
 
@@ -103,32 +97,36 @@ class BaseStrategy(ABC):
             Dictionary containing strategy status information
         """
         return {
-            "name": self.name,
-            "symbols": self.symbols,
-            "timeframe": self.timeframe,
-            "parameters": self.parameters,
-            "timestamp": datetime.now().isoformat(),
+            "name": self.__class__.__name__,
+            "parameters": self.get_parameters()
         }
 
+    @abstractmethod
     def calculate_indicators(self, data: pd.DataFrame) -> pd.DataFrame:
-        """Calculate technical indicators.
+        """Calculate technical indicators used by the strategy.
 
         Args:
-            data: Market data as a DataFrame
+            data: Market data DataFrame
 
         Returns:
-            DataFrame with added indicator columns
+            DataFrame with calculated indicators
         """
         pass
 
+    @abstractmethod
     def get_parameters(self) -> Dict[str, float]:
-        """Get strategy parameters.
+        """Get the strategy parameters.
 
         Returns:
             Dictionary of parameter names and values
         """
-        return {
-            name: value
-            for name, value in vars(self).items()
-            if isinstance(value, (int, float)) and not name.startswith("_")
-        }
+        pass
+
+    @abstractmethod
+    def set_parameters(self, params: Dict[str, Any]) -> None:
+        """Update strategy parameters.
+
+        Args:
+            params: Dictionary of parameters to update
+        """
+        pass

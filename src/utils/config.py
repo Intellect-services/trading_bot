@@ -5,7 +5,7 @@ import logging
 import os
 from datetime import datetime, time
 from pathlib import Path
-from typing import Any, Dict, Optional
+from typing import Any, Dict, Optional, Union
 
 from dotenv import load_dotenv
 
@@ -118,46 +118,46 @@ def validate_config(config: Dict[str, Any]) -> bool:
 class Config:
     """Configuration class for the trading bot."""
 
-    def __init__(self):
+    def __init__(self) -> None:
         # Load environment variables
         load_dotenv()
         logger.info("Configuration initialized")
 
         # Alpaca API Configuration
-        self.ALPACA_API_KEY = os.getenv("ALPACA_API_KEY")
-        self.ALPACA_SECRET_KEY = os.getenv("ALPACA_SECRET_KEY")
-        self.ALPACA_PAPER = os.getenv("ALPACA_PAPER", "true").lower() == "true"
+        self.ALPACA_API_KEY: Optional[str] = os.getenv("ALPACA_API_KEY")
+        self.ALPACA_SECRET_KEY: Optional[str] = os.getenv("ALPACA_SECRET_KEY")
+        self.ALPACA_PAPER: bool = os.getenv("ALPACA_PAPER", "true").lower() == "true"
 
         # Trading Parameters
-        self.INITIAL_BALANCE = float(os.getenv("INITIAL_BALANCE", "100000.0"))
-        self.RISK_MAX_POSITION_SIZE = float(os.getenv("RISK_MAX_POSITION_SIZE", "0.1"))
-        self.RISK_STOP_LOSS_PCT = float(os.getenv("RISK_STOP_LOSS_PCT", "0.02"))
-        self.RISK_MAX_DRAWDOWN = float(os.getenv("RISK_MAX_DRAWDOWN", "0.20"))
-        self.RISK_MAX_LEVERAGE = float(os.getenv("RISK_MAX_LEVERAGE", "2.00"))
-        self.RISK_PER_TRADE = float(os.getenv("RISK_PER_TRADE", "0.01"))
+        self.INITIAL_BALANCE: float = float(os.getenv("INITIAL_BALANCE", "100000.0"))
+        self.RISK_MAX_POSITION_SIZE: float = float(os.getenv("RISK_MAX_POSITION_SIZE", "0.1"))
+        self.RISK_STOP_LOSS_PCT: float = float(os.getenv("RISK_STOP_LOSS_PCT", "0.02"))
+        self.RISK_MAX_DRAWDOWN: float = float(os.getenv("RISK_MAX_DRAWDOWN", "0.20"))
+        self.RISK_MAX_LEVERAGE: float = float(os.getenv("RISK_MAX_LEVERAGE", "2.00"))
+        self.RISK_PER_TRADE: float = float(os.getenv("RISK_PER_TRADE", "0.01"))
 
         # Strategy Parameters
-        self.STRATEGY_PARAMS = {
+        self.STRATEGY_PARAMS: Dict[str, Union[str, list[str], Dict[str, Any]]] = {
             "symbols": os.getenv("STRATEGY_SYMBOLS", "SPY").split(","),
             "timeframe": os.getenv("STRATEGY_TIMEFRAME", "1D"),
             "parameters": json.loads(os.getenv("STRATEGY_PARAMETERS", "{}")),
         }
 
         # Default Trading Symbol
-        self.DEFAULT_SYMBOL = os.getenv("DEFAULT_SYMBOL", "SPY")
+        self.DEFAULT_SYMBOL: str = os.getenv("DEFAULT_SYMBOL", "SPY")
 
         # Market Hours (EST)
-        self.MARKET_OPEN = os.getenv("MARKET_OPEN", "09:30")
-        self.MARKET_CLOSE = os.getenv("MARKET_CLOSE", "16:00")
+        self.MARKET_OPEN: str = os.getenv("MARKET_OPEN", "09:30")
+        self.MARKET_CLOSE: str = os.getenv("MARKET_CLOSE", "16:00")
 
         # System Configuration
-        self.UPDATE_INTERVAL = int(os.getenv("UPDATE_INTERVAL", "60"))
-        self.ERROR_RETRY_INTERVAL = int(os.getenv("ERROR_RETRY_INTERVAL", "60"))
-        self.LOG_LEVEL = os.getenv("LOG_LEVEL", "INFO")
+        self.UPDATE_INTERVAL: int = int(os.getenv("UPDATE_INTERVAL", "60"))
+        self.ERROR_RETRY_INTERVAL: int = int(os.getenv("ERROR_RETRY_INTERVAL", "60"))
+        self.LOG_LEVEL: str = os.getenv("LOG_LEVEL", "INFO")
 
         # Flask Configuration
-        self.FLASK_DEBUG = os.getenv("FLASK_DEBUG", "false").lower() == "true"
-        self.FLASK_SECRET_KEY = os.getenv("FLASK_SECRET_KEY", "default-secret-key")
+        self.FLASK_DEBUG: bool = os.getenv("FLASK_DEBUG", "false").lower() == "true"
+        self.FLASK_SECRET_KEY: str = os.getenv("FLASK_SECRET_KEY", "default-secret-key")
 
     def get(self, key: str, default: Any = None) -> Any:
         """Get configuration value by key.

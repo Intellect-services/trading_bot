@@ -2,7 +2,7 @@
 
 import os
 from datetime import datetime, timedelta
-from typing import Any, Dict, List, Optional, Union
+from typing import Any, Dict, List, Optional, Union, cast
 
 import pandas as pd
 from alpaca.data.historical import StockHistoricalDataClient
@@ -59,7 +59,7 @@ class AlpacaClient:
         account = self.trading_client.get_account()
         if isinstance(account, dict):
             return account
-        return account.dict()
+        return cast(Dict[str, Any], account.dict())
 
     def get_position(self, symbol: str) -> Optional[Dict[str, Any]]:
         """
@@ -77,7 +77,7 @@ class AlpacaClient:
             position = self.trading_client.get_open_position(symbol)
             if isinstance(position, dict):
                 return position
-            return position.dict()
+            return cast(Dict[str, Any], position.dict())
         except Exception:
             return None
 
@@ -94,7 +94,7 @@ class AlpacaClient:
         result: Dict[str, Dict[str, Any]] = {}
         for pos in positions:
             if isinstance(pos, Position):
-                result[pos.symbol] = pos.dict()
+                result[pos.symbol] = cast(Dict[str, Any], pos.dict())
             elif isinstance(pos, dict):
                 result[pos["symbol"]] = pos
             else:
@@ -156,7 +156,7 @@ class AlpacaClient:
         result: List[Dict[str, Any]] = []
         for asset in assets:
             if isinstance(asset, Asset):
-                result.append(asset.dict())
+                result.append(cast(Dict[str, Any], asset.dict()))
             elif isinstance(asset, dict):
                 result.append(asset)
             else:
@@ -222,7 +222,7 @@ class AlpacaClient:
         order = self.trading_client.submit_order(order_data)
         if isinstance(order, dict):
             return order
-        return {
+        return cast(Dict[str, Any], {
             "id": order.id,
             "symbol": order.symbol,
             "qty": order.qty,
@@ -233,7 +233,7 @@ class AlpacaClient:
             "filled_at": order.filled_at,
             "filled_qty": order.filled_qty,
             "filled_avg_price": order.filled_avg_price,
-        }
+        })
 
     def cancel_order(self, order_id: str) -> bool:
         """
@@ -250,7 +250,8 @@ class AlpacaClient:
         try:
             self.trading_client.cancel_order_by_id(order_id)
             return True
-        except Exception:
+        except Exception as e:
+            logger.error(f"Failed to cancel order {order_id}: {e}")
             return False
 
     def get_order(self, order_id: str) -> Optional[Dict[str, Any]]:
@@ -258,7 +259,7 @@ class AlpacaClient:
         Get order information.
 
         Args:
-            order_id: ID of the order.
+            order_id: ID of the order to retrieve.
 
         Returns:
             Dictionary containing order information or None if not found.
@@ -267,12 +268,8 @@ class AlpacaClient:
             raise RuntimeError("Trading client not initialized")
         try:
             order = self.trading_client.get_order_by_id(order_id)
-            if isinstance(order, Order):
-                return order.dict()
-            elif isinstance(order, dict):
+            if isinstance(order, dict):
                 return order
-            else:
-                logger.warning(f"Unexpected order type: {type(order)}")
-                return None
+            return cast(Dict[str, Any], order.dict())
         except Exception:
             return None

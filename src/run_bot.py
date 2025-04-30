@@ -2,7 +2,7 @@ import logging
 import os
 import sys
 from datetime import datetime
-from typing import Any, Dict, Optional, Tuple, Union
+from typing import Any, Dict, Optional, Tuple, Union, TypedDict, cast
 
 from dotenv import load_dotenv
 from flask import (
@@ -16,11 +16,31 @@ from flask import (
     url_for,
 )
 from flask_socketio import SocketIO, emit
+from werkzeug.wrappers import Response as WerkzeugResponse
 
 from app import app, socketio
 from src.core.alpaca_service import AlpacaService
 from src.core.trading_bot import TradingBot
 from src.utils.config import Config
+
+
+class BotMetrics(TypedDict):
+    initial_capital: float
+    current_capital: float
+    total_trades: int
+    win_rate: float
+    profit_factor: float
+    sharpe_ratio: float
+    active_positions: int
+
+
+class BotStatus(TypedDict):
+    is_running: bool
+    market_status: str
+    runtime: str
+    last_update: Optional[datetime]
+    metrics: BotMetrics
+
 
 # Load environment variables
 load_dotenv()
@@ -99,18 +119,18 @@ alpaca_service = AlpacaService()
 trading_bot = TradingBot(alpaca_service)
 
 # Global state
-bot_status = {
+bot_status: BotStatus = {
     "is_running": False,
     "market_status": "unknown",
     "runtime": "00:00:00",
     "last_update": None,
     "metrics": {
-        "initial_capital": 0,
-        "current_capital": 0,
+        "initial_capital": 0.0,
+        "current_capital": 0.0,
         "total_trades": 0,
-        "win_rate": 0,
-        "profit_factor": 0,
-        "sharpe_ratio": 0,
+        "win_rate": 0.0,
+        "profit_factor": 0.0,
+        "sharpe_ratio": 0.0,
         "active_positions": 0,
     },
 }
@@ -122,14 +142,15 @@ def update_bot_status() -> None:
         try:
             # Get market status
             market_status = alpaca_service.get_market_status()
-            bot_status["market_status"] = market_status["status"]
+            bot_status["market_status"] = cast(str, market_status["status"])
 
             # Get account info
             account = alpaca_service.get_account()
             if account:
-                bot_status["metrics"]["current_capital"] = float(account.get("equity", 0))
-                if not bot_status["metrics"]["initial_capital"]:
-                    bot_status["metrics"]["initial_capital"] = float(account.get("equity", 0))
+                metrics = cast(BotMetrics, bot_status["metrics"])
+                metrics["current_capital"] = float(account.get("equity", 0))
+                if not metrics["initial_capital"]:
+                    metrics["initial_capital"] = float(account.get("equity", 0))
 
             # Get positions
             positions = alpaca_service.get_positions()
@@ -138,7 +159,7 @@ def update_bot_status() -> None:
             # Update runtime if bot is running
             if bot_status["is_running"]:
                 if bot_status["last_update"]:
-                    runtime = datetime.now() - bot_status["last_update"]
+                    runtime = datetime.now() - cast(datetime, bot_status["last_update"])
                     bot_status["runtime"] = str(runtime).split(".")[0]
                 else:
                     bot_status["last_update"] = datetime.now()
@@ -165,14 +186,14 @@ socketio.start_background_task(update_bot_status)
 
 
 @app.route("/")
-def index() -> Response:
+def index() -> WerkzeugResponse:
     if "username" not in session:
         return redirect(url_for("login"))
     return render_template("index.html")
 
 
 @app.route("/login", methods=["GET", "POST"])
-def login() -> Union[Response, str]:
+def login() -> Union[WerkzeugResponse, str]:
     if request.method == "POST":
         username = request.form.get("username")
         password = request.form.get("password")
@@ -189,13 +210,13 @@ def login() -> Union[Response, str]:
 
 
 @app.route("/logout")
-def logout() -> Response:
+def logout() -> WerkzeugResponse:
     session.pop("username", None)
     return redirect(url_for("login"))
 
 
 @app.route("/api/status", methods=["GET"])
-def get_status() -> Union[Response, Tuple[Response, int]]:
+def get_status() -> Union[WerkzeugResponse, Tuple[WerkzeugResponse, int]]:
     """Get the current status of the trading bot."""
     try:
         bot = app.config.get("bot")
@@ -210,7 +231,7 @@ def get_status() -> Union[Response, Tuple[Response, int]]:
 
 
 @app.route("/api/start", methods=["POST"])
-def start_bot() -> Union[Response, Tuple[Response, int]]:
+def start_bot() -> Union[WerkzeugResponse, Tuple[WerkzeugResponse, int]]:
     """Start the trading bot."""
     try:
         bot = app.config.get("bot")
@@ -225,7 +246,7 @@ def start_bot() -> Union[Response, Tuple[Response, int]]:
 
 
 @app.route("/api/stop", methods=["POST"])
-def stop_bot() -> Union[Response, Tuple[Response, int]]:
+def stop_bot() -> Union[WerkzeugResponse, Tuple[WerkzeugResponse, int]]:
     """Stop the trading bot."""
     try:
         bot = app.config.get("bot")
@@ -240,7 +261,7 @@ def stop_bot() -> Union[Response, Tuple[Response, int]]:
 
 
 @app.route("/api/config", methods=["GET"])
-def get_config() -> Union[Response, Tuple[Response, int]]:
+def get_config() -> Union[WerkzeugResponse, Tuple[WerkzeugResponse, int]]:
     """Get the current configuration of the trading bot."""
     try:
         bot = app.config.get("bot")
@@ -255,7 +276,7 @@ def get_config() -> Union[Response, Tuple[Response, int]]:
 
 
 @app.route("/api/config", methods=["PUT"])
-def update_config() -> Union[Response, Tuple[Response, int]]:
+def update_config() -> Union[WerkzeugResponse, Tuple[WerkzeugResponse, int]]:
     """Update the configuration of the trading bot."""
     try:
         bot = app.config.get("bot")
