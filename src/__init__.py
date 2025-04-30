@@ -8,4 +8,6 @@ from src.utils.config import Config
 
 __all__ = ["Strategy", "RiskManager", "Config"]
 
-__version__ = "0.1.0"
+__version__ = '1.0.0'
+
+# This file makes the src directory a Python package

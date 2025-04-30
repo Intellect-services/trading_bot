@@ -107,107 +107,50 @@ def validate_config(config: Dict[str, Any]) -> bool:
 
     return True
 
-
 class Config:
-    """Configuration manager for the trading bot."""
+    """Configuration class for the trading bot."""
     
-    def __init__(self) -> None:
-        """Initialize configuration."""
-        self.config_data: Dict[str, Any] = {}
-        self.load_config()
-        
-    def load_config(self) -> None:
-        """Load configuration from environment variables and .env file."""
-        # Load .env file
+    def __init__(self):
+        # Load environment variables
         load_dotenv()
-        
-        # Set default values
-        self.config_data = {
-            # API Configuration
-            'alpaca_api_key': os.getenv('ALPACA_API_KEY', ''),
-            'alpaca_secret_key': os.getenv('ALPACA_SECRET_KEY', ''),
-            'ALPACA_API_KEY': os.getenv('ALPACA_API_KEY', ''),
-            'ALPACA_SECRET_KEY': os.getenv('ALPACA_SECRET_KEY', ''),
-            'API_KEY': os.getenv('ALPACA_API_KEY', ''),
-            'SECRET_KEY': os.getenv('ALPACA_SECRET_KEY', ''),
-            
-            # Trading Mode
-            'paper_trading': os.getenv('PAPER_TRADING', 'True').lower() == 'true',
-            'PAPER_TRADING': os.getenv('PAPER_TRADING', 'True').lower() == 'true',
-            'PAPER': os.getenv('PAPER_TRADING', 'True').lower() == 'true',
-            
-            # Account Settings
-            'initial_balance': float(os.getenv('INITIAL_BALANCE', '10000.0')),
-            'INITIAL_BALANCE': float(os.getenv('INITIAL_BALANCE', '10000.0')),
-            
-            # Risk Management
-            'max_position_size': float(os.getenv('MAX_POSITION_SIZE', '0.1')),
-            'stop_loss': float(os.getenv('STOP_LOSS', '0.02')),
-            'max_drawdown': float(os.getenv('MAX_DRAWDOWN', '0.20')),
-            'max_leverage': float(os.getenv('MAX_LEVERAGE', '2.00')),
-            'RISK_MAX_POSITION_SIZE': float(os.getenv('MAX_POSITION_SIZE', '0.1')),
-            'RISK_STOP_LOSS_PCT': float(os.getenv('STOP_LOSS', '0.02')),
-            'RISK_MAX_DRAWDOWN': float(os.getenv('MAX_DRAWDOWN', '0.20')),
-            'RISK_MAX_LEVERAGE': float(os.getenv('MAX_LEVERAGE', '2.00')),
-            
-            # Trading Parameters
-            'DEFAULT_SYMBOL': os.getenv('DEFAULT_SYMBOL', 'AAPL'),
-            'DEFAULT_TIMEFRAME': os.getenv('DEFAULT_TIMEFRAME', '1D'),
-            
-            # Market Hours
-            'MARKET_OPEN': os.getenv('MARKET_OPEN', '09:30'),
-            'MARKET_CLOSE': os.getenv('MARKET_CLOSE', '16:00'),
-            
-            # System Configuration
-            'UPDATE_INTERVAL': int(os.getenv('UPDATE_INTERVAL', '60')),
-            'ERROR_RETRY_INTERVAL': int(os.getenv('ERROR_RETRY_INTERVAL', '60')),
-            'LOG_LEVEL': os.getenv('LOG_LEVEL', 'INFO'),
-        }
-        
         logger.info("Configuration initialized")
         
-    def get(self, key: str, default: Any = None) -> Any:
-        """Get a configuration value."""
-        return self.config_data.get(key, default)
+        # Alpaca API Configuration
+        self.ALPACA_API_KEY = os.getenv('ALPACA_API_KEY')
+        self.ALPACA_API_SECRET = os.getenv('ALPACA_API_SECRET')
+        self.ALPACA_PAPER = os.getenv('ALPACA_PAPER', 'true').lower() == 'true'
         
-    def __getattr__(self, name: str) -> Any:
-        """Allow attribute access to config values."""
-        if name in self.config_data:
-            return self.config_data[name]
-        # Try uppercase version
-        if name.upper() in self.config_data:
-            return self.config_data[name.upper()]
-        raise AttributeError(f"'Config' object has no attribute '{name}'")
+        # Trading Parameters
+        self.INITIAL_BALANCE = float(os.getenv('INITIAL_BALANCE', '100000.0'))
+        self.MAX_POSITION_SIZE = float(os.getenv('MAX_POSITION_SIZE', '0.1'))
+        self.STOP_LOSS = float(os.getenv('STOP_LOSS', '0.02'))
+        self.MAX_DRAWDOWN = float(os.getenv('MAX_DRAWDOWN', '0.20'))
+        self.MAX_LEVERAGE = float(os.getenv('MAX_LEVERAGE', '2.00'))
+        
+        # Default Trading Symbol
+        self.DEFAULT_SYMBOL = os.getenv('DEFAULT_SYMBOL', 'SPY')
+        
+        # Market Hours (EST)
+        self.MARKET_OPEN = os.getenv('MARKET_OPEN', '09:30')
+        self.MARKET_CLOSE = os.getenv('MARKET_CLOSE', '16:00')
+        
+        # System Configuration
+        self.UPDATE_INTERVAL = int(os.getenv('UPDATE_INTERVAL', '60'))
+        self.ERROR_RETRY_INTERVAL = int(os.getenv('ERROR_RETRY_INTERVAL', '60'))
+        self.LOG_LEVEL = os.getenv('LOG_LEVEL', 'INFO')
+        
+        # Flask Configuration
+        self.FLASK_DEBUG = os.getenv('FLASK_DEBUG', 'false').lower() == 'true'
+        self.FLASK_SECRET_KEY = os.getenv('FLASK_SECRET_KEY', 'default-secret-key')
 
-    def to_dict(self) -> Dict[str, Any]:
-        """Convert config to dictionary format."""
-        return self.config_data.copy()
+    @property
+    def is_valid(self) -> bool:
+        """Check if the configuration is valid."""
+        return bool(self.ALPACA_API_KEY and self.ALPACA_API_SECRET)
 
-    @classmethod
-    def get_trading_params(cls) -> Dict[str, float]:
-        """Get trading parameters."""
-        config = cls()
-        return {
-            "max_position_size": config.get('RISK_MAX_POSITION_SIZE', 0.1),
-            "risk_per_trade": config.get('RISK_PER_TRADE', 0.01),
-            "stop_loss_percent": config.get('RISK_STOP_LOSS_PCT', 0.02),
-        }
+    def __str__(self) -> str:
+        """Return a string representation of the configuration."""
+        return f"Config(paper={self.ALPACA_PAPER}, debug={self.FLASK_DEBUG})"
 
-    @classmethod
-    def get_backtest_params(cls) -> Dict[str, Any]:
-        """Get backtesting parameters."""
-        config = cls()
-        return {
-            "start_date": config.get('BACKTEST_START_DATE', '2020-01-01'),
-            "end_date": config.get('BACKTEST_END_DATE', '2023-12-31'),
-            "initial_capital": str(config.get('INITIAL_BALANCE', 10000.0)),
-        }
-
-    @classmethod
-    def get_risk_params(cls) -> Dict[str, float]:
-        """Get risk management parameters."""
-        config = cls()
-        return {
-            "max_drawdown": config.get('RISK_MAX_DRAWDOWN', 0.2),
-            "risk_per_trade": config.get('RISK_PER_TRADE', 0.01),
-        }
+# Create a global instance
+config = Config()

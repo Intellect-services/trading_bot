@@ -5,11 +5,11 @@ import logging
 import pandas as pd
 from datetime import datetime
 import numpy as np
-from src.utils.config import Config
-from src.core.data_feed import DataFeed
-from src.core.portfolio import Portfolio
+from ..utils.config import Config
+from ..core.data_feed import DataFeed
+from ..core.portfolio import Portfolio
 from src.core.risk_manager import RiskManager
-from src.utils.logger import setup_logger
+from ..utils.logger import setup_logger
 
 logger = setup_logger(__name__)
 

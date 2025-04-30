@@ -2,435 +2,462 @@
 const socket = io();
 
 // DOM Elements
-const loginForm = document.getElementById('login-form');
-const dashboard = document.getElementById('dashboard');
-const loginContainer = document.getElementById('login-container');
-const logoutBtn = document.getElementById('logout-btn');
-const startBotBtn = document.getElementById('start-bot');
-const stopBotBtn = document.getElementById('stop-bot');
 const botStatus = document.getElementById('bot-status');
-const runtime = document.getElementById('runtime');
+const botRuntime = document.getElementById('bot-runtime');
 const marketStatus = document.getElementById('market-status');
+const alpacaAccountId = document.getElementById('alpaca-account-id');
+const alpacaBuyingPower = document.getElementById('alpaca-buying-power');
+const alpacaEquity = document.getElementById('alpaca-equity');
+const alpacaLastUpdate = document.getElementById('alpaca-last-update');
+const totalTrades = document.getElementById('total-trades');
+const winRate = document.getElementById('win-rate');
+const avgReturn = document.getElementById('avg-return');
+const currentStrategy = document.getElementById('current-strategy');
 const initialCapital = document.getElementById('initial-capital');
 const currentCapital = document.getElementById('current-capital');
 const activePositions = document.getElementById('active-positions');
+const totalReturn = document.getElementById('total-return');
+const positionsContainer = document.getElementById('positions-container');
+const logs = document.getElementById('logs');
+const startBotBtn = document.getElementById('start-bot');
+const stopBotBtn = document.getElementById('stop-bot');
 const errorMessage = document.getElementById('error-message');
-const configForm = document.getElementById('config-form');
-const symbolsInput = document.getElementById('symbols');
-const initialCapitalInput = document.getElementById('initial-capital');
-const userProfile = document.querySelector('.user-profile');
-const userAvatar = document.querySelector('.user-avatar');
-const userName = document.querySelector('.user-name');
-const userEmail = document.querySelector('.user-email');
 
 // Charts
 let returnsChart = null;
 let positionsChart = null;
 
-// Initialize charts with descriptions
-function initializeCharts() {
-  // Returns Chart
-  const returnsCtx = document.getElementById('returns-chart').getContext('2d');
-  returnsChart = new Chart(returnsCtx, {
-    type: 'line',
-    data: {
-      labels: [],
-      datasets: [{
-        label: 'Returns (%)',
-        data: [],
-        borderColor: 'rgb(75, 192, 192)',
-        tension: 0.1,
-        fill: false
-      }]
-    },
-    options: {
-      responsive: true,
-      maintainAspectRatio: false,
-      plugins: {
-        legend: {
-          display: false
-        },
-        tooltip: {
-          callbacks: {
-            label: function(context) {
-              return `Returns: ${context.parsed.y.toFixed(2)}%`;
-            }
-          }
-        }
-      },
-      scales: {
-        y: {
-          beginAtZero: true,
-          ticks: {
-            callback: function(value) {
-              return value + '%';
-            }
-          },
-          title: {
-            display: true,
-            text: 'Returns (%)'
-          }
-        },
-        x: {
-          title: {
-            display: true,
-            text: 'Time'
-          }
-        }
-      }
+// Bot state
+let botRunning = false;
+let botStartTime = null;
+let runtimeInterval = null;
+
+// Utility Functions
+function formatCurrency(value) {
+    return new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' }).format(value);
+}
+
+function formatPercentage(value) {
+    return new Intl.NumberFormat('en-US', { style: 'percent', minimumFractionDigits: 2 }).format(value / 100);
+}
+
+function formatDateTime(date) {
+    return new Intl.DateTimeFormat('en-US', {
+        year: 'numeric',
+        month: 'short',
+        day: 'numeric',
+        hour: '2-digit',
+        minute: '2-digit',
+        second: '2-digit',
+        timeZoneName: 'short'
+    }).format(new Date(date));
+}
+
+function formatRuntime(seconds) {
+    const hours = Math.floor(seconds / 3600);
+    const minutes = Math.floor((seconds % 3600) / 60);
+    const secs = seconds % 60;
+    return `${hours.toString().padStart(2, '0')}:${minutes.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
+}
+
+// Logging Functions
+function addLog(message, type = 'info') {
+    if (!logs) return;
+    const logEntry = document.createElement('div');
+    logEntry.className = `log-entry ${type}`;
+    logEntry.innerHTML = `
+        <span class="log-timestamp">${formatDateTime(new Date())}</span>
+        <span class="log-message">${message}</span>
+    `;
+    logs.insertBefore(logEntry, logs.firstChild);
+    if (logs.children.length > 100) {
+        logs.removeChild(logs.lastChild);
     }
-  });
-
-  // Add returns chart description
-  const returnsContainer = document.querySelector('#returns-chart').parentElement;
-  const returnsDescription = document.createElement('div');
-  returnsDescription.className = 'chart-description';
-  returnsDescription.innerHTML = `
-    <h6>Returns Over Time</h6>
-    <p>This chart shows the percentage returns of your trading bot over time. Positive values indicate profits, while negative values show losses.</p>
-  `;
-  returnsContainer.appendChild(returnsDescription);
-
-  // Positions Chart
-  const positionsCtx = document.getElementById('positions-chart').getContext('2d');
-  positionsChart = new Chart(positionsCtx, {
-    type: 'bar',
-    data: {
-      labels: [],
-      datasets: [{
-        label: 'Active Positions',
-        data: [],
-        backgroundColor: 'rgba(54, 162, 235, 0.5)',
-        borderColor: 'rgb(54, 162, 235)',
-        borderWidth: 1
-      }]
-    },
-    options: {
-      responsive: true,
-      maintainAspectRatio: false,
-      plugins: {
-        legend: {
-          display: false
-        },
-        tooltip: {
-          callbacks: {
-            label: function(context) {
-              return `Positions: ${context.parsed.y}`;
-            }
-          }
-        }
-      },
-      scales: {
-        y: {
-          beginAtZero: true,
-          ticks: {
-            stepSize: 1
-          },
-          title: {
-            display: true,
-            text: 'Number of Positions'
-          }
-        },
-        x: {
-          title: {
-            display: true,
-            text: 'Time'
-          }
-        }
-      }
-    }
-  });
-
-  // Add positions chart description
-  const positionsContainer = document.querySelector('#positions-chart').parentElement;
-  const positionsDescription = document.createElement('div');
-  positionsDescription.className = 'chart-description';
-  positionsDescription.innerHTML = `
-    <h6>Active Positions</h6>
-    <p>This chart displays the number of active trading positions over time. It helps you monitor the bot's trading activity and position management.</p>
-  `;
-  positionsContainer.appendChild(positionsDescription);
 }
 
-// Update bot status
-function updateBotStatus(status) {
-  const startBtn = document.getElementById('start-bot');
-  const stopBtn = document.getElementById('stop-bot');
-  
-  botStatus.textContent = status;
-  botStatus.className = `status-value bot-${status.toLowerCase()}`;
-  
-  // Update button states
-  if (status === 'RUNNING') {
-    startBtn.disabled = true;
-    stopBtn.disabled = false;
-  } else if (status === 'STOPPED') {
-    startBtn.disabled = false;
-    stopBtn.disabled = true;
-  }
+function logRequest(method, url, data) {
+    addLog(`${method} ${url} ${JSON.stringify(data)}`, 'request');
 }
 
-// Update market status
-function updateMarketStatus(isOpen) {
-  marketStatus.textContent = isOpen ? 'Open' : 'Closed';
-  marketStatus.className = `status-value market-${isOpen ? 'open' : 'closed'}`;
+function logResponse(method, url, response, data) {
+    addLog(`${method} ${url} Response: ${JSON.stringify(data)}`, 'response');
 }
 
-// Update performance metrics
-function updateMetrics(data) {
-  runtime.textContent = data.runtime;
-  currentCapital.textContent = `$${data.bot_status.current_capital?.toFixed(2) || '0.00'}`;
-  activePositions.textContent = data.bot_status.active_positions || '0';
-  
-  // Update charts
-  if (returnsChart && positionsChart) {
-    // Add new data point to returns chart
-    const timestamp = new Date().toLocaleTimeString();
-    returnsChart.data.labels.push(timestamp);
-    returnsChart.data.datasets[0].data.push(data.bot_status.current_capital || 0);
-    
-    // Keep only last 20 data points
-    if (returnsChart.data.labels.length > 20) {
-      returnsChart.data.labels.shift();
-      returnsChart.data.datasets[0].data.shift();
-    }
-    
-    returnsChart.update();
-  }
+function logError(method, url, error) {
+    addLog(`Error in ${method} ${url}: ${error.message}`, 'error');
+    showError(error.message);
 }
 
-// Update charts
-function updateCharts(data) {
-  if (!returnsChart || !positionsChart) return;
-
-  // Update Returns Chart
-  const timestamp = new Date().toLocaleTimeString();
-  returnsChart.data.labels.push(timestamp);
-  returnsChart.data.datasets[0].data.push(data.returns);
-  
-  // Keep only last 20 data points
-  if (returnsChart.data.labels.length > 20) {
-    returnsChart.data.labels.shift();
-    returnsChart.data.datasets[0].data.shift();
-  }
-  
-  returnsChart.update('none'); // Use 'none' for better performance
-
-  // Update Positions Chart
-  positionsChart.data.labels.push(timestamp);
-  positionsChart.data.datasets[0].data.push(data.positions);
-  
-  // Keep only last 20 data points
-  if (positionsChart.data.labels.length > 20) {
-    positionsChart.data.labels.shift();
-    positionsChart.data.datasets[0].data.shift();
-  }
-  
-  positionsChart.update('none'); // Use 'none' for better performance
-}
-
-// Show error message
 function showError(message) {
-  errorMessage.textContent = message;
-  errorMessage.style.display = 'block';
-  setTimeout(() => {
-    errorMessage.style.display = 'none';
-  }, 5000);
+    if (!errorMessage) return;
+    errorMessage.textContent = message;
+    errorMessage.style.display = 'block';
+    setTimeout(() => {
+        errorMessage.style.display = 'none';
+    }, 5000);
 }
 
-// Handle login form submission
-document.getElementById('login-form').addEventListener('submit', async (e) => {
-  e.preventDefault();
-  const username = document.getElementById('username').value;
-  const password = document.getElementById('password').value;
+// Chart Initialization
+function initializeCharts() {
+    try {
+        addLog('Initializing charts...');
+        const returnsCtx = document.getElementById('returns-chart');
+        const positionsCtx = document.getElementById('positions-chart');
 
-  try {
-    // Mock login - in production, this would be an API call
-    if (username && password) {
-      // Hide login page and show dashboard
-      document.getElementById('login-page').style.display = 'none';
-      document.getElementById('dashboard').style.display = 'block';
-      
-      // Update user profile
-      const name = username.split('@')[0];
-      const email = username;
-      userAvatar.textContent = name.charAt(0).toUpperCase();
-      userName.textContent = name;
-      userEmail.textContent = email;
-      userProfile.style.display = 'flex';
-      
-      // Initialize charts
-      initializeCharts();
-      
-      // Fetch initial status
-      const response = await fetch('/api/status');
-      if (!response.ok) {
-        throw new Error('Failed to fetch status');
-      }
-      const data = await response.json();
-      if (data.success) {
-        updateBotStatus(data.bot_status.status);
-        updateMarketStatus(data.market_open);
-        updateMetrics(data);
-      }
-    } else {
-      showError('Please enter both username and password');
+        if (!returnsCtx || !positionsCtx) {
+            addLog('Chart elements not found', 'error');
+            return;
+        }
+
+        // Returns Chart
+        returnsChart = new Chart(returnsCtx.getContext('2d'), {
+            type: 'line',
+            data: {
+                labels: [],
+                datasets: [{
+                    label: 'Portfolio Returns',
+                    data: [],
+                    borderColor: 'rgb(75, 192, 192)',
+                    tension: 0.1
+                }]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                scales: {
+                    y: {
+                        beginAtZero: true,
+                        ticks: {
+                            callback: value => formatPercentage(value)
+                        }
+                    }
+                }
+            }
+        });
+
+        // Positions Chart
+        positionsChart = new Chart(positionsCtx.getContext('2d'), {
+            type: 'doughnut',
+            data: {
+                labels: [],
+                datasets: [{
+                    data: [],
+                    backgroundColor: []
+                }]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false
+            }
+        });
+
+        addLog('Charts initialized successfully');
+    } catch (error) {
+        addLog(`Error initializing charts: ${error.message}`, 'error');
     }
-  } catch (error) {
-    console.error('Login error:', error);
-    showError('Login failed. Please try again.');
-  }
-});
+}
 
-// Handle social login buttons
-document.querySelectorAll('.social-btn').forEach(btn => {
-  btn.addEventListener('click', () => {
-    // Mock social login - in production, this would redirect to OAuth
-    const mockEmail = 'user@example.com';
-    const mockName = 'User';
+function updateBotRuntime(runtime) {
+    if (!botRuntime) return;
+    if (typeof runtime === 'string') {
+        botRuntime.textContent = runtime;
+    } else {
+        const hours = Math.floor(runtime / 3600);
+        const minutes = Math.floor((runtime % 3600) / 60);
+        const seconds = runtime % 60;
+        botRuntime.textContent = `${hours.toString().padStart(2, '0')}:${minutes.toString().padStart(2, '0')}:${seconds.toString().padStart(2, '0')}`;
+    }
+}
+
+function updateAlpacaAccountInfo(data) {
+    if (!data) return;
     
-    // Hide login page and show dashboard
-    document.getElementById('login-page').style.display = 'none';
-    document.getElementById('dashboard').style.display = 'block';
+    if (alpacaAccountId) alpacaAccountId.textContent = data.account_id || 'N/A';
+    if (alpacaBuyingPower) alpacaBuyingPower.textContent = formatCurrency(parseFloat(data.buying_power || 0));
+    if (alpacaEquity) alpacaEquity.textContent = formatCurrency(parseFloat(data.equity || 0));
+    if (alpacaLastUpdate) alpacaLastUpdate.textContent = formatDateTime(new Date());
+
+    // Update performance metrics
+    if (initialCapital) initialCapital.textContent = formatCurrency(parseFloat(data.equity || 0));
+    if (currentCapital) currentCapital.textContent = formatCurrency(parseFloat(data.equity || 0));
     
-    // Update user profile
-    userAvatar.textContent = mockName.charAt(0).toUpperCase();
-    userName.textContent = mockName;
-    userEmail.textContent = mockEmail;
-    userProfile.style.display = 'flex';
+    if (totalReturn && data.equity && data.cash) {
+        const returnValue = ((parseFloat(data.equity) - parseFloat(data.cash)) / parseFloat(data.cash)) * 100;
+        totalReturn.textContent = formatPercentage(returnValue);
+    }
+}
+
+function updatePositions(positions) {
+    if (!positions) return;
     
-    // Initialize charts
-    initializeCharts();
-  });
-});
+    // Update active positions count
+    if (activePositions) activePositions.textContent = positions.length;
 
-// Handle logout
-document.getElementById('logout-btn').addEventListener('click', () => {
-  // Hide dashboard and show login page
-  document.getElementById('dashboard').style.display = 'none';
-  document.getElementById('login-page').style.display = 'block';
-  
-  // Clear user profile
-  userProfile.style.display = 'none';
-  userAvatar.textContent = '';
-  userName.textContent = '';
-  userEmail.textContent = '';
-  
-  // Reset form
-  document.getElementById('login-form').reset();
-  
-  // Clear any existing charts
-  if (returnsChart) returnsChart.destroy();
-  if (positionsChart) positionsChart.destroy();
-});
-
-// Handle start bot button
-startBotBtn.addEventListener('click', async () => {
-  try {
-    const response = await fetch('/api/start', {
-      method: 'POST'
-    });
-    const data = await response.json();
-    if (data.success) {
-      updateBotStatus('RUNNING');
-      addLog('Bot started successfully');
-    } else {
-      showError(data.error || 'Failed to start bot');
+    // Clear and update positions container
+    if (positionsContainer) {
+        positionsContainer.innerHTML = '';
+        
+        if (positions.length === 0) {
+            const emptyMessage = document.createElement('div');
+            emptyMessage.className = 'text-muted text-center p-3';
+            emptyMessage.textContent = 'No active positions';
+            positionsContainer.appendChild(emptyMessage);
+        } else {
+            positions.forEach((position, index) => {
+                const card = document.createElement('div');
+                card.className = 'position-card mb-3';
+                const unrealizedPL = parseFloat(position.unrealized_pl || 0);
+                const plClass = unrealizedPL >= 0 ? 'text-success' : 'text-danger';
+                
+                card.innerHTML = `
+                    <div class="d-flex justify-content-between align-items-center">
+                        <h6 class="mb-0">${position.symbol}</h6>
+                        <span class="badge ${position.quantity > 0 ? 'bg-success' : 'bg-danger'}">
+                            ${position.quantity > 0 ? 'LONG' : 'SHORT'}
+                        </span>
+                    </div>
+                    <div class="position-details">
+                        <div class="row">
+                            <div class="col">
+                                <small>Quantity</small>
+                                <div>${Math.abs(position.quantity)}</div>
+                            </div>
+                            <div class="col">
+                                <small>Market Value</small>
+                                <div>${formatCurrency(parseFloat(position.market_value || 0))}</div>
+                            </div>
+                            <div class="col">
+                                <small>Current Price</small>
+                                <div>${formatCurrency(parseFloat(position.current_price || 0))}</div>
+                            </div>
+                            <div class="col">
+                                <small>P/L</small>
+                                <div class="${plClass}">${formatCurrency(unrealizedPL)}</div>
+                            </div>
+                        </div>
+                    </div>
+                `;
+                positionsContainer.appendChild(card);
+            });
+        }
     }
-  } catch (error) {
-    showError('Failed to start bot');
-  }
-});
 
-// Handle stop bot button
-stopBotBtn.addEventListener('click', async () => {
-  try {
-    const response = await fetch('/api/stop', {
-      method: 'POST'
-    });
-    const data = await response.json();
-    if (data.success) {
-      updateBotStatus('STOPPED');
-      addLog('Bot stopped successfully');
-    } else {
-      showError(data.error || 'Failed to stop bot');
+    // Update positions chart
+    if (positionsChart) {
+        const labels = positions.map(p => p.symbol);
+        const values = positions.map(p => Math.abs(parseFloat(p.market_value || 0)));
+        const colors = positions.map((_, i) => `hsl(${(i * 360) / positions.length}, 70%, 50%)`);
+
+        positionsChart.data.labels = labels;
+        positionsChart.data.datasets[0].data = values;
+        positionsChart.data.datasets[0].backgroundColor = colors;
+        positionsChart.update();
     }
-  } catch (error) {
-    showError('Failed to stop bot');
-  }
-});
+}
 
-// Handle config form submission
-configForm.addEventListener('submit', async (e) => {
-  e.preventDefault();
-  const symbols = document.getElementById('symbols').value;
-  const initialCapital = document.getElementById('initial-capital').value;
+function updateMarketStatus(status) {
+    if (!marketStatus || !status) return;
+    const isOpen = status === 'open' || status.is_open;
+    marketStatus.textContent = isOpen ? 'OPEN' : 'CLOSED';
+    marketStatus.className = `status-badge ${isOpen ? 'bg-success' : 'bg-danger'}`;
+}
 
-  try {
-    const response = await fetch('/api/config', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json'
-      },
-      body: JSON.stringify({
-        symbols: symbols.split(',').map(s => s.trim()),
-        initial_capital: parseFloat(initialCapital)
-      })
-    });
-    const data = await response.json();
-    if (data.success) {
-      showError('Configuration updated successfully');
+function updateBotStatus(status) {
+    if (!botStatus || !status) return;
+    const isRunning = status === 'running' || status === 'RUNNING';
+    botStatus.textContent = isRunning ? 'RUNNING' : 'STOPPED';
+    botStatus.className = `status-badge ${isRunning ? 'bg-success' : 'bg-secondary'}`;
+    
+    if (startBotBtn) startBotBtn.disabled = isRunning;
+    if (stopBotBtn) stopBotBtn.disabled = !isRunning;
+}
+
+function updateMarketHours(marketStatus) {
+    const marketHoursInfo = document.getElementById('market-hours-info');
+    if (!marketHoursInfo) return;
+    
+    if (marketStatus.is_open) {
+        const closeTime = new Date(marketStatus.next_close);
+        if (closeTime instanceof Date && !isNaN(closeTime)) {
+            marketHoursInfo.textContent = `Market is open until ${closeTime.toLocaleTimeString('en-US', { 
+                hour: '2-digit', 
+                minute: '2-digit',
+                timeZoneName: 'short'
+            })}`;
+            marketHoursInfo.className = 'text-success';
+        } else {
+            marketHoursInfo.textContent = 'Market is open';
+            marketHoursInfo.className = 'text-success';
+        }
     } else {
-      showError(data.error || 'Failed to update configuration');
+        const nextOpen = new Date(marketStatus.next_open);
+        if (nextOpen instanceof Date && !isNaN(nextOpen)) {
+            marketHoursInfo.textContent = `Market opens at ${nextOpen.toLocaleTimeString('en-US', { 
+                hour: '2-digit', 
+                minute: '2-digit',
+                timeZoneName: 'short'
+            })} on ${nextOpen.toLocaleDateString('en-US', {
+                weekday: 'long',
+                month: 'long',
+                day: 'numeric'
+            })}`;
+            marketHoursInfo.className = 'text-danger';
+        } else {
+            marketHoursInfo.textContent = 'Market is closed';
+            marketHoursInfo.className = 'text-danger';
+        }
     }
-  } catch (error) {
-    showError('Failed to update configuration');
-  }
-});
+}
 
-// Socket.IO event handlers
+function updateRuntime() {
+    if (botStartTime) {
+        const runtimeElement = document.getElementById('runtime-counter');
+        const now = new Date();
+        const runtime = Math.floor((now - botStartTime) / 1000);
+        runtimeElement.querySelector('span').textContent = formatRuntime(runtime);
+    }
+}
+
+// Socket Event Handlers
 socket.on('connect', () => {
-  console.log('Connected to server');
+    addLog('Connected to server');
+    socket.emit('get_initial_status');
 });
 
 socket.on('disconnect', () => {
-  console.log('Disconnected from server');
+    addLog('Disconnected from server', 'error');
+    updateBotStatus('stopped');
 });
 
-socket.on('update', (data) => {
-  updateBotStatus(data.bot_status.status);
-  updateMarketStatus(data.market_open);
-  updateMetrics(data);
-  updateCharts(data);
-  document.getElementById('runtime').textContent = data.runtime;
-});
-
-// Initialize the UI
-document.addEventListener('DOMContentLoaded', () => {
-  // Only initialize charts after successful login
-  if (document.getElementById('dashboard').style.display === 'block') {
-    initializeCharts();
+socket.on('status_update', (data) => {
+    if (!data) return;
     
-    // Fetch initial configuration
-    fetch('/api/config')
-      .then(response => {
-        if (!response.ok) {
-          throw new Error('Failed to fetch configuration');
-        }
-        return response.json();
-      })
-      .then(data => {
-        if (data.success) {
-          symbolsInput.value = data.symbols.join(', ');
-          initialCapitalInput.value = data.initial_capital;
-          initialCapital.textContent = `$${data.initial_capital.toFixed(2)}`;
-        } else {
-          showError(data.error || 'Failed to load configuration');
-        }
-      })
-      .catch(error => {
-        console.error('Configuration error:', error);
-        showError('Error loading configuration: ' + error.message);
-      });
-  }
+    updateBotStatus(data.status);
+    updateMarketStatus(data.market_status);
+    if (data.runtime) updateBotRuntime(data.runtime);
+    if (data.account) updateAlpacaAccountInfo(data.account);
+    if (data.positions) updatePositions(data.positions);
+    if (data.error) showError(data.error);
+    
+    // Update metrics if available
+    if (data.metrics) {
+        if (totalTrades) totalTrades.textContent = data.metrics.total_trades || '0';
+        if (winRate) winRate.textContent = `${data.metrics.win_rate || 0}%`;
+        if (avgReturn) avgReturn.textContent = `${data.metrics.avg_return || 0}%`;
+    }
+    
+    // Update portfolio history chart if available
+    if (data.portfolio_history && returnsChart) {
+        returnsChart.data.labels = data.portfolio_history.timestamp || [];
+        returnsChart.data.datasets[0].data = data.portfolio_history.profit_loss_pct || [];
+        returnsChart.update();
+    }
+
+    if (data.market_status) {
+        updateMarketHours(data.market_status);
+    }
+});
+
+// Event Listeners
+if (startBotBtn) {
+    startBotBtn.addEventListener('click', () => {
+        fetch('/api/start', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json'
+            }
+        })
+        .then(response => response.json())
+        .then(data => {
+            if (data.error) {
+                addLog(`Error: ${data.error}`, 'error');
+                showError(data.error);
+                if (data.market_status) {
+                    updateMarketStatus(data.market_status.is_open ? 'open' : 'closed');
+                    updateMarketHours(data.market_status);
+                }
+            } else {
+                addLog('Bot started successfully');
+                botRunning = true;
+                botStartTime = new Date();
+                startBotBtn.disabled = true;
+                stopBotBtn.disabled = false;
+                updateBotStatus('RUNNING');
+                const runtimeElement = document.getElementById('runtime-counter');
+                runtimeElement.style.display = 'flex';
+                runtimeInterval = setInterval(updateRuntime, 1000);
+                updateRuntime();
+            }
+        })
+        .catch(error => {
+            addLog(`Error starting bot: ${error.message}`, 'error');
+            showError('Failed to start bot');
+        });
+    });
+}
+
+if (stopBotBtn) {
+    stopBotBtn.addEventListener('click', () => {
+        fetch('/api/stop', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' }
+        })
+        .then(response => response.json())
+        .then(data => {
+            if (data.success) {
+                addLog('Bot stopped successfully');
+                updateBotStatus('stopped');
+                botStartTime = null;
+                const runtimeElement = document.getElementById('runtime-counter');
+                runtimeElement.style.display = 'none';
+                if (runtimeInterval) {
+                    clearInterval(runtimeInterval);
+                    runtimeInterval = null;
+                }
+            } else {
+                throw new Error(data.error || 'Failed to stop bot');
+            }
+        })
+        .catch(error => {
+            addLog(`Failed to stop bot: ${error.message}`, 'error');
+            showError(error.message);
+        });
+    });
+}
+
+// Initialize
+document.addEventListener('DOMContentLoaded', () => {
+    try {
+        addLog('Initializing application...');
+        initializeCharts();
+        
+        // Initial data fetch
+        fetch('/api/status')
+            .then(response => response.json())
+            .then(data => {
+                if (data.success) {
+                    updateBotStatus(data.status);
+                    updateMarketStatus(data.market_status);
+                    if (data.account) updateAlpacaAccountInfo(data.account);
+                    if (data.positions) updatePositions(data.positions);
+                    addLog('Initial status loaded successfully');
+                } else {
+                    throw new Error(data.error || 'Failed to load initial status');
+                }
+            })
+            .catch(error => {
+                addLog(`Error loading initial status: ${error.message}`, 'error');
+                showError(error.message);
+            });
+        
+        // Set up periodic data refresh
+        setInterval(() => {
+            if (socket.connected) {
+                socket.emit('get_initial_status');
+            }
+        }, 5000);
+    } catch (error) {
+        addLog(`Error during initialization: ${error.message}`, 'error');
+        showError('Error initializing application');
+    }
 }); 

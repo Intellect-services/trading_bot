@@ -12,928 +12,820 @@
       href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css"
       rel="stylesheet"
     />
-    <link
-      href="{{ url_for('static', filename='style.css') }}"
-      rel="stylesheet"
-    />
-    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/socket.io/4.0.1/socket.io.js"></script>
     <style>
       :root {
         --primary-blue: #1a73e8;
         --secondary-blue: #4285f4;
-        --light-blue: #e8f0fe;
         --dark-blue: #0d47a1;
+        --light-blue: #e8f0fe;
         --success-green: #34a853;
         --danger-red: #ea4335;
-        --warning-yellow: #fbbc05;
-        --dark-gray: #202124;
-        --light-gray: #f8f9fa;
-        --text-gray: #5f6368;
+        --header-gradient: linear-gradient(135deg, #1a73e8 0%, #4285f4 100%);
       }
 
       body {
-        background-color: var(--light-gray);
-        font-family: "Segoe UI", Tahoma, Geneva, Verdana, sans-serif;
-        color: var(--dark-gray);
+        background-color: #f8f9fa;
+        min-height: 100vh;
+        display: flex;
+        flex-direction: column;
       }
 
-      .login-container {
-        max-width: 400px;
-        margin: 100px auto;
-        padding: 2rem;
-        background: white;
-        border-radius: 8px;
-        box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+      .main-content {
+        flex: 1;
+        padding-bottom: 3rem;
       }
 
-      .login-title {
-        color: var(--primary-blue);
-        margin-bottom: 1.5rem;
-        text-align: center;
-      }
-
-      .form-control {
-        border-radius: 4px;
-        padding: 0.75rem;
-        border: 1px solid #ddd;
-      }
-
-      .form-control:focus {
-        border-color: var(--primary-blue);
-        box-shadow: 0 0 0 0.2rem rgba(26, 115, 232, 0.25);
-      }
-
-      .btn-login {
-        background-color: var(--primary-blue);
-        border: none;
-        border-radius: 4px;
-        padding: 0.75rem;
-        font-weight: 500;
-        width: 100%;
-        transition: all 0.2s;
-      }
-
-      .btn-login:hover {
-        background-color: var(--dark-blue);
-      }
-
-      .dashboard {
-        display: none;
-      }
-
-      .header {
-        background: linear-gradient(
-          135deg,
-          var(--primary-blue),
-          var(--dark-blue)
-        );
+      .footer {
+        background: var(--header-gradient);
         color: white;
-        padding: 1.5rem 2rem;
-        margin-bottom: 2rem;
-        box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+        padding: 1.5rem 0;
+        margin-top: auto;
       }
 
-      .header-content {
-        max-width: 1400px;
-        margin: 0 auto;
+      .footer-content {
         display: flex;
         justify-content: space-between;
         align-items: center;
       }
 
-      .header-title {
-        font-size: 1.5rem;
+      .footer-links {
+        display: flex;
+        gap: 1.5rem;
+      }
+
+      .footer-links a {
+        color: white;
+        text-decoration: none;
+        opacity: 0.8;
+        transition: opacity 0.2s ease;
+      }
+
+      .footer-links a:hover {
+        opacity: 1;
+      }
+
+      .login-page {
+        min-height: 100vh;
+        display: flex;
+        flex-direction: column;
+        background: linear-gradient(135deg, #0d47a1 0%, #1a73e8 100%);
+        padding: 0;
+      }
+
+      .login-header {
+        text-align: center;
+        color: white;
+        padding: 2rem 0;
+        background: rgba(255, 255, 255, 0.1);
+      }
+
+      .login-header i {
+        font-size: 2.5rem;
+        margin-bottom: 0.5rem;
+      }
+
+      .login-header h1 {
+        font-size: 1.75rem;
         font-weight: 600;
         margin: 0;
       }
 
-      .user-profile {
-        display: flex;
-        align-items: center;
-        gap: 1rem;
-        background: rgba(255, 255, 255, 0.1);
-        padding: 0.5rem 1rem;
-        border-radius: 25px;
-        transition: all 0.3s ease;
-      }
-
-      .user-profile:hover {
-        background: rgba(255, 255, 255, 0.2);
-      }
-
-      .user-avatar {
-        width: 40px;
-        height: 40px;
-        border-radius: 50%;
-        background-color: rgba(255, 255, 255, 0.2);
+      .login-container {
+        flex: 1;
         display: flex;
         align-items: center;
         justify-content: center;
-        color: white;
-        font-weight: bold;
+        padding: 2rem;
       }
 
-      .user-info {
-        display: flex;
-        flex-direction: column;
-      }
-
-      .user-name {
-        font-weight: 500;
-        margin: 0;
-        font-size: 1rem;
-      }
-
-      .user-email {
-        font-size: 0.8rem;
-        color: rgba(255, 255, 255, 0.8);
-        margin: 0;
-      }
-
-      .main-container {
-        max-width: 1400px;
-        margin: 0 auto;
-        padding: 0 2rem;
-      }
-
-      .card {
+      .login-box {
         background: white;
-        border: none;
-        border-radius: 12px;
-        box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
-        margin-bottom: 1.5rem;
-        transition: transform 0.2s;
+        border-radius: 16px;
+        padding: 2.5rem;
+        box-shadow: 0 10px 25px rgba(0, 0, 0, 0.2);
+        width: 100%;
+        max-width: 400px;
       }
 
-      .card:hover {
-        transform: translateY(-2px);
+      .login-form-header {
+        text-align: center;
+        margin-bottom: 2rem;
       }
 
-      .card-header {
-        background: var(--light-blue);
-        border-bottom: none;
-        border-radius: 12px 12px 0 0;
-        padding: 1rem 1.5rem;
-      }
-
-      .status-badge {
-        display: inline-flex;
-        align-items: center;
-        padding: 0.5rem 1rem;
-        border-radius: 20px;
-        font-weight: 500;
-      }
-
-      .status-badge.running {
-        background: rgba(52, 168, 83, 0.1);
-        color: var(--success-green);
-      }
-
-      .status-badge.stopped {
-        background: rgba(234, 67, 53, 0.1);
-        color: var(--danger-red);
-      }
-
-      .status-badge.error {
-        background: rgba(251, 188, 5, 0.1);
-        color: var(--warning-yellow);
-      }
-
-      .metric-value {
-        font-size: 1.5rem;
-        font-weight: 600;
+      .login-title {
         color: var(--primary-blue);
+        font-weight: 600;
+        font-size: 1.5rem;
+        margin-bottom: 0.5rem;
       }
 
-      .metric-label {
-        color: var(--text-gray);
-        font-size: 0.9rem;
+      .login-subtitle {
+        color: #666;
+        font-size: 0.95rem;
+        margin-bottom: 0;
       }
 
-      .btn {
-        font-weight: 500;
-        padding: 0.75rem 1.5rem;
+      .login-footer {
+        text-align: center;
+        color: white;
+        font-size: 0.875rem;
+        padding: 1rem;
+        background: rgba(255, 255, 255, 0.1);
+      }
+
+      .social-login {
+        display: flex;
+        gap: 1rem;
+        margin: 1.5rem 0;
+      }
+
+      .social-btn {
+        flex: 1;
+        padding: 0.75rem;
         border-radius: 8px;
-        transition: all 0.2s ease-in-out;
-        display: inline-flex;
+        border: 1px solid #e0e0e0;
+        background: white;
+        color: #666;
+        font-size: 0.9rem;
+        display: flex;
         align-items: center;
         justify-content: center;
         gap: 0.5rem;
+        transition: all 0.2s ease;
+      }
+
+      .social-btn:hover {
+        background: #f8f9fa;
+        transform: translateY(-1px);
+        color: var(--primary-blue);
+      }
+
+      .social-btn i {
+        font-size: 1.1rem;
+      }
+
+      .divider {
+        display: flex;
+        align-items: center;
+        text-align: center;
+        margin: 1.5rem 0;
+        color: #666;
+        font-size: 0.875rem;
+      }
+
+      .divider::before,
+      .divider::after {
+        content: "";
+        flex: 1;
+        border-bottom: 1px solid #e0e0e0;
+      }
+
+      .divider::before {
+        margin-right: 1rem;
+      }
+
+      .divider::after {
+        margin-left: 1rem;
+      }
+
+      .form-floating {
+        margin-bottom: 1.75rem;
+      }
+
+      .form-floating input {
+        border-radius: 10px;
+        border: 1px solid #e0e0e0;
+        padding: 1.25rem 1rem;
+        height: auto;
+        font-size: 1rem;
+      }
+
+      .form-floating input:focus {
+        border-color: var(--primary-blue);
+        box-shadow: 0 0 0 0.2rem rgba(26, 115, 232, 0.15);
+      }
+
+      .form-floating label {
+        padding: 1.25rem 1rem;
+        color: #666;
+        font-size: 1rem;
+      }
+
+      .btn-login {
+        width: 100%;
+        padding: 1rem;
+        font-size: 1.1rem;
+        font-weight: 500;
+        border-radius: 10px;
+        background: var(--primary-blue);
+        border: none;
+        transition: all 0.2s ease;
+        margin-top: 0.5rem;
+      }
+
+      .btn-login:hover {
+        background: var(--dark-blue);
+        transform: translateY(-1px);
+      }
+
+      .card {
+        margin-bottom: 2rem;
+      }
+
+      .row {
+        margin-bottom: 2.5rem;
+      }
+
+      .row:last-child {
+        margin-bottom: 0;
+      }
+
+      .card {
+        margin-bottom: 0;
+        height: 100%;
+      }
+
+      .card-body {
+        padding: 1.25rem;
+      }
+
+      .card-header {
+        background-color: white;
+        border-bottom: 1px solid #e0e0e0;
+        padding: 1.25rem 1.5rem;
+      }
+
+      .col-md-6 {
+        padding: 0 1rem;
+      }
+
+      .col-md-6:first-child {
+        padding-left: 0;
+      }
+
+      .col-md-6:last-child {
+        padding-right: 0;
+      }
+
+      .runtime-counter {
+        font-size: 1.1rem;
+        font-weight: 500;
+        color: var(--primary-blue);
+        display: flex;
+        align-items: center;
+        gap: 0.5rem;
+      }
+
+      .runtime-counter i {
+        font-size: 1.2rem;
+      }
+
+      .navbar {
+        background: var(--header-gradient);
+        box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+        padding: 0.75rem 1.5rem;
+      }
+
+      .navbar-brand {
+        color: white !important;
+        font-weight: 600;
+        font-size: 1.5rem;
+        display: flex;
+        align-items: center;
+        gap: 0.5rem;
+      }
+
+      .navbar-brand i {
+        font-size: 1.75rem;
+      }
+
+      .user-section {
+        display: flex;
+        align-items: center;
+        gap: 1.5rem;
+      }
+
+      .user-name {
+        color: white;
+        font-weight: 500;
+        margin: 0;
+        display: flex;
+        align-items: center;
+        gap: 0.5rem;
+        font-size: 0.95rem;
+      }
+
+      .user-name i {
+        font-size: 1.1rem;
+      }
+
+      .logout-btn {
+        background: rgba(255, 255, 255, 0.1);
+        border: 1px solid rgba(255, 255, 255, 0.2);
+        color: white;
+        padding: 0.35rem 0.75rem;
+        border-radius: 20px;
+        display: flex;
+        align-items: center;
+        gap: 0.5rem;
+        transition: all 0.2s ease;
+        cursor: pointer;
+        font-size: 0.9rem;
+        font-weight: 500;
+        text-decoration: none;
+      }
+
+      .logout-btn:hover {
+        background: rgba(255, 255, 255, 0.2);
+        border-color: rgba(255, 255, 255, 0.3);
+        transform: translateY(-1px);
+        text-decoration: none;
+      }
+
+      .logout-btn i {
+        font-size: 0.9rem;
+      }
+
+      .card-title {
+        color: var(--primary-blue);
+        font-weight: 600;
+        margin: 0;
       }
 
       .btn-primary {
         background-color: var(--primary-blue);
-        border: 2px solid var(--primary-blue);
-        color: white;
+        border: none;
+        border-radius: 8px;
+        padding: 0.5rem 1rem;
+        font-weight: 500;
       }
 
       .btn-primary:hover {
         background-color: var(--dark-blue);
-        border-color: var(--dark-blue);
-        transform: translateY(-1px);
-        box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
-      }
-
-      .btn-primary:active {
-        transform: translateY(0);
-        box-shadow: none;
-      }
-
-      .btn-primary:disabled {
-        background-color: #e0e0e0;
-        border-color: #e0e0e0;
-        color: #9e9e9e;
-        cursor: not-allowed;
-        transform: none;
-        box-shadow: none;
       }
 
       .btn-secondary {
-        background-color: transparent;
-        border: 2px solid var(--primary-blue);
+        background-color: var(--light-blue);
         color: var(--primary-blue);
+        border: none;
+        border-radius: 8px;
+        padding: 0.5rem 1rem;
+        font-weight: 500;
       }
 
       .btn-secondary:hover {
-        background-color: rgba(26, 115, 232, 0.1);
-        transform: translateY(-1px);
-        box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+        background-color: #d2e3fc;
       }
 
-      .btn-secondary:active {
-        transform: translateY(0);
-        box-shadow: none;
+      .status-badge {
+        padding: 0.5rem 1rem;
+        border-radius: 8px;
+        font-weight: 500;
       }
 
-      .btn-secondary:disabled {
-        border-color: #e0e0e0;
-        color: #9e9e9e;
-        cursor: not-allowed;
-        transform: none;
-        box-shadow: none;
+      .bg-success {
+        background-color: var(--success-green) !important;
       }
 
-      .btn-lg {
-        padding: 1rem 2rem;
-        font-size: 1.1rem;
+      .bg-danger {
+        background-color: var(--danger-red) !important;
       }
 
-      .btn-icon {
-        font-size: 1.2rem;
+      .metric-label {
+        color: #666;
+        font-size: 0.875rem;
+      }
+
+      .metric-value {
+        color: var(--primary-blue);
+        font-weight: 600;
+        font-size: 1.125rem;
+      }
+
+      .log-entry {
+        padding: 0.75rem;
+        border-radius: 8px;
+        margin-bottom: 0.5rem;
+        background-color: white;
+        border-left: 4px solid var(--primary-blue);
+      }
+
+      .log-entry.error {
+        border-left-color: var(--danger-red);
+      }
+
+      .log-entry.success {
+        border-left-color: var(--success-green);
+      }
+
+      .log-timestamp {
+        color: #666;
+        font-size: 0.75rem;
       }
 
       .chart-container {
         position: relative;
         height: 300px;
-        margin: 1rem 0;
-        display: flex;
-        flex-direction: column;
-      }
-
-      .chart-wrapper {
-        flex: 1;
-        position: relative;
-        min-height: 0; /* Important for flex child */
-      }
-
-      .chart-description {
-        color: var(--text-gray);
-        font-size: 0.9rem;
-        margin-top: 0.5rem;
-        padding: 0.5rem;
-        background-color: var(--light-gray);
-        border-radius: 4px;
-        max-width: 100%;
-        word-wrap: break-word;
-      }
-
-      .grid {
-        display: grid;
-        grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
-        gap: 1.5rem;
-        margin-bottom: 1.5rem;
-      }
-
-      .alert {
-        border-radius: 8px;
         margin-bottom: 1rem;
       }
 
-      .form-control {
-        border-radius: 8px;
-        padding: 0.75rem 1rem;
-        border: 1px solid rgba(0, 0, 0, 0.1);
-      }
-
-      .form-control:focus {
-        border-color: var(--primary-blue);
-        box-shadow: 0 0 0 0.2rem rgba(26, 115, 232, 0.25);
-      }
-
-      .logs-container {
-        height: 300px;
-        overflow-y: auto;
-        background: var(--light-gray);
-        border-radius: 8px;
-        padding: 1rem;
-      }
-
-      .log-entry {
-        padding: 0.5rem;
-        border-bottom: 1px solid rgba(0, 0, 0, 0.1);
-        font-size: 0.9rem;
-      }
-
-      .log-entry:last-child {
-        border-bottom: none;
-      }
-
       .position-card {
-        background: var(--light-gray);
+        background-color: white;
         border-radius: 8px;
         padding: 1rem;
-        margin-bottom: 0.5rem;
+        margin-bottom: 1rem;
+        border: 1px solid #e0e0e0;
       }
 
-      @media (max-width: 768px) {
-        .main-container {
-          padding: 0 1rem;
-        }
+      .position-card:hover {
+        box-shadow: 0 2px 4px rgba(0, 0, 0, 0.05);
+      }
 
-        .grid {
-          grid-template-columns: 1fr;
-        }
+      .market-hours-info {
+        font-size: 0.875rem;
+        margin-top: 0.5rem;
+      }
+
+      .text-success {
+        color: var(--success-green) !important;
+      }
+
+      .text-danger {
+        color: var(--danger-red) !important;
+      }
+
+      .account-window {
+        background: white;
+        border-radius: 12px;
+        box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+        padding: 1.5rem;
+        margin-top: 1rem;
+        margin-bottom: 2.5rem;
+        border: none;
+      }
+
+      .account-header {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        margin-bottom: 1.5rem;
+        padding-bottom: 1rem;
+        border-bottom: 1px solid #e0e0e0;
+      }
+
+      .account-title {
+        color: var(--primary-blue);
+        font-weight: 600;
+        font-size: 1.25rem;
+        margin: 0;
+      }
+
+      .account-info {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+        gap: 1.5rem;
+      }
+
+      .account-metric {
+        background: var(--light-blue);
+        padding: 1rem;
+        border-radius: 8px;
+        transition: transform 0.2s ease;
+      }
+
+      .account-metric:hover {
+        transform: translateY(-2px);
+      }
+
+      .account-actions {
+        display: flex;
+        gap: 1rem;
+        margin-top: 1.5rem;
+      }
+
+      .btn-account {
+        flex: 1;
+        padding: 0.75rem;
+        border-radius: 8px;
+        font-weight: 500;
+        transition: all 0.2s ease;
+      }
+
+      .btn-account-primary {
+        background: var(--primary-blue);
+        color: white;
+        border: none;
+      }
+
+      .btn-account-primary:hover {
+        background: var(--dark-blue);
+        transform: translateY(-1px);
+      }
+
+      .btn-account-secondary {
+        background: var(--light-blue);
+        color: var(--primary-blue);
+        border: none;
+      }
+
+      .btn-account-secondary:hover {
+        background: #d2e3fc;
+        transform: translateY(-1px);
       }
     </style>
   </head>
-  <body>
+  <body class="{% if session.username %}logged-in{% endif %}">
+    {% if not session.username %}
     <!-- Login Page -->
-    <div id="login-page" class="login-page">
-      <header class="login-header">
-        <h1 class="login-header-title">
-          <i class="fas fa-chart-line"></i>
-          Trading Bot
-        </h1>
-      </header>
-      <main class="login-main">
-        <div class="login-container">
-          <div class="login-box">
-            <div class="login-form-header">
-              <div class="login-logo">
-                <i class="fas fa-chart-line"></i>
-              </div>
-              <h2 class="login-title">Welcome Back</h2>
-              <p class="login-subtitle">
-                Sign in to access your trading dashboard
-              </p>
-            </div>
-            <form id="login-form" class="login-form">
-              <div class="form-floating mb-3">
-                <input
-                  type="email"
-                  class="form-control"
-                  id="username"
-                  placeholder="name@example.com"
-                  required
-                />
-                <label for="username">Email address</label>
-              </div>
-              <div class="form-floating mb-3">
-                <input
-                  type="password"
-                  class="form-control"
-                  id="password"
-                  placeholder="Password"
-                  required
-                />
-                <label for="password">Password</label>
-              </div>
-              <div class="d-grid mb-3">
-                <button type="submit" class="btn btn-primary btn-lg">
-                  <i class="fas fa-sign-in-alt me-2"></i>Sign in
-                </button>
-              </div>
-              <div class="text-center mb-3">
-                <a href="#" class="text-decoration-none">Forgot password?</a>
-              </div>
-              <div class="social-login">
-                <div class="divider">
-                  <span>Or continue with</span>
-                </div>
-                <div class="social-buttons">
-                  <button type="button" class="social-btn google">
-                    <i class="fab fa-google"></i>
-                  </button>
-                  <button type="button" class="social-btn github">
-                    <i class="fab fa-github"></i>
-                  </button>
-                </div>
-              </div>
-            </form>
-          </div>
-        </div>
-      </main>
-      <footer class="login-footer">
-        <div class="text-center">© 2024 Trading Bot. All rights reserved.</div>
-      </footer>
-    </div>
+    <div class="login-page">
+      <div class="login-header">
+        <i class="fas fa-chart-line"></i>
+        <h1>Trading Bot</h1>
+      </div>
 
-    <!-- Dashboard -->
-    <div id="dashboard" class="dashboard" style="display: none">
-      <!-- Header -->
-      <header class="header">
-        <div class="header-content">
-          <h1 class="header-title">
-            <i class="fas fa-chart-line"></i>
-            Trading Bot Dashboard
-          </h1>
-          <div class="user-profile" style="display: none">
-            <div class="user-avatar"></div>
-            <div class="user-info">
-              <p class="user-name"></p>
-              <p class="user-email"></p>
+      <div class="login-container">
+        <div class="login-box">
+          <div class="login-form-header">
+            <h2 class="login-title">Welcome Back</h2>
+            <p class="login-subtitle">
+              Sign in to access your trading dashboard
+            </p>
+          </div>
+
+          <div class="social-login">
+            <button class="social-btn">
+              <i class="fab fa-google"></i>
+              Google
+            </button>
+            <button class="social-btn">
+              <i class="fab fa-github"></i>
+              GitHub
+            </button>
+          </div>
+
+          <div class="divider">or continue with email</div>
+
+          <form
+            id="login-form"
+            class="login-form"
+            method="POST"
+            action="/login"
+          >
+            <div class="form-floating">
+              <input
+                type="email"
+                class="form-control"
+                id="username"
+                name="username"
+                placeholder="name@example.com"
+                required
+              />
+              <label for="username">Email address</label>
             </div>
-            <button id="logout-btn" class="btn btn-link text-white">
-              <i class="fas fa-sign-out-alt"></i>
+            <div class="form-floating">
+              <input
+                type="password"
+                class="form-control"
+                id="password"
+                name="password"
+                placeholder="Password"
+                required
+              />
+              <label for="password">Password</label>
+            </div>
+            <div class="d-grid">
+              <button type="submit" class="btn btn-login">
+                <i class="fas fa-sign-in-alt me-2"></i>Sign in
+              </button>
+            </div>
+            {% if error %}
+            <div class="alert alert-danger mt-3" role="alert">{{ error }}</div>
+            {% endif %}
+          </form>
+        </div>
+      </div>
+
+      <div class="login-footer">
+        <p>© 2024 Trading Bot</p>
+      </div>
+    </div>
+    {% else %}
+    <!-- Main Dashboard -->
+    <nav class="navbar navbar-expand-lg">
+      <div class="container-fluid">
+        <a class="navbar-brand" href="#">
+          <i class="fas fa-chart-line"></i>
+          Trading Bot Dashboard
+        </a>
+        <div class="user-section">
+          <p class="user-name">
+            <i class="fas fa-user-circle"></i>
+            {{ session.username }}
+          </p>
+          <a href="/logout" class="logout-btn">
+            <i class="fas fa-sign-out-alt"></i>
+            Sign out
+          </a>
+        </div>
+      </div>
+    </nav>
+
+    <div class="main-content">
+      <div class="container mt-4">
+        <div class="account-window">
+          <div class="account-header">
+            <h2 class="account-title">Account Overview</h2>
+            <div class="market-status">
+              <span class="badge bg-success">Market Open</span>
+            </div>
+          </div>
+
+          <div class="account-info">
+            <div class="account-metric">
+              <div class="metric-label">Account Value</div>
+              <div class="metric-value" id="account-value">$0.00</div>
+            </div>
+            <div class="account-metric">
+              <div class="metric-label">Buying Power</div>
+              <div class="metric-value" id="buying-power">$0.00</div>
+            </div>
+            <div class="account-metric">
+              <div class="metric-label">Cash Balance</div>
+              <div class="metric-value" id="cash-balance">$0.00</div>
+            </div>
+            <div class="account-metric">
+              <div class="metric-label">Equity</div>
+              <div class="metric-value" id="equity">$0.00</div>
+            </div>
+          </div>
+
+          <div class="account-actions">
+            <button class="btn btn-account btn-account-primary" id="start-bot">
+              <i class="fas fa-play me-2"></i>Start Bot
+            </button>
+            <button class="btn btn-account btn-account-secondary" id="stop-bot">
+              <i class="fas fa-stop me-2"></i>Stop Bot
             </button>
           </div>
         </div>
-      </header>
 
-      <!-- Main Content -->
-      <main class="dashboard-content">
-        <div class="row g-4">
-          <!-- Bot Status Card -->
-          <div class="col-md-4">
+        <div class="row mb-4">
+          <div class="col-md-6">
             <div class="card h-100">
-              <div class="card-header">
-                <h5 class="card-title mb-0">Bot Status</h5>
+              <div
+                class="card-header d-flex justify-content-between align-items-center"
+              >
+                <h5 class="card-title mb-0">Trading Progress</h5>
+                <div
+                  class="runtime-counter"
+                  id="runtime-counter"
+                  style="display: none"
+                >
+                  <i class="fas fa-clock"></i>
+                  <span>00:00:00</span>
+                </div>
               </div>
               <div class="card-body">
-                <div class="status-item">
-                  <span class="status-label">Status:</span>
-                  <span id="bot-status" class="status-value">Stopped</span>
+                <div
+                  class="d-flex justify-content-between align-items-center mb-3"
+                >
+                  <span class="metric-label">Total Trades:</span>
+                  <span id="total-trades" class="metric-value">0</span>
                 </div>
-                <div class="status-item">
-                  <span class="status-label">Runtime:</span>
-                  <span id="runtime" class="status-value">00:00:00</span>
+                <div
+                  class="d-flex justify-content-between align-items-center mb-3"
+                >
+                  <span class="metric-label">Win Rate:</span>
+                  <span id="win-rate" class="metric-value">0%</span>
                 </div>
-                <div class="status-item">
-                  <span class="status-label">Market Status:</span>
-                  <span id="market-status" class="status-value">Closed</span>
+                <div
+                  class="d-flex justify-content-between align-items-center mb-3"
+                >
+                  <span class="metric-label">Average Return:</span>
+                  <span id="avg-return" class="metric-value">0%</span>
                 </div>
-                <div class="d-grid gap-2 mt-3">
-                  <button id="start-bot" class="btn btn-primary btn-lg">
-                    <i class="fas fa-play btn-icon"></i> Start Bot
-                  </button>
-                  <button id="stop-bot" class="btn btn-secondary btn-lg">
-                    <i class="fas fa-stop btn-icon"></i> Stop Bot
-                  </button>
+                <div class="d-flex justify-content-between align-items-center">
+                  <span class="metric-label">Current Strategy:</span>
+                  <span id="current-strategy" class="metric-value"
+                    >SMA Crossover</span
+                  >
                 </div>
               </div>
             </div>
           </div>
 
-          <!-- Configuration Card -->
-          <div class="col-md-4">
-            <div class="card h-100">
-              <div class="card-header">
-                <h5 class="card-title mb-0">Configuration</h5>
-              </div>
-              <div class="card-body">
-                <form id="config-form">
-                  <div class="mb-3">
-                    <label for="symbols" class="form-label"
-                      >Trading Symbols</label
-                    >
-                    <input
-                      type="text"
-                      class="form-control"
-                      id="symbols"
-                      placeholder="AAPL,GOOGL,MSFT"
-                    />
-                  </div>
-                  <div class="mb-3">
-                    <label for="initial-capital" class="form-label"
-                      >Initial Capital ($)</label
-                    >
-                    <input
-                      type="number"
-                      class="form-control"
-                      id="initial-capital"
-                      placeholder="100000"
-                    />
-                  </div>
-                  <button type="submit" class="btn btn-primary w-100">
-                    <i class="fas fa-save btn-icon"></i> Save Configuration
-                  </button>
-                </form>
-              </div>
-            </div>
-          </div>
-
-          <!-- Performance Card -->
-          <div class="col-md-4">
+          <div class="col-md-6">
             <div class="card h-100">
               <div class="card-header">
                 <h5 class="card-title mb-0">Performance</h5>
               </div>
               <div class="card-body">
-                <div class="status-item">
-                  <span class="status-label">Initial Capital:</span>
-                  <span id="initial-capital-value" class="status-value"
-                    >$100,000.00</span
-                  >
+                <div
+                  class="d-flex justify-content-between align-items-center mb-3"
+                >
+                  <span class="metric-label">Initial Capital:</span>
+                  <span id="initial-capital" class="metric-value">$0.00</span>
                 </div>
-                <div class="status-item">
-                  <span class="status-label">Current Capital:</span>
-                  <span id="current-capital" class="status-value"
-                    >$100,000.00</span
-                  >
+                <div
+                  class="d-flex justify-content-between align-items-center mb-3"
+                >
+                  <span class="metric-label">Current Capital:</span>
+                  <span id="current-capital" class="metric-value">$0.00</span>
                 </div>
-                <div class="status-item">
-                  <span class="status-label">Active Positions:</span>
-                  <span id="active-positions" class="status-value">0</span>
+                <div
+                  class="d-flex justify-content-between align-items-center mb-3"
+                >
+                  <span class="metric-label">Active Positions:</span>
+                  <span id="active-positions" class="metric-value">0</span>
                 </div>
-              </div>
-            </div>
-          </div>
-        </div>
-
-        <!-- Charts -->
-        <div class="row mt-4 g-4">
-          <div class="col-md-6">
-            <div class="card h-100">
-              <div class="card-header">
-                <h5 class="card-title mb-0">Returns</h5>
-              </div>
-              <div class="card-body">
-                <div class="chart-container">
-                  <div class="chart-wrapper">
-                    <canvas id="returns-chart"></canvas>
-                  </div>
-                  <div class="chart-description">
-                    Shows the percentage returns of the trading bot over time
-                  </div>
-                </div>
-              </div>
-            </div>
-          </div>
-          <div class="col-md-6">
-            <div class="card h-100">
-              <div class="card-header">
-                <h5 class="card-title mb-0">Positions</h5>
-              </div>
-              <div class="card-body">
-                <div class="chart-container">
-                  <div class="chart-wrapper">
-                    <canvas id="positions-chart"></canvas>
-                  </div>
-                  <div class="chart-description">
-                    Displays the number of active trading positions over time
-                  </div>
+                <div class="d-flex justify-content-between align-items-center">
+                  <span class="metric-label">Total Return:</span>
+                  <span id="total-return" class="metric-value">0%</span>
                 </div>
               </div>
             </div>
           </div>
         </div>
 
-        <!-- Logs -->
-        <div class="row mt-4">
-          <div class="col-12">
+        <div class="row mb-4">
+          <div class="col-md-6">
+            <div class="card">
+              <div class="card-header">
+                <h5 class="card-title mb-0">Active Positions</h5>
+              </div>
+              <div class="card-body" id="positions-container">
+                <!-- Positions will be added here dynamically -->
+              </div>
+            </div>
+          </div>
+
+          <div class="col-md-6">
+            <div class="card">
+              <div class="card-header">
+                <h5 class="card-title mb-0">Returns Over Time</h5>
+              </div>
+              <div class="card-body">
+                <div
+                  class="chart-container"
+                  style="position: relative; height: 300px"
+                >
+                  <canvas id="returns-chart"></canvas>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div class="row mb-4">
+          <div class="col-md-6">
+            <div class="card">
+              <div class="card-header">
+                <h5 class="card-title mb-0">Position Distribution</h5>
+              </div>
+              <div class="card-body">
+                <div
+                  class="chart-container"
+                  style="position: relative; height: 300px"
+                >
+                  <canvas id="positions-chart"></canvas>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <div class="col-md-6">
             <div class="card">
               <div class="card-header">
                 <h5 class="card-title mb-0">System Logs</h5>
               </div>
               <div class="card-body">
-                <div id="logs" class="logs-container"></div>
+                <div id="logs" style="height: 200px; overflow-y: auto">
+                  <!-- Logs will be added here dynamically -->
+                </div>
               </div>
             </div>
           </div>
         </div>
-      </main>
-
-      <!-- Footer -->
-      <footer class="footer">
-        <div class="footer-content">
-          <p class="footer-text">© 2024 Trading Bot. All rights reserved.</p>
-          <div class="footer-links">
-            <a href="#" class="footer-link">Privacy Policy</a>
-            <a href="#" class="footer-link">Terms of Service</a>
-            <a href="#" class="footer-link">Contact Support</a>
-          </div>
-        </div>
-      </footer>
+      </div>
     </div>
 
-    <!-- Error Message -->
-    <div
-      id="error-message"
-      class="alert alert-danger"
-      style="display: none"
-    ></div>
+    <footer class="footer">
+      <div class="container">
+        <div class="footer-content">
+          <div class="footer-brand">
+            <i class="fas fa-chart-line me-2"></i>
+            Trading Bot Dashboard
+          </div>
+          <div class="footer-links">
+            <a href="#"><i class="fas fa-info-circle me-1"></i>About</a>
+            <a href="#"><i class="fas fa-cog me-1"></i>Settings</a>
+            <a href="#"><i class="fas fa-question-circle me-1"></i>Help</a>
+          </div>
+        </div>
+      </div>
+    </footer>
+    {% endif %}
 
-    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
-    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
-    <script src="https://cdn.socket.io/4.0.1/socket.io.min.js"></script>
     <script src="{{ url_for('static', filename='script.js') }}"></script>
-    <script>
-      // Initialize Socket.IO connection
-      const socket = io();
-
-      // DOM Elements
-      const loginForm = document.getElementById("login-form");
-      const loginPage = document.getElementById("login-page");
-      const dashboard = document.getElementById("dashboard");
-      const startBotBtn = document.getElementById("start-bot");
-      const stopBotBtn = document.getElementById("stop-bot");
-      const botStatus = document.getElementById("bot-status");
-      const runtime = document.getElementById("runtime");
-      const marketStatus = document.getElementById("market-status");
-      const initialCapital = document.getElementById("initial-capital-value");
-      const currentCapital = document.getElementById("current-capital");
-      const activePositions = document.getElementById("active-positions");
-      const logs = document.getElementById("logs");
-      const errorMessage = document.getElementById("error-message");
-
-      // Initialize charts
-      let returnsChart, positionsChart;
-
-      // Socket.IO event handlers
-      socket.on("connect", () => {
-        console.log("Connected to server");
-        fetchInitialStatus();
-      });
-
-      socket.on("disconnect", () => {
-        console.log("Disconnected from server");
-        showError("Lost connection to server");
-      });
-
-      socket.on("status_update", (data) => {
-        console.log("Status update received:", data); // Debug log
-
-        // Update bot status and runtime
-        updateBotStatus(data.status);
-        updateRuntime(data.runtime);
-        updateMarketStatus(data.market_status);
-        updateMetrics(data.metrics);
-        addLog(data.log);
-
-        // Update button states based on status
-        if (data.status === "running") {
-          startBotBtn.disabled = true;
-          stopBotBtn.disabled = false;
-          startRuntimeCounter();
-        } else {
-          startBotBtn.disabled = false;
-          stopBotBtn.disabled = true;
-          stopRuntimeCounter();
-        }
-      });
-
-      // Button event handlers
-      startBotBtn.addEventListener("click", async () => {
-        try {
-          const response = await fetch("/api/start", {
-            method: "POST",
-            headers: {
-              "Content-Type": "application/json",
-            },
-          });
-          const data = await response.json();
-          console.log("Start response:", data);
-
-          if (data.success) {
-            // Status will be updated by the socket event
-            startBotBtn.disabled = true;
-            stopBotBtn.disabled = false;
-          } else {
-            showError(data.error || "Failed to start bot");
-          }
-        } catch (error) {
-          showError("Error starting bot: " + error);
-        }
-      });
-
-      stopBotBtn.addEventListener("click", async () => {
-        try {
-          const response = await fetch("/api/stop", {
-            method: "POST",
-            headers: {
-              "Content-Type": "application/json",
-            },
-          });
-          const data = await response.json();
-          console.log("Stop response:", data);
-
-          if (data.success) {
-            // Status will be updated by the socket event
-            startBotBtn.disabled = false;
-            stopBotBtn.disabled = true;
-          } else {
-            showError(data.error || "Failed to stop bot");
-          }
-        } catch (error) {
-          showError("Error stopping bot: " + error);
-        }
-      });
-
-      // Runtime counter management
-      let runtimeInterval;
-      let startTime;
-
-      function startRuntimeCounter() {
-        if (runtimeInterval) {
-          clearInterval(runtimeInterval);
-        }
-        startTime = new Date();
-        runtimeInterval = setInterval(() => {
-          const currentTime = new Date();
-          const diff = currentTime - startTime;
-          const hours = Math.floor(diff / 3600000);
-          const minutes = Math.floor((diff % 3600000) / 60000);
-          const seconds = Math.floor((diff % 60000) / 1000);
-          updateRuntime(
-            `${hours.toString().padStart(2, "0")}:${minutes
-              .toString()
-              .padStart(2, "0")}:${seconds.toString().padStart(2, "0")}`
-          );
-        }, 1000);
-      }
-
-      function stopRuntimeCounter() {
-        if (runtimeInterval) {
-          clearInterval(runtimeInterval);
-          runtimeInterval = null;
-        }
-        updateRuntime("00:00:00");
-      }
-
-      // Helper functions
-      function updateBotStatus(status) {
-        botStatus.textContent =
-          status.charAt(0).toUpperCase() + status.slice(1);
-        botStatus.className = "status-value bot-" + status;
-      }
-
-      function updateRuntime(time) {
-        runtime.textContent = time;
-      }
-
-      function updateMarketStatus(status) {
-        marketStatus.textContent =
-          status.charAt(0).toUpperCase() + status.slice(1);
-        marketStatus.className = "status-value market-" + status.toLowerCase();
-      }
-
-      function updateMetrics(metrics) {
-        if (metrics.initial_capital) {
-          initialCapital.textContent = `$${metrics.initial_capital.toFixed(2)}`;
-        }
-        if (metrics.current_capital) {
-          currentCapital.textContent = `$${metrics.current_capital.toFixed(2)}`;
-        }
-        if (metrics.active_positions !== undefined) {
-          activePositions.textContent = metrics.active_positions;
-        }
-      }
-
-      function addLog(message) {
-        const logEntry = document.createElement("div");
-        logEntry.className = "log-entry";
-        logEntry.textContent = `[${new Date().toLocaleTimeString()}] ${message}`;
-        logs.appendChild(logEntry);
-        logs.scrollTop = logs.scrollHeight;
-      }
-
-      function showError(message) {
-        errorMessage.textContent = message;
-        errorMessage.style.display = "block";
-        setTimeout(() => {
-          errorMessage.style.display = "none";
-        }, 5000);
-      }
-
-      async function fetchInitialStatus() {
-        try {
-          const response = await fetch("/api/status");
-          const data = await response.json();
-          console.log("Initial status:", data); // Debug log
-
-          if (data.success) {
-            updateBotStatus(data.status);
-            updateRuntime(data.runtime);
-            updateMarketStatus(data.market_status);
-            updateMetrics(data.metrics);
-
-            if (data.status === "running") {
-              startBotBtn.disabled = true;
-              stopBotBtn.disabled = false;
-              startRuntimeCounter();
-            } else {
-              startBotBtn.disabled = false;
-              stopBotBtn.disabled = true;
-              stopRuntimeCounter();
-            }
-          }
-        } catch (error) {
-          showError("Error fetching initial status: " + error);
-        }
-      }
-
-      // Initialize the page
-      document.addEventListener("DOMContentLoaded", () => {
-        // Initialize charts
-        initializeCharts();
-
-        // Get initial status
-        fetchInitialStatus();
-
-        // Handle login form submission
-        loginForm.addEventListener("submit", async (e) => {
-          e.preventDefault();
-          const username = document.getElementById("username").value;
-          const password = document.getElementById("password").value;
-
-          try {
-            const response = await fetch("/api/login", {
-              method: "POST",
-              headers: {
-                "Content-Type": "application/json",
-              },
-              body: JSON.stringify({ username, password }),
-            });
-
-            const data = await response.json();
-
-            if (data.success) {
-              loginPage.style.display = "none";
-              dashboard.style.display = "block";
-              // Get initial status after login
-              fetchInitialStatus();
-            } else {
-              showError(data.error || "Login failed");
-            }
-          } catch (error) {
-            showError("Error during login: " + error);
-          }
-        });
-
-        // Handle logout
-        document.getElementById("logout-btn").addEventListener("click", () => {
-          // Reset all states
-          bot_state = {
-            status: "stopped",
-            start_time: null,
-            runtime: "00:00:00",
-          };
-
-          // Stop any running timers
-          stopRuntimeCounter();
-
-          // Clear logs
-          logs.innerHTML = "";
-
-          // Reset form values
-          document.getElementById("username").value = "";
-          document.getElementById("password").value = "";
-
-          // Hide dashboard and show login page
-          dashboard.style.display = "none";
-          loginPage.style.display = "flex"; // Changed to flex to maintain layout
-
-          // Reset user profile
-          const userProfile = document.querySelector(".user-profile");
-          userProfile.style.display = "none";
-
-          // Reset charts
-          if (returnsChart) {
-            returnsChart.destroy();
-          }
-          if (positionsChart) {
-            positionsChart.destroy();
-          }
-
-          // Reset status indicators
-          updateBotStatus("stopped");
-          updateRuntime("00:00:00");
-          updateMarketStatus("closed");
-          updateMetrics({
-            initial_capital: 0,
-            current_capital: 0,
-            active_positions: 0,
-          });
-
-          // Reset buttons
-          startBotBtn.disabled = true;
-          stopBotBtn.disabled = true;
-
-          // Show success message
-          showError("Logged out successfully", "success");
-        });
-      });
-    </script>
   </body>
 </html>
