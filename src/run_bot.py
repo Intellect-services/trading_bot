@@ -2,7 +2,7 @@ import logging
 import os
 import sys
 from datetime import datetime
-from typing import Any, Dict, Optional, Tuple, Union, TypedDict, cast
+from typing import Any, Dict, Optional, Tuple, TypedDict, Union, cast
 
 from dotenv import load_dotenv
 from flask import (
