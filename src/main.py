@@ -50,12 +50,12 @@ def initialize_bot(config_data: Dict[str, Any]) -> TradingBot:
         # Set environment variables for Alpaca API
         os.environ["ALPACA_API_KEY"] = config_data.get("ALPACA_API_KEY", "")
         os.environ["ALPACA_API_SECRET"] = config_data.get("ALPACA_SECRET_KEY", "")
-        
+
         # Initialize services
         alpaca_client = AlpacaClient(
             api_key=config_data.get("ALPACA_API_KEY", ""),
             secret_key=config_data.get("ALPACA_SECRET_KEY", ""),
-            paper=config_data.get("ALPACA_PAPER", True)
+            paper=config_data.get("ALPACA_PAPER", True),
         )
         alpaca_service = AlpacaService()
         bot = TradingBot(alpaca_service)
@@ -92,14 +92,14 @@ def main() -> None:
     try:
         # Load configuration
         config = load_config()
-        
+
         # Initialize Alpaca service
         alpaca_service = AlpacaService()
-        
+
         # Initialize and start trading bot
         bot = TradingBot(alpaca_service)
         handle_shutdown(bot)
-        
+
         # Start the bot
         bot.start()
 

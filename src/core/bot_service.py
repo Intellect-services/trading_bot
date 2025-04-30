@@ -82,9 +82,7 @@ class BotService:
             True if started successfully, False otherwise
         """
         if self.status != BotStatus.STOPPED:
-            logger.warning(
-                f"Bot is not in STOPPED state (current state: {self.status.name})"
-            )
+            logger.warning(f"Bot is not in STOPPED state (current state: {self.status.name})")
             return False
 
         try:
@@ -191,9 +189,7 @@ class BotService:
 
                     # Update runtime
                     if self._start_time:
-                        self._runtime = (
-                            datetime.now() - self._start_time
-                        ).total_seconds()
+                        self._runtime = (datetime.now() - self._start_time).total_seconds()
 
                     # Run one iteration
                     self.bot._run()
@@ -248,9 +244,7 @@ class BotService:
             "current_capital": self.current_balance,
             "active_positions": len(self.bot.positions) if self.bot else 0,
             "error_count": self._error_count,
-            "last_error_time": self._last_error_time.isoformat()
-            if self._last_error_time
-            else None,
+            "last_error_time": self._last_error_time.isoformat() if self._last_error_time else None,
             "start_time": self._start_time.isoformat() if self._start_time else None,
         }
 
@@ -272,7 +266,11 @@ class BotService:
             # Calculate returns
             if self.initial_value > 0:
                 self.total_return = (current_value - self.initial_value) / self.initial_value
-                self.daily_return = (current_value - self.last_value) / self.last_value if self.last_value > 0 else 0.0
+                self.daily_return = (
+                    (current_value - self.last_value) / self.last_value
+                    if self.last_value > 0
+                    else 0.0
+                )
 
             # Update values
             self.last_value = current_value

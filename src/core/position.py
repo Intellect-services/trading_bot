@@ -7,9 +7,7 @@ from typing import Any, Dict
 class Position:
     """Class representing a trading position."""
 
-    def __init__(
-        self, symbol: str, size: float, entry_price: float, entry_time: datetime
-    ) -> None:
+    def __init__(self, symbol: str, size: float, entry_price: float, entry_time: datetime) -> None:
         """Initialize a trading position.
 
         Args:
@@ -25,9 +23,7 @@ class Position:
 
     def __str__(self) -> str:
         """Return string representation of position."""
-        return (
-            f"Position({self.symbol}, size={self.size}, entry_price={self.entry_price})"
-        )
+        return f"Position({self.symbol}, size={self.size}, entry_price={self.entry_price})"
 
     def to_dict(self) -> Dict[str, Any]:
         """Convert position to dictionary.

@@ -56,19 +56,13 @@ def update_bot_status() -> None:
             # Get account info
             account = alpaca_service.get_account()
             if account:
-                bot_status["metrics"]["current_capital"] = float(
-                    account.get("equity", 0)
-                )
+                bot_status["metrics"]["current_capital"] = float(account.get("equity", 0))
                 if not bot_status["metrics"]["initial_capital"]:
-                    bot_status["metrics"]["initial_capital"] = float(
-                        account.get("equity", 0)
-                    )
+                    bot_status["metrics"]["initial_capital"] = float(account.get("equity", 0))
 
             # Get positions
             positions = alpaca_service.get_positions()
-            bot_status["metrics"]["active_positions"] = (
-                len(positions) if positions else 0
-            )
+            bot_status["metrics"]["active_positions"] = len(positions) if positions else 0
 
             # Update runtime if bot is running
             if bot_status["is_running"]:

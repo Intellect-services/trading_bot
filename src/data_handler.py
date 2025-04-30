@@ -52,9 +52,7 @@ class DataHandler:
         """
         return os.path.join(self._cache_dir, f"{symbol}_{timeframe}.json")
 
-    def _load_cache(
-        self, symbol: str, timeframe: str
-    ) -> Optional[List[Dict[str, Any]]]:
+    def _load_cache(self, symbol: str, timeframe: str) -> Optional[List[Dict[str, Any]]]:
         """Load cached data for a symbol and timeframe.
 
         Args:
@@ -122,16 +120,13 @@ class DataHandler:
         """
         try:
             # Convert datetime objects to ISO format strings
-            start = (datetime.now() - timedelta(days=30)).isoformat() if not start_date else start_date
+            start = (
+                (datetime.now() - timedelta(days=30)).isoformat() if not start_date else start_date
+            )
             end = datetime.now().isoformat() if not end_date else end_date
 
             # Get data from Alpaca
-            data = self.client.get_historical_data(
-                symbol,
-                start,
-                end,
-                timeframe
-            )
+            data = self.client.get_historical_data(symbol, start, end, timeframe)
             return data
         except Exception as e:
             self.logger.error(f"Error getting historical data for {symbol}: {e}")

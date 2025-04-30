@@ -92,12 +92,8 @@ class BacktestEngine:
                     if latest_signal > 0:  # Buy signal
                         position = self.portfolio.get_position("AAPL")
                         if not position:
-                            size = self.portfolio.calculate_position_size(
-                                current_data["close"]
-                            )
-                            self.portfolio.execute_order(
-                                "AAPL", size, "buy", current_data["close"]
-                            )
+                            size = self.portfolio.calculate_position_size(current_data["close"])
+                            self.portfolio.execute_order("AAPL", size, "buy", current_data["close"])
                             self.trades.append(
                                 {
                                     "timestamp": current_date.isoformat(),
@@ -171,34 +167,18 @@ class BacktestEngine:
             winning_trades = [t for t in self.trades if t["pnl"] > 0]
             losing_trades = [t for t in self.trades if t["pnl"] < 0]
 
-            win_rate = (
-                float(len(winning_trades) / len(self.trades)) if self.trades else 0.0
-            )
+            win_rate = float(len(winning_trades) / len(self.trades)) if self.trades else 0.0
 
             total_profits = sum(t["pnl"] for t in winning_trades)
             total_losses = abs(sum(t["pnl"] for t in losing_trades))
-            profit_factor = (
-                float(total_profits / total_losses) if total_losses != 0 else 0.0
-            )
+            profit_factor = float(total_profits / total_losses) if total_losses != 0 else 0.0
 
             # Calculate average metrics
             avg_trade = float(np.mean(returns)) if returns else 0.0
-            avg_win = (
-                float(np.mean([t["pnl"] for t in winning_trades]))
-                if winning_trades
-                else 0.0
-            )
-            avg_loss = (
-                float(np.mean([t["pnl"] for t in losing_trades]))
-                if losing_trades
-                else 0.0
-            )
-            max_win = (
-                float(max(t["pnl"] for t in winning_trades)) if winning_trades else 0.0
-            )
-            max_loss = (
-                float(min(t["pnl"] for t in losing_trades)) if losing_trades else 0.0
-            )
+            avg_win = float(np.mean([t["pnl"] for t in winning_trades])) if winning_trades else 0.0
+            avg_loss = float(np.mean([t["pnl"] for t in losing_trades])) if losing_trades else 0.0
+            max_win = float(max(t["pnl"] for t in winning_trades)) if winning_trades else 0.0
+            max_loss = float(min(t["pnl"] for t in losing_trades)) if losing_trades else 0.0
 
             return {
                 "trades": trades_dict,
@@ -307,14 +287,10 @@ class BacktestEngine:
             if not self.trades:
                 return 0.0
             total_profit = sum(
-                trade["price"] * trade["size"]
-                for trade in self.trades
-                if trade["side"] == "sell"
+                trade["price"] * trade["size"] for trade in self.trades if trade["side"] == "sell"
             )
             total_loss = sum(
-                trade["price"] * trade["size"]
-                for trade in self.trades
-                if trade["side"] == "buy"
+                trade["price"] * trade["size"] for trade in self.trades if trade["side"] == "buy"
             )
             return total_profit / total_loss if total_loss != 0 else 0.0
         except Exception as e:
@@ -377,9 +353,7 @@ class BacktestEngine:
         """
         try:
             winning_trades = [
-                trade["price"] * trade["size"]
-                for trade in self.trades
-                if trade["side"] == "sell"
+                trade["price"] * trade["size"] for trade in self.trades if trade["side"] == "sell"
             ]
             return max(winning_trades) if winning_trades else 0.0
         except Exception as e:
@@ -394,9 +368,7 @@ class BacktestEngine:
         """
         try:
             losing_trades = [
-                trade["price"] * trade["size"]
-                for trade in self.trades
-                if trade["side"] == "buy"
+                trade["price"] * trade["size"] for trade in self.trades if trade["side"] == "buy"
             ]
             return max(losing_trades) if losing_trades else 0.0
         except Exception as e:

@@ -150,24 +150,18 @@ def update_bot_status():
                             "status": account.get("status"),
                             "daytrade_count": account.get("daytrade_count", 0),
                             "trading_blocked": account.get("trading_blocked", False),
-                            "transfers_blocked": account.get(
-                                "transfers_blocked", False
-                            ),
+                            "transfers_blocked": account.get("transfers_blocked", False),
                             "account_blocked": account.get("account_blocked", False),
                             "shorting_enabled": account.get("shorting_enabled", False),
                             "multiplier": account.get("multiplier", 1),
-                            "regt_buying_power": float(
-                                account.get("regt_buying_power", 0)
-                            ),
+                            "regt_buying_power": float(account.get("regt_buying_power", 0)),
                             "daytrading_buying_power": float(
                                 account.get("daytrading_buying_power", 0)
                             ),
                             "non_marginable_buying_power": float(
                                 account.get("non_marginable_buying_power", 0)
                             ),
-                            "maintenance_margin": float(
-                                account.get("maintenance_margin", 0)
-                            ),
+                            "maintenance_margin": float(account.get("maintenance_margin", 0)),
                             "last_equity": float(account.get("last_equity", 0)),
                             "last_maintenance_margin": float(
                                 account.get("last_maintenance_margin", 0)
@@ -189,9 +183,7 @@ def update_bot_status():
                             ),
                             "realized_pl": float(account.get("equity", 0))
                             - float(account.get("last_equity", 0))
-                            - sum(
-                                float(pos.get("unrealized_pl", 0)) for pos in positions
-                            ),
+                            - sum(float(pos.get("unrealized_pl", 0)) for pos in positions),
                         },
                     }
                 )
@@ -261,7 +253,7 @@ def initialize_bot(config_data: Dict[str, Any]) -> TradingBot:
         # Set environment variables for Alpaca API
         os.environ["ALPACA_API_KEY"] = config_data.get("ALPACA_API_KEY", "")
         os.environ["ALPACA_API_SECRET"] = config_data.get("ALPACA_SECRET_KEY", "")
-        
+
         # Initialize services
         alpaca_service = AlpacaService()
         bot = TradingBot(alpaca_service)
@@ -303,9 +295,7 @@ def oauth_login(provider):
     elif provider == "github":
         return github.authorize_redirect(url_for("github_authorize", _external=True))
     elif provider == "linkedin":
-        return linkedin.authorize_redirect(
-            url_for("linkedin_authorize", _external=True)
-        )
+        return linkedin.authorize_redirect(url_for("linkedin_authorize", _external=True))
     return redirect(url_for("login"))
 
 

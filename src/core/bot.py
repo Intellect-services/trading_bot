@@ -168,9 +168,7 @@ class TradingBot:
         # TODO: Implement proper Sharpe ratio calculation
         return 0.0
 
-    def execute_trade(
-        self, symbol: str, side: OrderSide, quantity: float
-    ) -> Optional[Order]:
+    def execute_trade(self, symbol: str, side: OrderSide, quantity: float) -> Optional[Order]:
         """Execute a trade.
 
         Args:

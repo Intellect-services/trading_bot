@@ -6,9 +6,7 @@ import numpy as np
 import pandas as pd
 
 
-def calculate_metrics(
-    trades: List[Dict[str, Any]], initial_capital: float
-) -> Dict[str, float]:
+def calculate_metrics(trades: List[Dict[str, Any]], initial_capital: float) -> Dict[str, float]:
     """Calculate performance metrics from trade history.
 
     Args:

@@ -52,9 +52,7 @@ class TimeFrame(Protocol):
 
 # Type stubs for alpaca.trading.requests
 class OrderRequest(Protocol):
-    def __init__(
-        self, symbol: str, qty: float, side: str, type: str, time_in_force: str
-    ) -> None:
+    def __init__(self, symbol: str, qty: float, side: str, type: str, time_in_force: str) -> None:
         ...
 
 

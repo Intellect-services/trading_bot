@@ -63,9 +63,7 @@ def load_config() -> Dict[str, Any]:
     config = {
         "api_key": os.environ["ALPACA_API_KEY"],
         "api_secret": os.environ["ALPACA_API_SECRET"],
-        "base_url": os.environ.get(
-            "ALPACA_API_BASE_URL", "https://paper-api.alpaca.markets"
-        ),
+        "base_url": os.environ.get("ALPACA_API_BASE_URL", "https://paper-api.alpaca.markets"),
         "data_feed": os.environ.get("DATA_FEED", "iex"),
     }
     return config
@@ -156,9 +154,7 @@ def update_bot_status() -> None:
 
             # Get positions
             positions = alpaca_service.get_positions()
-            bot_status["metrics"]["active_positions"] = (
-                len(positions) if positions else 0
-            )
+            bot_status["metrics"]["active_positions"] = len(positions) if positions else 0
 
             # Update runtime if bot is running
             if bot_status["is_running"]:
@@ -202,9 +198,9 @@ def login() -> Union[WerkzeugResponse, str]:
         username = request.form.get("username")
         password = request.form.get("password")
 
-        if username == os.getenv(
-            "ADMIN_USERNAME", "admin@admin.com"
-        ) and password == os.getenv("ADMIN_PASSWORD", "admin"):
+        if username == os.getenv("ADMIN_USERNAME", "admin@admin.com") and password == os.getenv(
+            "ADMIN_PASSWORD", "admin"
+        ):
             session["username"] = username
             return redirect(url_for("index"))
 

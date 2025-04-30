@@ -69,9 +69,7 @@ class MovingAverageCrossover(BaseStrategy):
 
         # Generate signals based on MA crossover with threshold
         df.loc[df["ma_diff_pct"] > self.signal_threshold, "signal"] = 1.0  # Buy signal
-        df.loc[
-            df["ma_diff_pct"] < -self.signal_threshold, "signal"
-        ] = -1.0  # Sell signal
+        df.loc[df["ma_diff_pct"] < -self.signal_threshold, "signal"] = -1.0  # Sell signal
 
         # Set signals to NaN during warmup period
         df.loc[: self.warmup_period, "signal"] = np.nan
