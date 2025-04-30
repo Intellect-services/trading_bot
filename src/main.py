@@ -1,17 +1,17 @@
 """Main module for trading bot."""
 
-import sys
-import signal
-from typing import Dict, Any, Optional
 import json
 import os
+import signal
+import sys
+from typing import Any, Dict, Optional
 
-from src.utils.config import Config
-from src.core.strategy import Strategy
-from src.core.risk_manager import RiskManager
-from src.core.portfolio import Portfolio
-from src.core.data_feed import DataFeed
 from src.core.bot import TradingBot
+from src.core.data_feed import DataFeed
+from src.core.portfolio import Portfolio
+from src.core.risk_manager import RiskManager
+from src.core.strategy import Strategy
+from src.utils.config import Config
 from src.utils.logger import setup_logger
 
 logger = setup_logger(__name__)
@@ -45,14 +45,16 @@ def initialize_bot(config: Config) -> TradingBot:
     try:
         # Initialize components
         strategy = Strategy(config)
-        risk_manager = RiskManager({
-            'max_position_size': config.RISK_MAX_POSITION_SIZE,
-            'stop_loss': config.RISK_STOP_LOSS_PCT,
-            'take_profit': config.RISK_STOP_LOSS_PCT * 2,
-            'max_drawdown': config.RISK_MAX_DRAWDOWN,
-            'max_leverage': config.RISK_MAX_LEVERAGE,
-            'risk_per_trade': config.RISK_PER_TRADE
-        })
+        risk_manager = RiskManager(
+            {
+                "max_position_size": config.RISK_MAX_POSITION_SIZE,
+                "stop_loss": config.RISK_STOP_LOSS_PCT,
+                "take_profit": config.RISK_STOP_LOSS_PCT * 2,
+                "max_drawdown": config.RISK_MAX_DRAWDOWN,
+                "max_leverage": config.RISK_MAX_LEVERAGE,
+                "risk_per_trade": config.RISK_PER_TRADE,
+            }
+        )
         data_feed = DataFeed(config)
         portfolio = Portfolio(config.INITIAL_BALANCE)
 
@@ -62,7 +64,7 @@ def initialize_bot(config: Config) -> TradingBot:
             strategy=strategy,
             risk_manager=risk_manager,
             data_feed=data_feed,
-            portfolio=portfolio
+            portfolio=portfolio,
         )
 
         # Add symbols
@@ -82,6 +84,7 @@ def handle_shutdown(bot: TradingBot) -> None:
     Args:
         bot: Trading bot instance
     """
+
     def signal_handler(signum: int, frame: Any) -> None:
         """Handle shutdown signal.
 
@@ -102,32 +105,34 @@ def main() -> None:
     try:
         # Load configuration
         config = Config()
-        
+
         # Initialize components
-        risk_manager = RiskManager({
-            'max_position_size': config.RISK_MAX_POSITION_SIZE,
-            'stop_loss': config.RISK_STOP_LOSS_PCT,
-            'take_profit': config.RISK_STOP_LOSS_PCT * 2,
-            'max_drawdown': config.RISK_MAX_DRAWDOWN,
-            'max_leverage': config.RISK_MAX_LEVERAGE,
-            'risk_per_trade': config.RISK_PER_TRADE
-        })
-        
+        risk_manager = RiskManager(
+            {
+                "max_position_size": config.RISK_MAX_POSITION_SIZE,
+                "stop_loss": config.RISK_STOP_LOSS_PCT,
+                "take_profit": config.RISK_STOP_LOSS_PCT * 2,
+                "max_drawdown": config.RISK_MAX_DRAWDOWN,
+                "max_leverage": config.RISK_MAX_LEVERAGE,
+                "risk_per_trade": config.RISK_PER_TRADE,
+            }
+        )
+
         portfolio = Portfolio(config.INITIAL_BALANCE)
         data_feed = DataFeed(config)
         strategy = Strategy(config)
-        
+
         # Initialize and start trading bot
         bot = TradingBot(
             config=config,
             strategy=strategy,
             risk_manager=risk_manager,
             portfolio=portfolio,
-            data_feed=data_feed
+            data_feed=data_feed,
         )
-        
+
         bot.start()
-        
+
     except Exception as e:
         logger.error(f"Error in main: {str(e)}")
         raise

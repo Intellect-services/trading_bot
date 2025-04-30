@@ -1,15 +1,16 @@
 """Data handler module for fetching and caching market data."""
 
-from datetime import datetime, timedelta
-from typing import Dict, List, Optional, Any
-import pandas as pd
-import numpy as np
 import json
 import os
+from datetime import datetime, timedelta
+from typing import Any, Dict, List, Optional
 
+import numpy as np
+import pandas as pd
+
+from src.core.alpaca_client import AlpacaClient
 from src.utils.config import Config
 from src.utils.logger import setup_logger
-from src.core.alpaca_client import AlpacaClient
 
 logger = setup_logger(__name__)
 
@@ -77,7 +78,13 @@ class DataHandler:
         """
         try:
             cache_path = self._get_cache_path(symbol, timeframe)
-            cache_data = [{str(k): str(v) if isinstance(v, (pd.Timestamp, datetime)) else v for k, v in d.items()} for d in data]
+            cache_data = [
+                {
+                    str(k): str(v) if isinstance(v, (pd.Timestamp, datetime)) else v
+                    for k, v in d.items()
+                }
+                for d in data
+            ]
             with open(cache_path, "w") as f:
                 json.dump(cache_data, f)
             logger.info(f"Saved data to cache: {cache_path}")
@@ -85,10 +92,7 @@ class DataHandler:
             logger.error(f"Error saving cache: {e}")
 
     def get_historical_data(
-        self,
-        symbol: str,
-        days: int = 30,
-        timeframe: str = "1Day"
+        self, symbol: str, days: int = 30, timeframe: str = "1Day"
     ) -> pd.DataFrame:
         """Get historical market data.
 
@@ -103,20 +107,17 @@ class DataHandler:
         try:
             end_date = datetime.now()
             start_date = end_date - timedelta(days=days)
-            
+
             data = self._client.get_bars(
-                symbol=symbol,
-                timeframe=timeframe,
-                start=start_date,
-                end=end_date
+                symbol=symbol, timeframe=timeframe, start=start_date, end=end_date
             )
-            
+
             if data.empty:
                 logger.warning(f"No historical data found for {symbol}")
                 return pd.DataFrame()
-            
+
             return data
-            
+
         except Exception as e:
             logger.error(f"Error getting historical data for {symbol}: {str(e)}")
             return pd.DataFrame()
@@ -131,26 +132,22 @@ class DataHandler:
             Dictionary containing latest data or None if not available
         """
         try:
-            data = self._client.get_bars(
-                symbol=symbol,
-                timeframe="1Min",
-                limit=1
-            )
-            
+            data = self._client.get_bars(symbol=symbol, timeframe="1Min", limit=1)
+
             if data.empty:
                 logger.warning(f"No latest data found for {symbol}")
                 return None
-            
+
             return {
-                'symbol': symbol,
-                'timestamp': data.index[-1],
-                'open': data['open'].iloc[-1],
-                'high': data['high'].iloc[-1],
-                'low': data['low'].iloc[-1],
-                'close': data['close'].iloc[-1],
-                'volume': data['volume'].iloc[-1]
+                "symbol": symbol,
+                "timestamp": data.index[-1],
+                "open": data["open"].iloc[-1],
+                "high": data["high"].iloc[-1],
+                "low": data["low"].iloc[-1],
+                "close": data["close"].iloc[-1],
+                "volume": data["volume"].iloc[-1],
             }
-            
+
         except Exception as e:
             logger.error(f"Error getting latest data for {symbol}: {str(e)}")
             return None
@@ -187,7 +184,7 @@ class DataHandler:
         type: str = "market",
         time_in_force: str = "day",
         limit_price: Optional[float] = None,
-        stop_price: Optional[float] = None
+        stop_price: Optional[float] = None,
     ) -> Optional[Dict[str, Any]]:
         """Submit a trading order.
 
@@ -211,7 +208,7 @@ class DataHandler:
                 type=type,
                 time_in_force=time_in_force,
                 limit_price=limit_price,
-                stop_price=stop_price
+                stop_price=stop_price,
             )
         except Exception as e:
             logger.error(f"Error submitting order for {symbol}: {str(e)}")

@@ -1,6 +1,8 @@
-import pandas as pd
+from typing import Any, Dict, Optional
+
 import numpy as np
-from typing import Dict, Any, Optional
+import pandas as pd
+
 from .base import Strategy
 
 

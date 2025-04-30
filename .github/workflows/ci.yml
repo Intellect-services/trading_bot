@@ -27,7 +27,6 @@ jobs:
           python -m pip install --upgrade pip
           pip install setuptools wheel
           pip install -r requirements.txt
-          pip install pytest pytest-cov flake8 mypy black isort bandit safety
 
       - name: Check code formatting with black
         run: |
@@ -35,7 +34,7 @@ jobs:
 
       - name: Sort imports with isort
         run: |
-          isort . --check-only
+          isort . --check-only --profile black
 
       - name: Lint with flake8
         run: |
@@ -44,24 +43,24 @@ jobs:
 
       - name: Type checking with mypy
         run: |
-          mypy src/utils/ --ignore-missing-imports --disallow-untyped-defs
-          mypy src/core/ --ignore-missing-imports --disallow-untyped-defs
-          mypy src/backtesting/ --ignore-missing-imports --disallow-untyped-defs
+          mypy src/ --ignore-missing-imports --disallow-untyped-defs --strict
 
       - name: Run tests with pytest
         run: |
-          pytest --cov=src --cov-report=xml --cov-report=term-missing
+          pytest --cov=src --cov-report=xml --cov-report=term-missing --cov-fail-under=80
 
-      - name: Run safety check
-        run: |
-          safety check --full-report
-
-      - name: Run bandit
+      - name: Run security checks
         run: |
           bandit -r src/ -c pyproject.toml
+          safety check --full-report
 
       - name: Upload coverage to Codecov
         uses: codecov/codecov-action@v3
         with:
           file: ./coverage.xml
           fail_ci_if_error: true
+          token: ${{ secrets.CODECOV_TOKEN }}
+
+      - name: Check for outdated packages
+        run: |
+          pip list --outdated

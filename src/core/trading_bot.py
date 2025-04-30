@@ -1,7 +1,9 @@
 import logging
 from datetime import datetime
 from typing import Dict, List, Optional
+
 from .alpaca_service import AlpacaService
+
 
 class TradingBot:
     def __init__(self, alpaca_service: AlpacaService):
@@ -24,12 +26,12 @@ class TradingBot:
 
             # Get initial account information
             account = self.alpaca_service.get_account()
-            self.initial_capital = float(account.get('equity', 0))
+            self.initial_capital = float(account.get("equity", 0))
             self.current_capital = self.initial_capital
 
             # Check market status
             market_status = self.alpaca_service.get_market_status()
-            if not market_status.get('is_open', False):
+            if not market_status.get("is_open", False):
                 self.logger.error("Cannot start bot: Market is closed")
                 return False
 
@@ -62,7 +64,7 @@ class TradingBot:
         """Get the bot's runtime in HH:MM:SS format."""
         if not self.start_time:
             return "00:00:00"
-        
+
         runtime = datetime.now() - self.start_time
         hours = runtime.seconds // 3600
         minutes = (runtime.seconds % 3600) // 60
@@ -89,16 +91,16 @@ class TradingBot:
         """Update and return current metrics."""
         try:
             account = self.alpaca_service.get_account()
-            self.current_capital = float(account.get('equity', 0))
-            
+            self.current_capital = float(account.get("equity", 0))
+
             return {
-                'initial_capital': self.initial_capital,
-                'current_capital': self.current_capital,
-                'active_positions': len(self.alpaca_service.get_positions()),
-                'total_trades': self.total_trades,
-                'win_rate': self.get_win_rate(),
-                'avg_return': self.get_average_return()
+                "initial_capital": self.initial_capital,
+                "current_capital": self.current_capital,
+                "active_positions": len(self.alpaca_service.get_positions()),
+                "total_trades": self.total_trades,
+                "win_rate": self.get_win_rate(),
+                "avg_return": self.get_average_return(),
             }
         except Exception as e:
             self.logger.error(f"Error updating metrics: {str(e)}")
-            return {} 
+            return {}

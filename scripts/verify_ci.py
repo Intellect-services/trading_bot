@@ -2,22 +2,19 @@
 """Script to verify CI workflow locally."""
 
 import os
-import sys
 import subprocess
+import sys
 from typing import List, Tuple
+
 
 def run_command(command: List[str]) -> Tuple[int, str]:
     """Run a shell command and return its output."""
     try:
-        result = subprocess.run(
-            command,
-            check=False,
-            capture_output=True,
-            text=True
-        )
+        result = subprocess.run(command, check=False, capture_output=True, text=True)
         return result.returncode, result.stdout + result.stderr
     except Exception as e:
         return 1, str(e)
+
 
 def main():
     """Main function to verify CI workflow."""
@@ -70,5 +67,6 @@ def main():
 
     print("\nAll checks passed successfully!")
 
+
 if __name__ == "__main__":
-    main() 
+    main()

@@ -1,9 +1,9 @@
 """Logging configuration module."""
 
 import logging
+import os
 import sys
 from datetime import datetime
-import os
 
 
 def setup_logger(name: str) -> logging.Logger:
@@ -16,37 +16,38 @@ def setup_logger(name: str) -> logging.Logger:
         Configured logger instance
     """
     logger = logging.getLogger(name)
-    
+
     # Only configure handlers if they haven't been added yet
     if not logger.handlers:
         logger.setLevel(logging.INFO)
-        
+
         # Create formatters
-        fmt = '%(asctime)s - %(name)s - %(levelname)s - %(message)s'
+        fmt = "%(asctime)s - %(name)s - %(levelname)s - %(message)s"
         console_formatter = logging.Formatter(fmt)
         file_formatter = logging.Formatter(fmt)
-        
+
         # Create console handler
         console_handler = logging.StreamHandler(sys.stdout)
         console_handler.setLevel(logging.INFO)
         console_handler.setFormatter(console_formatter)
-        
+
         # Create file handler
-        log_dir = 'logs'
+        log_dir = "logs"
         if not os.path.exists(log_dir):
             os.makedirs(log_dir)
-        
+
         timestamp = datetime.now().strftime("%Y%m%d")
-        log_file = os.path.join(log_dir, f'trading_bot_{timestamp}.log')
+        log_file = os.path.join(log_dir, f"trading_bot_{timestamp}.log")
         file_handler = logging.FileHandler(log_file)
         file_handler.setLevel(logging.INFO)
         file_handler.setFormatter(file_formatter)
-        
+
         # Add handlers to logger
         logger.addHandler(console_handler)
         logger.addHandler(file_handler)
-    
+
     return logger
+
 
 class BotLogger:
     def __init__(self):

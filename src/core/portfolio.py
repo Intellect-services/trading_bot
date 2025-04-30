@@ -1,10 +1,11 @@
 """Portfolio management module."""
 
-from typing import Dict, List, Any, Optional, Union
-import pandas as pd
-import numpy as np
 import logging
 from datetime import datetime
+from typing import Any, Dict, List, Optional, Union
+
+import numpy as np
+import pandas as pd
 
 from src.utils.logger import setup_logger
 
@@ -90,13 +91,7 @@ class Portfolio:
             logger.error(f"Error calculating position size: {e}")
             return 0.0
 
-    def execute_order(
-        self,
-        symbol: str,
-        qty: float,
-        side: str,
-        price: float
-    ) -> Dict[str, Any]:
+    def execute_order(self, symbol: str, qty: float, side: str, price: float) -> Dict[str, Any]:
         """Execute a trading order.
 
         Args:
@@ -114,15 +109,15 @@ class Portfolio:
                 "qty": qty,
                 "side": side,
                 "price": price,
-                "timestamp": datetime.now()
+                "timestamp": datetime.now(),
             }
-            
+
             if side.lower() == "buy":
                 cost = qty * price
                 if cost > self.current_balance:
                     logger.warning("Insufficient funds for buy order")
                     return {}
-                
+
                 self.current_balance -= cost
                 if symbol in self.positions:
                     position = self.positions[symbol]
@@ -138,22 +133,22 @@ class Portfolio:
                         "cost": cost,
                         "avg_price": price,
                         "current_price": price,
-                        "entry_price": price
+                        "entry_price": price,
                     }
-            
+
             elif side.lower() == "sell":
                 if symbol not in self.positions:
                     logger.warning("No position to sell")
                     return {}
-                
+
                 position = self.positions[symbol]
                 if position["size"] < qty:
                     logger.warning("Insufficient shares for sell order")
                     return {}
-                
+
                 proceeds = qty * price
                 self.current_balance += proceeds
-                
+
                 new_size = position["size"] - qty
                 if new_size == 0:
                     del self.positions[symbol]
@@ -162,7 +157,7 @@ class Portfolio:
                     position["cost"] = position["cost"] * (new_size / position["size"])
                     position["avg_price"] = position["cost"] / new_size
                     position["current_price"] = price
-            
+
             self.trades.append(order)
             self.peak_value = max(self.peak_value, self.get_value())
             logger.info(f"Executed {side} order: {order}")
@@ -200,19 +195,13 @@ class Portfolio:
                 "peak_value": self.peak_value,
                 "total_return": (current_value - self.initial_capital) / self.initial_capital,
                 "positions": self.positions,
-                "trades": len(self.trades)
+                "trades": len(self.trades),
             }
         except Exception as e:
             logger.error(f"Error getting portfolio summary: {e}")
             return {}
 
-    def update_position(
-        self,
-        symbol: str,
-        quantity: float,
-        price: float,
-        action: str
-    ) -> bool:
+    def update_position(self, symbol: str, quantity: float, price: float, action: str) -> bool:
         """Update position for a symbol.
 
         Args:
@@ -237,15 +226,15 @@ class Portfolio:
                 if symbol in self.positions:
                     self.positions[symbol]["quantity"] += quantity
                     self.positions[symbol]["cost_basis"] = (
-                        (self.positions[symbol]["cost_basis"] * self.positions[symbol]["quantity"] + cost)
-                        / (self.positions[symbol]["quantity"] + quantity)
-                    )
+                        self.positions[symbol]["cost_basis"] * self.positions[symbol]["quantity"]
+                        + cost
+                    ) / (self.positions[symbol]["quantity"] + quantity)
                 else:
                     self.positions[symbol] = {
                         "quantity": quantity,
                         "cost_basis": price,
                         "entry_price": price,
-                        "timestamp": datetime.now()
+                        "timestamp": datetime.now(),
                     }
             else:  # sell
                 if symbol not in self.positions:
@@ -260,28 +249,24 @@ class Portfolio:
                     del self.positions[symbol]
 
             # Record trade
-            self.trades.append({
-                "timestamp": datetime.now(),
-                "symbol": symbol,
-                "action": action,
-                "quantity": quantity,
-                "price": price,
-                "commission": commission,
-                "balance": self.current_balance
-            })
+            self.trades.append(
+                {
+                    "timestamp": datetime.now(),
+                    "symbol": symbol,
+                    "action": action,
+                    "quantity": quantity,
+                    "price": price,
+                    "commission": commission,
+                    "balance": self.current_balance,
+                }
+            )
 
             # Update peak value
             current_value = self.get_value()
             if current_value > self.peak_value:
                 self.peak_value = current_value
 
-            logger.info(
-                "%s %s shares of %s at %.2f",
-                action.capitalize(),
-                quantity,
-                symbol,
-                price
-            )
+            logger.info("%s %s shares of %s at %.2f", action.capitalize(), quantity, symbol, price)
             return True
 
         except Exception as e:
@@ -296,13 +281,7 @@ class Portfolio:
         """
         return (self.current_balance - self.initial_capital) / self.initial_capital
 
-    def update_portfolio(
-        self,
-        symbol: str,
-        quantity: float,
-        price: float,
-        action: str
-    ) -> None:
+    def update_portfolio(self, symbol: str, quantity: float, price: float, action: str) -> None:
         """Update portfolio with a trade.
 
         Args:
@@ -338,8 +317,7 @@ class Portfolio:
             Total portfolio value
         """
         position_values = sum(
-            self.calculate_position_value(symbol, price)
-            for symbol, price in current_prices.items()
+            self.calculate_position_value(symbol, price) for symbol, price in current_prices.items()
         )
         return self.current_balance + position_values
 

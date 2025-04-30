@@ -1,7 +1,7 @@
 """Helper functions for trading calculations and formatting."""
 
-from typing import Union, Optional
 from decimal import Decimal
+from typing import Optional, Union
 
 
 def calculate_position_size(

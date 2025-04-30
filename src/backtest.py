@@ -1,18 +1,19 @@
 """Backtesting module."""
 
-from typing import Dict, List, Any, Optional
-from datetime import datetime
-import pandas as pd
 import json
+from datetime import datetime
+from typing import Any, Dict, List, Optional
 
-from src.utils.config import Config
-from src.core.strategy import Strategy
-from src.core.risk_manager import RiskManager
+import pandas as pd
+
 from src.backtesting.engine import BacktestingEngine
-from src.utils.logger import setup_logger
 from src.core.bot import TradingBot
-from src.core.portfolio import Portfolio
 from src.core.data_feed import DataFeed
+from src.core.portfolio import Portfolio
+from src.core.risk_manager import RiskManager
+from src.core.strategy import Strategy
+from src.utils.config import Config
+from src.utils.logger import setup_logger
 
 logger = setup_logger(__name__)
 
@@ -22,38 +23,40 @@ def run_backtest():
     try:
         # Load configuration
         config = Config()
-        
+
         # Initialize components
-        risk_manager = RiskManager({
-            'max_position_size': config.RISK_MAX_POSITION_SIZE,
-            'stop_loss': config.RISK_STOP_LOSS_PCT,
-            'take_profit': config.RISK_STOP_LOSS_PCT * 2,  # Use 2x stop loss as take profit
-            'max_drawdown': config.RISK_MAX_DRAWDOWN,
-            'max_leverage': config.RISK_MAX_LEVERAGE,
-            'risk_per_trade': config.RISK_PER_TRADE
-        })
-        
+        risk_manager = RiskManager(
+            {
+                "max_position_size": config.RISK_MAX_POSITION_SIZE,
+                "stop_loss": config.RISK_STOP_LOSS_PCT,
+                "take_profit": config.RISK_STOP_LOSS_PCT * 2,  # Use 2x stop loss as take profit
+                "max_drawdown": config.RISK_MAX_DRAWDOWN,
+                "max_leverage": config.RISK_MAX_LEVERAGE,
+                "risk_per_trade": config.RISK_PER_TRADE,
+            }
+        )
+
         portfolio = Portfolio(config.INITIAL_BALANCE)
         data_feed = DataFeed(config)
         strategy = Strategy(config)
-        
+
         # Initialize and run backtest
         bot = TradingBot(
             config=config,
             strategy=strategy,
             risk_manager=risk_manager,
             portfolio=portfolio,
-            data_feed=data_feed
+            data_feed=data_feed,
         )
-        
+
         # Run backtest
         results = bot.backtest()
-        
+
         # Save results
         save_results(results)
-        
+
         return results
-        
+
     except Exception as e:
         logger.error(f"Error in backtest: {str(e)}")
         raise

@@ -1,14 +1,17 @@
 """Base strategy module for implementing trading strategies."""
 
-from typing import Dict, List, Any, Optional
 import logging
-import pandas as pd
 from datetime import datetime
+from typing import Any, Dict, List, Optional
+
 import numpy as np
-from ..utils.config import Config
+import pandas as pd
+
+from src.core.risk_manager import RiskManager
+
 from ..core.data_feed import DataFeed
 from ..core.portfolio import Portfolio
-from src.core.risk_manager import RiskManager
+from ..utils.config import Config
 from ..utils.logger import setup_logger
 
 logger = setup_logger(__name__)
@@ -44,7 +47,7 @@ class Strategy:
 
     def initialize_symbol(self, symbol: str, data: pd.DataFrame) -> None:
         """Initialize strategy for a symbol.
-        
+
         Args:
             symbol: Symbol to initialize
             data: Historical data for the symbol
@@ -67,20 +70,24 @@ class Strategy:
         try:
             # Calculate indicators
             data = self._calculate_indicators(data)
-            
+
             # Generate signals
             signals = pd.DataFrame(index=data.index)
-            signals["symbol"] = data.index.get_level_values(0) if isinstance(data.index, pd.MultiIndex) else data.index
+            signals["symbol"] = (
+                data.index.get_level_values(0)
+                if isinstance(data.index, pd.MultiIndex)
+                else data.index
+            )
             signals["signal"] = 0
-            
+
             # Buy signal: SMA20 crosses above SMA50
             buy_signal = (data["sma_20"] > data["sma_50"]) & (data["rsi"] < 70)
             signals.loc[buy_signal, "signal"] = 1
-            
+
             # Sell signal: SMA20 crosses below SMA50
             sell_signal = (data["sma_20"] < data["sma_50"]) & (data["rsi"] > 30)
             signals.loc[sell_signal, "signal"] = -1
-            
+
             logger.debug(f"Generated signals: {signals}")
             return signals
         except Exception as e:
@@ -89,10 +96,10 @@ class Strategy:
 
     def _calculate_indicators(self, data: pd.DataFrame) -> pd.DataFrame:
         """Calculate technical indicators.
-        
+
         Args:
             data: Market data to calculate indicators for
-            
+
         Returns:
             DataFrame with added indicators
         """
@@ -100,22 +107,20 @@ class Strategy:
             # Calculate SMA
             data["sma_20"] = data["close"].rolling(window=20).mean()
             data["sma_50"] = data["close"].rolling(window=50).mean()
-            
+
             # Calculate RSI
             delta = data["close"].diff()
             gain = delta.where(delta.gt(0), 0).rolling(window=14).mean()
             loss = -delta.where(delta.lt(0), 0).rolling(window=14).mean()
             rs = gain / loss
             data["rsi"] = 100 - (100 / (1 + rs))
-            
+
             return data
         except Exception as e:
             logger.error(f"Error calculating indicators: {e}")
             return data
 
-    def update_position(
-        self, symbol: str, quantity: float, price: float, side: str
-    ) -> None:
+    def update_position(self, symbol: str, quantity: float, price: float, side: str) -> None:
         """Update the current position after a trade execution.
 
         Args:
@@ -138,12 +143,8 @@ class Strategy:
                 self.current_position[symbol] = {"quantity": 0, "avg_price": 0}
             current = self.current_position[symbol]
             total_quantity = current["quantity"] + quantity
-            total_cost = (current["quantity"] * current["avg_price"]) + (
-                quantity * price
-            )
-            current["avg_price"] = (
-                total_cost / total_quantity if total_quantity > 0 else 0
-            )
+            total_cost = (current["quantity"] * current["avg_price"]) + (quantity * price)
+            current["avg_price"] = total_cost / total_quantity if total_quantity > 0 else 0
             current["quantity"] = total_quantity
         else:  # sell
             if symbol in self.current_position:
@@ -167,7 +168,7 @@ class Strategy:
         Returns:
             float: Position size in base currency
         """
-        max_position_size = self.config.get('max_position_size', 0.1)
+        max_position_size = self.config.get("max_position_size", 0.1)
         return (account_value * max_position_size) / price
 
     @staticmethod

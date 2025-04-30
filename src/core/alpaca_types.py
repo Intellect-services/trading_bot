@@ -1,44 +1,76 @@
 """Type stubs for Alpaca modules."""
 
-from typing import Any, Dict, List, Optional, Union, Protocol, TypedDict
 from datetime import datetime
+from typing import Any, Dict, List, Optional, Protocol, TypedDict, Union
+
 
 # Type stubs for alpaca.trading.client
 class TradingClient(Protocol):
-    def __init__(self, api_key: str, secret_key: str, paper: bool = True) -> None: ...
-    def get_account(self) -> Dict[str, Any]: ...
-    def get_positions(self) -> List[Dict[str, Any]]: ...
-    def submit_order(self, symbol: str, qty: float, side: str, type: str, time_in_force: str) -> Dict[str, Any]: ...
+    def __init__(self, api_key: str, secret_key: str, paper: bool = True) -> None:
+        ...
+
+    def get_account(self) -> Dict[str, Any]:
+        ...
+
+    def get_positions(self) -> List[Dict[str, Any]]:
+        ...
+
+    def submit_order(
+        self, symbol: str, qty: float, side: str, type: str, time_in_force: str
+    ) -> Dict[str, Any]:
+        ...
+
 
 # Type stubs for alpaca.data.historical
 class HistoricalDataClient(Protocol):
-    def __init__(self, api_key: str, secret_key: str) -> None: ...
-    def get_bars(self, symbol: str, timeframe: Any, start: datetime, end: datetime) -> List[Dict[str, Any]]: ...
+    def __init__(self, api_key: str, secret_key: str) -> None:
+        ...
+
+    def get_bars(
+        self, symbol: str, timeframe: Any, start: datetime, end: datetime
+    ) -> List[Dict[str, Any]]:
+        ...
+
 
 # Type stubs for alpaca.data.requests
 class StockBarsRequest(Protocol):
-    def __init__(self, symbol_or_symbols: Union[str, List[str]], timeframe: Any, start: datetime, end: datetime) -> None: ...
+    def __init__(
+        self,
+        symbol_or_symbols: Union[str, List[str]],
+        timeframe: Any,
+        start: datetime,
+        end: datetime,
+    ) -> None:
+        ...
+
 
 # Type stubs for alpaca.data.timeframe
 class TimeFrame(Protocol):
-    def __init__(self, amount: int, unit: str) -> None: ...
+    def __init__(self, amount: int, unit: str) -> None:
+        ...
+
 
 # Type stubs for alpaca.trading.requests
 class OrderRequest(Protocol):
-    def __init__(self, symbol: str, qty: float, side: str, type: str, time_in_force: str) -> None: ...
+    def __init__(self, symbol: str, qty: float, side: str, type: str, time_in_force: str) -> None:
+        ...
+
 
 # Type stubs for alpaca.trading.enums
 class OrderSide:
     BUY: str = "buy"
     SELL: str = "sell"
 
+
 class OrderType:
     MARKET: str = "market"
     LIMIT: str = "limit"
 
+
 class TimeInForce:
     DAY: str = "day"
     GTC: str = "gtc"
+
 
 # Type stubs for alpaca.trading.models
 class OrderModel(Protocol):
@@ -74,6 +106,7 @@ class OrderModel(Protocol):
     trail_price: Optional[float]
     hwm: Optional[float]
 
+
 # Type stubs for alpaca.data.models
 class BarModel(Protocol):
     t: datetime
@@ -83,9 +116,10 @@ class BarModel(Protocol):
     c: float
     v: int
 
+
 class Position(TypedDict):
     """Position type definition."""
-    
+
     symbol: str
     qty: float
     avg_entry_price: float
@@ -97,9 +131,10 @@ class Position(TypedDict):
     lastday_price: float
     change_today: float
 
+
 class Order(TypedDict):
     """Order type definition."""
-    
+
     id: str
     client_order_id: str
     created_at: str
@@ -133,9 +168,10 @@ class Order(TypedDict):
     trail_price: Optional[float]
     hwm: Optional[float]
 
+
 class Asset(TypedDict):
     """Asset type definition."""
-    
+
     id: str
     class_: str
     exchange: str
@@ -148,9 +184,10 @@ class Asset(TypedDict):
     easy_to_borrow: bool
     fractionable: bool
 
+
 class Bar(TypedDict):
     """Bar type definition."""
-    
+
     timestamp: str
     open: float
     high: float
@@ -158,4 +195,4 @@ class Bar(TypedDict):
     close: float
     volume: int
     trade_count: int
-    vwap: float 
+    vwap: float

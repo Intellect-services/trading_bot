@@ -1,6 +1,7 @@
-import pytest
-import pandas as pd
 import numpy as np
+import pandas as pd
+import pytest
+
 from src.core.portfolio import Portfolio
 
 
@@ -123,10 +124,7 @@ def test_calculate_total_returns(portfolio, sample_data):
     assert total_returns > 0
     assert (
         total_returns
-        == (
-            portfolio.calculate_portfolio_value(current_prices)
-            - portfolio.initial_capital
-        )
+        == (portfolio.calculate_portfolio_value(current_prices) - portfolio.initial_capital)
         / portfolio.initial_capital
     )
 

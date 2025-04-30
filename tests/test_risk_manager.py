@@ -1,6 +1,7 @@
-import pytest
-import pandas as pd
 import numpy as np
+import pandas as pd
+import pytest
+
 from src.core.risk_manager import RiskManager
 
 
@@ -13,7 +14,7 @@ def config():
             "take_profit": 0.04,
             "max_drawdown": 0.1,
             "max_leverage": 2.0,
-            "risk_per_trade": 0.02
+            "risk_per_trade": 0.02,
         }
     }
 
@@ -51,12 +52,7 @@ def sample_signals(sample_data):
 
 @pytest.fixture
 def sample_position():
-    return {
-        "symbol": "AAPL",
-        "size": 100,
-        "avg_price": 150.0,
-        "current_price": 155.0
-    }
+    return {"symbol": "AAPL", "size": 100, "avg_price": 150.0, "current_price": 155.0}
 
 
 def test_risk_manager_initialization(risk_manager):
@@ -72,18 +68,14 @@ def test_apply_risk_management(risk_manager, sample_position):
     small_position = sample_position.copy()
     small_position["size"] = 50  # Smaller position size
     assert risk_manager.apply_risk_management(
-        price=155.0,
-        position=small_position,
-        account_value=100000.0
+        price=155.0, position=small_position, account_value=100000.0
     )
 
     # Test with position size too large
     large_position = sample_position.copy()
     large_position["size"] = 1000
     assert not risk_manager.apply_risk_management(
-        price=155.0,
-        position=large_position,
-        account_value=100000.0
+        price=155.0, position=large_position, account_value=100000.0
     )
 
     # Test with stop loss triggered
@@ -91,9 +83,7 @@ def test_apply_risk_management(risk_manager, sample_position):
     losing_position["size"] = 50
     losing_position["avg_price"] = 160.0
     assert not risk_manager.apply_risk_management(
-        price=155.0,
-        position=losing_position,
-        account_value=100000.0
+        price=155.0, position=losing_position, account_value=100000.0
     )
 
 
@@ -102,8 +92,7 @@ def test_calculate_position_size(risk_manager):
     price = 150.0
 
     position_size = risk_manager.calculate_position_size(
-        portfolio_value=portfolio_value,
-        price=price
+        portfolio_value=portfolio_value, price=price
     )
 
     assert isinstance(position_size, int)

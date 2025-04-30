@@ -1,15 +1,18 @@
 """Data feed module for fetching and processing market data."""
 
-from typing import Dict, List, Optional, Callable
-import pandas as pd
-import numpy as np
-from datetime import datetime, timedelta
 import threading
 import time
+from datetime import datetime, timedelta
+from typing import Callable, Dict, List, Optional
+
+import numpy as np
+import pandas as pd
+
 from src.core.alpaca_client import AlpacaClient
 from src.utils.logger import setup_logger
 
 logger = setup_logger(__name__)
+
 
 class DataFeed:
     """Class for fetching and processing market data."""
@@ -47,31 +50,22 @@ class DataFeed:
             self.logger.error("Error adding symbol %s: %s", symbol, str(e))
             return False
 
-    def get_historical_data(
-        self,
-        symbol: str,
-        start: datetime,
-        end: datetime
-    ) -> pd.DataFrame:
+    def get_historical_data(self, symbol: str, start: datetime, end: datetime) -> pd.DataFrame:
         """Get historical data for a symbol."""
         try:
             # Calculate number of days between start and end
             days = (end - start).days
             if days <= 0:
                 days = 1
-            
+
             # Get data from Alpaca
             df = self.client.get_historical_data(
-                symbol=symbol,
-                timeframe='1D',
-                start=start,
-                end=end,
-                limit=days
+                symbol=symbol, timeframe="1D", start=start, end=end, limit=days
             )
             if df.empty:
                 self.logger.warning("No historical data found for %s", symbol)
                 return pd.DataFrame()
-            
+
             # Set timestamp as index
             df.index = pd.to_datetime(df.index)
             return df
@@ -86,26 +80,22 @@ class DataFeed:
             end = datetime.now()
             start = end - timedelta(days=100)
             df = self.client.get_historical_data(
-                symbol=symbol,
-                timeframe='1D',
-                start=start,
-                end=end,
-                limit=100
+                symbol=symbol, timeframe="1D", start=start, end=end, limit=100
             )
             if df.empty:
                 self.logger.warning("No data found for %s", symbol)
                 return pd.DataFrame()
-            
+
             # Update stored data
             self.data[symbol] = df
-            
+
             # Calculate indicators
             self._calculate_indicators(symbol)
-            
+
             # Notify callbacks
             for callback in self.callbacks:
                 callback(symbol, df)
-            
+
             return df
         except Exception as e:
             self.logger.error("Error getting latest data for %s: %s", symbol, e)
@@ -115,7 +105,7 @@ class DataFeed:
         """Get latest price for a symbol."""
         try:
             if symbol in self.data and not self.data[symbol].empty:
-                return float(self.data[symbol]['close'].iloc[-1])
+                return float(self.data[symbol]["close"].iloc[-1])
             return None
         except Exception as e:
             self.logger.error(f"Error getting latest price for {symbol}: {e}")
@@ -139,23 +129,23 @@ class DataFeed:
         try:
             if symbol not in self.data or self.data[symbol].empty:
                 return
-            
+
             df = self.data[symbol]
-            
+
             # Calculate SMA
-            df['sma_20'] = df['close'].rolling(window=20).mean()
-            df['sma_50'] = df['close'].rolling(window=50).mean()
-            
+            df["sma_20"] = df["close"].rolling(window=20).mean()
+            df["sma_50"] = df["close"].rolling(window=50).mean()
+
             # Calculate RSI using pandas clip
-            delta = df['close'].diff()
+            delta = df["close"].diff()
             gain = delta.clip(lower=0).rolling(window=14).mean()
             loss = (-delta.clip(upper=0)).rolling(window=14).mean()
             rs = gain / loss
-            df['rsi'] = 100 - (100 / (1 + rs))
-            
+            df["rsi"] = 100 - (100 / (1 + rs))
+
             # Ensure RSI values are numeric and handle NaN values
-            df['rsi'] = pd.to_numeric(df['rsi'], errors='coerce').fillna(50)
-            
+            df["rsi"] = pd.to_numeric(df["rsi"], errors="coerce").fillna(50)
+
             # Update stored data
             self.data[symbol] = df
         except Exception as e:
@@ -189,6 +179,7 @@ class DataFeed:
                 self.logger.error(f"Error in data feed loop: {e}")
                 time.sleep(60)  # Wait before retrying
 
+
 class MockDataFeed(DataFeed):
     """Mock data feed for testing purposes."""
 
@@ -217,7 +208,7 @@ class MockDataFeed(DataFeed):
             if symbol not in self.symbols:
                 self.symbols.append(symbol)
                 self._mock_prices[symbol] = 100.0  # Initial price
-                self._mock_trends[symbol] = 'sideways'
+                self._mock_trends[symbol] = "sideways"
                 self._mock_volatility[symbol] = 0.02  # 2% daily volatility
                 self._generate_mock_data(symbol)
                 self.logger.info("Added mock symbol %s to data feed", symbol)
@@ -231,45 +222,43 @@ class MockDataFeed(DataFeed):
         """Generate mock historical data for a symbol."""
         try:
             # Generate 100 days of mock data
-            dates = pd.date_range(end=datetime.now(), periods=100, freq='D')
+            dates = pd.date_range(end=datetime.now(), periods=100, freq="D")
             base_price = self._mock_prices[symbol]
             volatility = self._mock_volatility[symbol]
-            
+
             # Generate random walk prices
             np.random.seed(hash(symbol) % 2**32)  # Consistent random data per symbol
             returns = np.random.normal(0, volatility, len(dates))
             prices = base_price * (1 + returns).cumprod()
-            
+
             # Create DataFrame
-            df = pd.DataFrame({
-                'open': prices * (1 + np.random.normal(0, volatility/2, len(dates))),
-                'high': prices * (1 + np.abs(np.random.normal(0, volatility, len(dates)))),
-                'low': prices * (1 - np.abs(np.random.normal(0, volatility, len(dates)))),
-                'close': prices,
-                'volume': np.random.randint(1000000, 5000000, len(dates))
-            }, index=dates)
-            
+            df = pd.DataFrame(
+                {
+                    "open": prices * (1 + np.random.normal(0, volatility / 2, len(dates))),
+                    "high": prices * (1 + np.abs(np.random.normal(0, volatility, len(dates)))),
+                    "low": prices * (1 - np.abs(np.random.normal(0, volatility, len(dates)))),
+                    "close": prices,
+                    "volume": np.random.randint(1000000, 5000000, len(dates)),
+                },
+                index=dates,
+            )
+
             # Calculate indicators
             self._calculate_indicators(symbol)
-            
+
             # Store mock data
             self._mock_data[symbol] = df
             self.data[symbol] = df
-            
+
         except Exception as e:
             self.logger.error("Error generating mock data for %s: %s", symbol, str(e))
 
-    def get_historical_data(
-        self,
-        symbol: str,
-        start: datetime,
-        end: datetime
-    ) -> pd.DataFrame:
+    def get_historical_data(self, symbol: str, start: datetime, end: datetime) -> pd.DataFrame:
         """Get mock historical data for a symbol."""
         try:
             if symbol not in self._mock_data:
                 return pd.DataFrame()
-            
+
             df = self._mock_data[symbol]
             mask = (df.index >= start) & (df.index <= end)
             return df[mask]
@@ -282,30 +271,30 @@ class MockDataFeed(DataFeed):
         try:
             if symbol not in self._mock_data:
                 return pd.DataFrame()
-            
+
             # Update mock price based on trend
             current_price = self._mock_prices[symbol]
             volatility = self._mock_volatility[symbol]
-            
-            if self._mock_trends[symbol] == 'up':
+
+            if self._mock_trends[symbol] == "up":
                 new_price = current_price * (1 + np.random.normal(0.001, volatility))
-            elif self._mock_trends[symbol] == 'down':
+            elif self._mock_trends[symbol] == "down":
                 new_price = current_price * (1 + np.random.normal(-0.001, volatility))
             else:  # sideways
                 new_price = current_price * (1 + np.random.normal(0, volatility))
-            
+
             self._mock_prices[symbol] = new_price
-            
+
             # Update mock data
             self._generate_mock_data(symbol)
-            
+
             # Get latest data
             df = self._mock_data[symbol].iloc[-1:]
-            
+
             # Notify callbacks
             for callback in self.callbacks:
                 callback(symbol, df)
-            
+
             return df
         except Exception as e:
             self.logger.error("Error getting latest mock data for %s: %s", symbol, str(e))
@@ -328,7 +317,7 @@ class MockDataFeed(DataFeed):
             symbol: Trading symbol
             trend: 'up', 'down', or 'sideways'
         """
-        if trend in ['up', 'down', 'sideways']:
+        if trend in ["up", "down", "sideways"]:
             self._mock_trends[symbol] = trend
             self.logger.info("Set mock trend for %s to %s", symbol, trend)
 

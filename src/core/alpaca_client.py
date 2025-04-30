@@ -1,53 +1,47 @@
 """Alpaca API client for trading operations."""
 
-from typing import Any, Dict, List, Optional, Union
-from datetime import datetime, timedelta
-import pandas as pd
 import os
+from datetime import datetime, timedelta
+from typing import Any, Dict, List, Optional, Union
 
-from alpaca.trading.client import TradingClient
-from alpaca.trading.requests import (
-    MarketOrderRequest,
-    LimitOrderRequest,
-    StopOrderRequest
-)
-from alpaca.trading.enums import OrderSide, TimeInForce
+import pandas as pd
 from alpaca.data.historical import StockHistoricalDataClient
 from alpaca.data.requests import StockBarsRequest
 from alpaca.data.timeframe import TimeFrame
-from alpaca.trading.models import Order, Position, Asset
+from alpaca.trading.client import TradingClient
+from alpaca.trading.enums import OrderSide, TimeInForce
+from alpaca.trading.models import Asset, Order, Position
+from alpaca.trading.requests import (
+    LimitOrderRequest,
+    MarketOrderRequest,
+    StopOrderRequest,
+)
 
 from src.utils.config import get_config
 from src.utils.logger import setup_logger
 
 logger = setup_logger(__name__)
 
+
 class AlpacaClient:
     """Client for interacting with Alpaca API."""
 
     def __init__(self) -> None:
         """Initialize Alpaca client with API credentials."""
-        self.api_key = os.environ.get('ALPACA_API_KEY', get_config('API_KEY'))
-        self.secret_key = os.environ.get('ALPACA_SECRET_KEY', get_config('SECRET_KEY'))
-        self.paper = os.environ.get('ALPACA_PAPER', 'true').lower() == 'true'
-        
+        self.api_key = os.environ.get("ALPACA_API_KEY", get_config("API_KEY"))
+        self.secret_key = os.environ.get("ALPACA_SECRET_KEY", get_config("SECRET_KEY"))
+        self.paper = os.environ.get("ALPACA_PAPER", "true").lower() == "true"
+
         self.trading_client: Optional[TradingClient] = None
         self.historical_client: Optional[StockHistoricalDataClient] = None
-        
+
         self._initialize_clients()
 
     def _initialize_clients(self) -> None:
         """Initialize Alpaca API clients."""
         try:
-            self.trading_client = TradingClient(
-                self.api_key,
-                self.secret_key,
-                paper=self.paper
-            )
-            self.historical_client = StockHistoricalDataClient(
-                self.api_key,
-                self.secret_key
-            )
+            self.trading_client = TradingClient(self.api_key, self.secret_key, paper=self.paper)
+            self.historical_client = StockHistoricalDataClient(self.api_key, self.secret_key)
             logger.info("Alpaca clients initialized successfully")
         except Exception as e:
             logger.error(f"Failed to initialize Alpaca clients: {e}")
@@ -102,7 +96,7 @@ class AlpacaClient:
             if isinstance(pos, Position):
                 result[pos.symbol] = pos.dict()
             elif isinstance(pos, dict):
-                result[pos['symbol']] = pos
+                result[pos["symbol"]] = pos
             else:
                 logger.warning(f"Unexpected position type: {type(pos)}")
         return result
@@ -113,7 +107,7 @@ class AlpacaClient:
         timeframe: str = "1D",
         start: Optional[datetime] = None,
         end: Optional[datetime] = None,
-        limit: int = 100
+        limit: int = 100,
     ) -> pd.DataFrame:
         """
         Get historical price data.
@@ -141,7 +135,7 @@ class AlpacaClient:
             timeframe=TimeFrame.Day,  # Use Day as the unit
             start=start,
             end=end,
-            limit=limit
+            limit=limit,
         )
 
         bars = self.historical_client.get_stock_bars(request)
@@ -177,7 +171,7 @@ class AlpacaClient:
         order_type: str = "market",
         time_in_force: TimeInForce = TimeInForce.DAY,
         limit_price: Optional[float] = None,
-        stop_price: Optional[float] = None
+        stop_price: Optional[float] = None,
     ) -> Dict[str, Any]:
         """Submit an order.
 
@@ -197,13 +191,10 @@ class AlpacaClient:
             raise RuntimeError("Trading client not initialized")
 
         order_data: Union[MarketOrderRequest, LimitOrderRequest, StopOrderRequest]
-        
+
         if order_type == "market":
             order_data = MarketOrderRequest(
-                symbol=symbol,
-                qty=qty,
-                side=side,
-                time_in_force=time_in_force
+                symbol=symbol, qty=qty, side=side, time_in_force=time_in_force
             )
         elif order_type == "limit":
             if limit_price is None:
@@ -213,7 +204,7 @@ class AlpacaClient:
                 qty=qty,
                 side=side,
                 time_in_force=time_in_force,
-                limit_price=limit_price
+                limit_price=limit_price,
             )
         elif order_type == "stop":
             if stop_price is None:
@@ -223,7 +214,7 @@ class AlpacaClient:
                 qty=qty,
                 side=side,
                 time_in_force=time_in_force,
-                stop_price=stop_price
+                stop_price=stop_price,
             )
         else:
             raise ValueError(f"Invalid order type: {order_type}")
@@ -241,7 +232,7 @@ class AlpacaClient:
             "status": order.status,
             "filled_at": order.filled_at,
             "filled_qty": order.filled_qty,
-            "filled_avg_price": order.filled_avg_price
+            "filled_avg_price": order.filled_avg_price,
         }
 
     def cancel_order(self, order_id: str) -> bool:
@@ -284,4 +275,4 @@ class AlpacaClient:
                 logger.warning(f"Unexpected order type: {type(order)}")
                 return None
         except Exception:
-            return None 
+            return None
