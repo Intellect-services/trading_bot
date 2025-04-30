@@ -1,3 +1,5 @@
+"""Flask application for trading bot."""
+
 import logging
 import os
 import threading
@@ -109,15 +111,18 @@ def format_runtime(seconds: int) -> str:
     return f"{hours:02d}:{minutes:02d}:{seconds:02d}"
 
 
-F = TypeVar('F', bound=Callable[..., Any])
+F = TypeVar("F", bound=Callable[..., Any])
+
 
 def login_required(f: F) -> F:
     """Decorator to require login for routes."""
+
     @wraps(f)
     def decorated_function(*args: Any, **kwargs: Any) -> Any:
         if "username" not in session:
             return redirect(url_for("login"))
         return f(*args, **kwargs)
+
     return cast(F, decorated_function)
 
 
@@ -131,7 +136,11 @@ def update_bot_status() -> None:
             else:
                 # Simulate status updates in demo mode
                 bot_status["runtime"] = format_runtime(
-                    int((datetime.now() - bot_status.get("start_time", datetime.now())).total_seconds())
+                    int(
+                        (
+                            datetime.now() - bot_status.get("start_time", datetime.now())
+                        ).total_seconds()
+                    )
                 )
                 bot_status["last_update"] = datetime.now().isoformat()
         except Exception as e:

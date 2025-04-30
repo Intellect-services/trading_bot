@@ -1,3 +1,5 @@
+"""Type definitions for the trading bot."""
+
 from typing import Any, Callable, Dict, Optional, Union
 from datetime import datetime
 from flask import Response
@@ -25,4 +27,4 @@ StrategyState = Dict[str, Any]
 
 # Type aliases for backtesting
 BacktestResult = Dict[str, Union[float, int, str, Dict[str, float]]]
-BacktestMetrics = Dict[str, float] 
+BacktestMetrics = Dict[str, float]

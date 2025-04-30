@@ -40,7 +40,8 @@ def run_backtest() -> Dict[str, Any]:
             {
                 "max_position_size": config_data["RISK_MAX_POSITION_SIZE"],
                 "stop_loss": config_data["RISK_STOP_LOSS_PCT"],
-                "take_profit": config_data["RISK_STOP_LOSS_PCT"] * 2,  # Use 2x stop loss as take profit
+                "take_profit": config_data["RISK_STOP_LOSS_PCT"]
+                * 2,  # Use 2x stop loss as take profit
                 "max_drawdown": config_data["RISK_MAX_DRAWDOWN"],
                 "max_leverage": config_data["RISK_MAX_LEVERAGE"],
                 "risk_per_trade": config_data["RISK_PER_TRADE"],

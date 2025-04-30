@@ -1,3 +1,5 @@
+"""Alpaca service for trading operations."""
+
 import logging
 import os
 from datetime import datetime, timedelta
@@ -305,7 +307,7 @@ class AlpacaService:
         timeframe: str,
         start: datetime,
         end: datetime,
-        limit: int = 1000
+        limit: int = 1000,
     ) -> pd.DataFrame:
         """Get historical market data for a symbol."""
         try:
@@ -314,14 +316,14 @@ class AlpacaService:
                 timeframe,
                 start=start,
                 end=end,
-                limit=limit
+                limit=limit,
             ).df
-            
+
             # Convert string values to float
-            for col in ['open', 'high', 'low', 'close', 'volume']:
+            for col in ["open", "high", "low", "close", "volume"]:
                 if col in bars.columns:
-                    bars[col] = pd.to_numeric(bars[col], errors='coerce')
-            
+                    bars[col] = pd.to_numeric(bars[col], errors="coerce")
+
             return bars
         except Exception as e:
             self.logger.error(f"Error fetching historical data: {str(e)}")
