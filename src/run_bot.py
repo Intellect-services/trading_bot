@@ -22,6 +22,7 @@ from app import app, socketio
 from src.core.alpaca_service import AlpacaService
 from src.core.trading_bot import TradingBot
 from src.utils.config import Config
+from typing import RouteDecorator, SocketIODecorator
 
 
 class BotMetrics(TypedDict):
@@ -135,6 +136,10 @@ bot_status: BotStatus = {
     },
 }
 
+# Type the route decorators
+route: RouteDecorator = app.route
+socket_on: SocketIODecorator = socketio.on
+
 
 def update_bot_status() -> None:
     """Update bot status and emit updates to connected clients"""
@@ -185,14 +190,14 @@ def update_bot_status() -> None:
 socketio.start_background_task(update_bot_status)
 
 
-@app.route("/")
+@route("/")
 def index() -> Union[WerkzeugResponse, str]:
     if "username" not in session:
         return redirect(url_for("login"))
     return render_template("index.html")
 
 
-@app.route("/login", methods=["GET", "POST"])
+@route("/login", methods=["GET", "POST"])
 def login() -> Union[WerkzeugResponse, str]:
     if request.method == "POST":
         username = request.form.get("username")
@@ -209,13 +214,13 @@ def login() -> Union[WerkzeugResponse, str]:
     return render_template("index.html")
 
 
-@app.route("/logout")
+@route("/logout")
 def logout() -> WerkzeugResponse:
     session.pop("username", None)
     return redirect(url_for("login"))
 
 
-@app.route("/api/status", methods=["GET"])
+@route("/api/status", methods=["GET"])
 def get_status() -> Union[WerkzeugResponse, Tuple[WerkzeugResponse, int]]:
     """Get the current status of the trading bot."""
     try:
@@ -230,7 +235,7 @@ def get_status() -> Union[WerkzeugResponse, Tuple[WerkzeugResponse, int]]:
         return jsonify({"error": str(e)}), 500
 
 
-@app.route("/api/start", methods=["POST"])
+@route("/api/start", methods=["POST"])
 def start_bot() -> Union[WerkzeugResponse, Tuple[WerkzeugResponse, int]]:
     """Start the trading bot."""
     try:
@@ -245,7 +250,7 @@ def start_bot() -> Union[WerkzeugResponse, Tuple[WerkzeugResponse, int]]:
         return jsonify({"error": str(e)}), 500
 
 
-@app.route("/api/stop", methods=["POST"])
+@route("/api/stop", methods=["POST"])
 def stop_bot() -> Union[WerkzeugResponse, Tuple[WerkzeugResponse, int]]:
     """Stop the trading bot."""
     try:
@@ -260,7 +265,7 @@ def stop_bot() -> Union[WerkzeugResponse, Tuple[WerkzeugResponse, int]]:
         return jsonify({"error": str(e)}), 500
 
 
-@app.route("/api/config", methods=["GET"])
+@route("/api/config", methods=["GET"])
 def get_config() -> Union[WerkzeugResponse, Tuple[WerkzeugResponse, int]]:
     """Get the current configuration of the trading bot."""
     try:
@@ -275,7 +280,7 @@ def get_config() -> Union[WerkzeugResponse, Tuple[WerkzeugResponse, int]]:
         return jsonify({"error": str(e)}), 500
 
 
-@app.route("/api/config", methods=["PUT"])
+@route("/api/config", methods=["PUT"])
 def update_config() -> Union[WerkzeugResponse, Tuple[WerkzeugResponse, int]]:
     """Update the configuration of the trading bot."""
     try:
@@ -294,7 +299,7 @@ def update_config() -> Union[WerkzeugResponse, Tuple[WerkzeugResponse, int]]:
         return jsonify({"error": str(e)}), 500
 
 
-@socketio.on("connect")
+@socket_on("connect")
 def handle_connect() -> None:
     """Handle WebSocket connection."""
     if hasattr(request, "sid"):
@@ -303,7 +308,7 @@ def handle_connect() -> None:
         logger.info("Client connected (no session ID available)")
 
 
-@socketio.on("disconnect")
+@socket_on("disconnect")
 def handle_disconnect() -> None:
     """Handle WebSocket disconnection."""
     if hasattr(request, "sid"):

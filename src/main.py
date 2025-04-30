@@ -5,6 +5,8 @@ import os
 import signal
 import sys
 from typing import Any, Dict, Optional
+import logging
+from datetime import datetime
 
 from src.core.alpaca_client import AlpacaClient
 from src.core.alpaca_service import AlpacaService
@@ -16,7 +18,9 @@ from src.strategies.moving_average import MovingAverageCrossover
 from src.utils.config import Config
 from src.utils.logger import setup_logger
 
-logger = setup_logger(__name__)
+# Configure logging
+logging.basicConfig(level=logging.DEBUG)
+logger = logging.getLogger(__name__)
 
 
 def load_config(config_file: str = "config.json") -> Config:
@@ -26,19 +30,19 @@ def load_config(config_file: str = "config.json") -> Config:
         config_file: Path to configuration file
 
     Returns:
-        Configuration instance
+        Configuration object
     """
     try:
         with open(config_file, "r") as f:
             config_data = json.load(f)
         return Config(config_data)
     except Exception as e:
-        logger.error(f"Error loading config: {str(e)}")
-        sys.exit(1)
+        logger.error(f"Error loading configuration: {e}")
+        raise
 
 
 def initialize_bot(config_data: Dict[str, Any]) -> TradingBot:
-    """Initialize the trading bot with configuration.
+    """Initialize trading bot with configuration.
 
     Args:
         config_data: Configuration data dictionary
@@ -58,7 +62,8 @@ def initialize_bot(config_data: Dict[str, Any]) -> TradingBot:
             paper=config_data.get("ALPACA_PAPER", True),
         )
         alpaca_service = AlpacaService()
-        bot = TradingBot(alpaca_service)
+        strategy = MovingAverageCrossover()
+        bot = TradingBot(alpaca_service, strategy)
         return bot
     except Exception as e:
         logger.error(f"Error initializing bot: {e}")
@@ -95,9 +100,10 @@ def main() -> None:
 
         # Initialize Alpaca service
         alpaca_service = AlpacaService()
+        strategy = MovingAverageCrossover()
 
         # Initialize and start trading bot
-        bot = TradingBot(alpaca_service)
+        bot = TradingBot(alpaca_service, strategy)
         handle_shutdown(bot)
 
         # Start the bot

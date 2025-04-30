@@ -52,7 +52,7 @@ class DataHandler:
         return os.path.join(self._cache_dir, f"{symbol}_{timeframe}.json")
 
     def _load_cache(self, symbol: str, timeframe: str) -> Optional[List[Dict[str, Any]]]:
-        """Load cached data for a symbol and timeframe.
+        """Load data from cache.
 
         Args:
             symbol: Trading symbol
@@ -65,7 +65,8 @@ class DataHandler:
             cache_path = self._get_cache_path(symbol, timeframe)
             if os.path.exists(cache_path):
                 with open(cache_path, "r") as f:
-                    return json.load(f)
+                    data = json.load(f)
+                    return [dict(item) for item in data]  # Ensure we return a list of dicts
             return None
         except Exception as e:
             logger.error(f"Error loading cache: {e}")
@@ -102,31 +103,39 @@ class DataHandler:
     def get_historical_data(
         self,
         symbol: str,
-        start_date: Optional[str] = None,
-        end_date: Optional[str] = None,
+        start_date: Optional[Union[str, datetime]] = None,
+        end_date: Optional[Union[str, datetime]] = None,
         timeframe: str = "1D",
     ) -> pd.DataFrame:
         """Get historical data for a symbol.
 
         Args:
             symbol: Trading symbol
-            start_date: Start date in ISO format (YYYY-MM-DD)
-            end_date: End date in ISO format (YYYY-MM-DD)
+            start_date: Start date in ISO format (YYYY-MM-DD) or datetime object
+            end_date: End date in ISO format (YYYY-MM-DD) or datetime object
             timeframe: Data timeframe (e.g., "1D" for daily)
 
         Returns:
             DataFrame with historical data
         """
         try:
-            # Convert datetime objects to ISO format strings
-            start = (
-                (datetime.now() - timedelta(days=30)).isoformat() if not start_date else start_date
-            )
-            end = datetime.now().isoformat() if not end_date else end_date
+            # Convert to datetime objects if strings are provided
+            if isinstance(start_date, str):
+                start_date = datetime.fromisoformat(start_date)
+            if isinstance(end_date, str):
+                end_date = datetime.fromisoformat(end_date)
+
+            # Set default dates if not provided
+            if not start_date:
+                start_date = datetime.now() - timedelta(days=30)
+            if not end_date:
+                end_date = datetime.now()
 
             # Get data from Alpaca
-            data = self.client.get_historical_data(symbol, start, end, timeframe)
-            return data
+            data = self.client.get_historical_data(symbol, start_date, end_date, timeframe)
+            if isinstance(data, pd.DataFrame):
+                return data
+            return pd.DataFrame()
         except Exception as e:
             self.logger.error(f"Error getting historical data for {symbol}: {e}")
             return pd.DataFrame()
@@ -141,14 +150,14 @@ class DataHandler:
             DataFrame containing latest data
         """
         try:
-            end = datetime.now().isoformat()
-            start = (datetime.now() - timedelta(minutes=1)).isoformat()
+            end = datetime.now()
+            start = end - timedelta(minutes=1)
             data = self.client.get_historical_data(symbol, start, end)
             if isinstance(data, pd.DataFrame):
                 return data
             return pd.DataFrame()
         except Exception as e:
-            self.logger.error(f"Error getting latest data: {e}")
+            self.logger.error(f"Error getting latest data for {symbol}: {e}")
             return pd.DataFrame()
 
     def get_account_info(self) -> Dict[str, Any]:

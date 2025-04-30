@@ -2,7 +2,7 @@
 
 import os
 from datetime import datetime, timedelta
-from typing import Any, Dict, List, Optional, Union, cast
+from typing import Any, Dict, List, Optional, Union
 
 import pandas as pd
 from alpaca.data.historical import StockHistoricalDataClient
@@ -50,7 +50,7 @@ class AlpacaClient:
         account = self.trading_client.get_account()
         if isinstance(account, dict):
             return account
-        return cast(Dict[str, Any], account.dict())
+        return account.dict()
 
     def get_position(self, symbol: str) -> Optional[Dict[str, Any]]:
         """
@@ -68,7 +68,7 @@ class AlpacaClient:
             position = self.trading_client.get_open_position(symbol)
             if isinstance(position, dict):
                 return position
-            return cast(Dict[str, Any], position.dict())
+            return position.dict()
         except Exception:
             return None
 
@@ -85,7 +85,7 @@ class AlpacaClient:
         result: Dict[str, Dict[str, Any]] = {}
         for pos in positions:
             if isinstance(pos, Position):
-                result[pos.symbol] = cast(Dict[str, Any], pos.dict())
+                result[pos.symbol] = pos.dict()
             elif isinstance(pos, dict):
                 result[pos["symbol"]] = pos
             else:
@@ -95,44 +95,62 @@ class AlpacaClient:
     def get_historical_data(
         self,
         symbol: str,
+        start: Optional[Union[str, datetime]] = None,
+        end: Optional[Union[str, datetime]] = None,
         timeframe: str = "1D",
-        start: Optional[datetime] = None,
-        end: Optional[datetime] = None,
-        limit: int = 100,
     ) -> pd.DataFrame:
-        """
-        Get historical price data.
+        """Get historical market data.
 
         Args:
-            symbol: Trading symbol.
-            timeframe: Timeframe for the data.
-            start: Start date.
-            end: End date.
-            limit: Maximum number of bars to return.
+            symbol: Trading symbol
+            start: Start date/time
+            end: End date/time
+            timeframe: Data timeframe (e.g., "1D" for daily)
 
         Returns:
-            DataFrame containing historical data.
+            DataFrame containing historical data
         """
         if self.data_client is None:
-            raise RuntimeError("Historical client not initialized")
+            raise RuntimeError("Data client not initialized")
 
-        if start is None:
+        # Convert timeframe string to TimeFrame enum
+        tf_map = {
+            "1m": TimeFrame.Minute,
+            "5m": TimeFrame.Minute(5),
+            "15m": TimeFrame.Minute(15),
+            "1h": TimeFrame.Hour,
+            "1D": TimeFrame.Day,
+            "1W": TimeFrame.Week,
+            "1M": TimeFrame.Month,
+        }
+        tf = tf_map.get(timeframe, TimeFrame.Day)
+
+        # Convert string dates to datetime objects
+        if isinstance(start, str):
+            start = datetime.fromisoformat(start)
+        if isinstance(end, str):
+            end = datetime.fromisoformat(end)
+
+        # Set default dates if not provided
+        if not start:
             start = datetime.now() - timedelta(days=30)
-        if end is None:
+        if not end:
             end = datetime.now()
 
-        request = StockBarsRequest(
-            symbol_or_symbols=symbol,
-            timeframe=TimeFrame.Day,  # Use Day as the unit
-            start=start,
-            end=end,
-            limit=limit,
-        )
-
-        bars = self.data_client.get_stock_bars(request)
-        if isinstance(bars, dict):
-            return bars[symbol].df
-        return bars.df
+        try:
+            request = StockBarsRequest(
+                symbol_or_symbols=symbol,
+                timeframe=tf,
+                start=start,
+                end=end,
+            )
+            bars = self.data_client.get_stock_bars(request)
+            if bars:
+                return bars.df
+            return pd.DataFrame()
+        except Exception as e:
+            logger.error(f"Error getting historical data: {e}")
+            return pd.DataFrame()
 
     def get_assets(self) -> List[Dict[str, Any]]:
         """
@@ -147,7 +165,7 @@ class AlpacaClient:
         result: List[Dict[str, Any]] = []
         for asset in assets:
             if isinstance(asset, Asset):
-                result.append(cast(Dict[str, Any], asset.dict()))
+                result.append(asset.dict())
             elif isinstance(asset, dict):
                 result.append(asset)
             else:
@@ -213,21 +231,18 @@ class AlpacaClient:
         order = self.trading_client.submit_order(order_data)
         if isinstance(order, dict):
             return order
-        return cast(
-            Dict[str, Any],
-            {
-                "id": order.id,
-                "symbol": order.symbol,
-                "qty": order.qty,
-                "side": order.side,
-                "type": order.type,
-                "time_in_force": order.time_in_force,
-                "status": order.status,
-                "filled_at": order.filled_at,
-                "filled_qty": order.filled_qty,
-                "filled_avg_price": order.filled_avg_price,
-            },
-        )
+        return {
+            "id": order.id,
+            "symbol": order.symbol,
+            "qty": order.qty,
+            "side": order.side,
+            "type": order.type,
+            "time_in_force": order.time_in_force,
+            "status": order.status,
+            "filled_at": order.filled_at,
+            "filled_qty": order.filled_qty,
+            "filled_avg_price": order.filled_avg_price,
+        }
 
     def cancel_order(self, order_id: str) -> bool:
         """
@@ -264,6 +279,6 @@ class AlpacaClient:
             order = self.trading_client.get_order_by_id(order_id)
             if isinstance(order, dict):
                 return order
-            return cast(Dict[str, Any], order.dict())
+            return order.dict()
         except Exception:
             return None

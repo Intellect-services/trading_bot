@@ -18,25 +18,36 @@ from src.utils.logger import setup_logger
 logger = setup_logger(__name__)
 
 
-def run_backtest():
+def run_backtest() -> Dict[str, Any]:
     """Run backtest simulation."""
     try:
         # Load configuration
-        config = Config()
+        config_data = {
+            "RISK_MAX_POSITION_SIZE": 0.1,
+            "RISK_STOP_LOSS_PCT": 0.02,
+            "RISK_MAX_DRAWDOWN": 0.1,
+            "RISK_MAX_LEVERAGE": 2.0,
+            "RISK_PER_TRADE": 0.01,
+            "INITIAL_BALANCE": 10000.0,
+            "ALPACA_API_KEY": "",
+            "ALPACA_SECRET_KEY": "",
+            "ALPACA_PAPER": True,
+        }
+        config = Config(config_data)
 
         # Initialize components
         risk_manager = RiskManager(
             {
-                "max_position_size": config.RISK_MAX_POSITION_SIZE,
-                "stop_loss": config.RISK_STOP_LOSS_PCT,
-                "take_profit": config.RISK_STOP_LOSS_PCT * 2,  # Use 2x stop loss as take profit
-                "max_drawdown": config.RISK_MAX_DRAWDOWN,
-                "max_leverage": config.RISK_MAX_LEVERAGE,
-                "risk_per_trade": config.RISK_PER_TRADE,
+                "max_position_size": config_data["RISK_MAX_POSITION_SIZE"],
+                "stop_loss": config_data["RISK_STOP_LOSS_PCT"],
+                "take_profit": config_data["RISK_STOP_LOSS_PCT"] * 2,  # Use 2x stop loss as take profit
+                "max_drawdown": config_data["RISK_MAX_DRAWDOWN"],
+                "max_leverage": config_data["RISK_MAX_LEVERAGE"],
+                "risk_per_trade": config_data["RISK_PER_TRADE"],
             }
         )
 
-        portfolio = Portfolio(config.INITIAL_BALANCE)
+        portfolio = Portfolio(config_data["INITIAL_BALANCE"])
         data_feed = DataFeed(config)
         strategy = Strategy(config)
 
@@ -58,7 +69,7 @@ def run_backtest():
         return results
 
     except Exception as e:
-        logger.error(f"Error in backtest: {str(e)}")
+        logger.error(f"Error running backtest: {e}")
         raise
 
 
@@ -66,38 +77,28 @@ def save_results(results: Dict[str, Any]) -> None:
     """Save backtest results to file.
 
     Args:
-        results: Dictionary containing backtest results
+        results: Backtest results dictionary
     """
     try:
         timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
         filename = f"backtest_results_{timestamp}.json"
-
         with open(filename, "w") as f:
-            json.dump(results, f, indent=4, default=str)
-
-        logger.info(f"Results saved to {filename}")
-
+            json.dump(results, f, indent=4)
+        logger.info(f"Saved backtest results to {filename}")
     except Exception as e:
-        logger.error(f"Error saving results: {str(e)}")
+        logger.error(f"Error saving backtest results: {e}")
+        raise
 
 
 def main() -> None:
-    """Main entry point."""
+    """Main entry point for backtesting."""
     try:
         results = run_backtest()
-        print("\nBacktest Results:")
-        print("================")
-        print(f"Initial Value: ${results.get('initial_value', 0):,.2f}")
-        print(f"Final Value: ${results.get('final_value', 0):,.2f}")
-        print(f"Total Return: {results.get('total_return', 0) * 100:.2f}%")
-        print(f"Total Trades: {results.get('total_trades', 0)}")
-        print(f"Sharpe Ratio: {results.get('sharpe_ratio', 0):.2f}")
-        print(f"Max Drawdown: {results.get('max_drawdown', 0) * 100:.2f}%")
-        print(f"Win Rate: {results.get('win_rate', 0) * 100:.2f}%")
-        print(f"Average Trade Return: {results.get('avg_trade_return', 0) * 100:.2f}%")
-
+        logger.info("Backtest completed successfully")
+        logger.info(f"Results: {results}")
     except Exception as e:
-        logger.error(f"Error in main: {str(e)}")
+        logger.error(f"Error in main: {e}")
+        raise
 
 
 if __name__ == "__main__":

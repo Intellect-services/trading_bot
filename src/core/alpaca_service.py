@@ -9,6 +9,7 @@ from alpaca.trading.client import TradingClient
 from alpaca.trading.enums import OrderSide, QueryOrderStatus, TimeInForce
 from alpaca.trading.models import Asset, Calendar, Clock, Order, Position, TradeAccount
 from alpaca.trading.requests import GetOrdersRequest, MarketOrderRequest
+import pandas as pd
 
 from ..utils.logger import setup_logger
 
@@ -296,4 +297,32 @@ class AlpacaService:
             }
         except Exception as e:
             self.logger.error(f"Failed to get portfolio history: {str(e)}")
+            raise
+
+    def get_historical_data(
+        self,
+        symbol: str,
+        timeframe: str,
+        start: datetime,
+        end: datetime,
+        limit: int = 1000
+    ) -> pd.DataFrame:
+        """Get historical market data for a symbol."""
+        try:
+            bars = self.client.get_bars(
+                symbol,
+                timeframe,
+                start=start,
+                end=end,
+                limit=limit
+            ).df
+            
+            # Convert string values to float
+            for col in ['open', 'high', 'low', 'close', 'volume']:
+                if col in bars.columns:
+                    bars[col] = pd.to_numeric(bars[col], errors='coerce')
+            
+            return bars
+        except Exception as e:
+            self.logger.error(f"Error fetching historical data: {str(e)}")
             raise

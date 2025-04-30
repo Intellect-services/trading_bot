@@ -2,10 +2,10 @@
 
 import logging
 import time
-from datetime import datetime
+from datetime import datetime, timedelta
 from enum import Enum, auto
 from threading import Event, Thread
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List, Optional, Union
 
 from src.core.alpaca_client import AlpacaClient
 from src.core.bot import TradingBot
@@ -38,7 +38,7 @@ class BotService:
 
         Args:
             config: Configuration object
-            alpaca_client: AlpacaClient instance
+            alpaca_client: Alpaca client instance
         """
         self.config = config
         self.portfolio = Portfolio(config.INITIAL_CAPITAL)
@@ -54,17 +54,17 @@ class BotService:
             risk_manager=self.risk_manager,
         )
         self._error_count = 0
-        self.current_balance: float = float(config.INITIAL_CAPITAL)
+        self.current_value: float = float(config.INITIAL_CAPITAL)
         self.status = BotStatus.STOPPED
         self.error_message: Optional[str] = None
         self._thread: Optional[Thread] = None
         self._stop_event = Event()
-        self._last_update = datetime.now()
+        self._last_update: Optional[datetime] = None
         self._is_running = False
         self._start_time: Optional[datetime] = None
         self._runtime = 0
         self._last_error_time: Optional[datetime] = None
-        self._max_errors = 5
+        self._max_errors = 10
         self._error_reset_time = 300  # 5 minutes in seconds
         self.logger = logging.getLogger(__name__)
         self.initial_value: float = 0.0
@@ -237,12 +237,12 @@ class BotService:
         return {
             "status": self.status.name,
             "error_message": self.error_message,
-            "last_update": self._last_update.isoformat(),
+            "last_update": self._last_update.isoformat() if self._last_update else None,
             "runtime": runtime_str,
-            "symbols": self.bot.symbols if self.bot else [],
-            "initial_capital": self.config.INITIAL_CAPITAL,
-            "current_capital": self.current_balance,
-            "active_positions": len(self.bot.positions) if self.bot else 0,
+            "symbols": self.alpaca_client.get_all_positions().keys(),
+            "initial_capital": self.config.get("INITIAL_CAPITAL", 0.0),
+            "current_capital": self.current_value,
+            "active_positions": len(self.alpaca_client.get_all_positions()),
             "error_count": self._error_count,
             "last_error_time": self._last_error_time.isoformat() if self._last_error_time else None,
             "start_time": self._start_time.isoformat() if self._start_time else None,
@@ -254,7 +254,7 @@ class BotService:
         Returns:
             Current balance
         """
-        return self.current_balance
+        return self.current_value
 
     def update_metrics(self) -> None:
         """Update bot metrics."""
@@ -274,15 +274,17 @@ class BotService:
 
             # Update values
             self.last_value = current_value
-            self.total_trades = int(len(self.alpaca_client.get_orders()))
-            self.active_positions = int(len(self.alpaca_client.get_all_positions()))
+            self.current_value = current_value
+            self.total_trades = len(self.alpaca_client.get_all_positions())
+            self.active_positions = len(self.alpaca_client.get_all_positions())
 
             # Log metrics
-            self.logger.info(
-                f"Bot metrics - Total Return: {self.total_return:.2%}, "
-                f"Daily Return: {self.daily_return:.2%}, "
-                f"Total Trades: {self.total_trades}, "
+            logger.info(
+                f"Metrics updated - Current Value: ${current_value:.2f}, "
+                f"Total Return: {self.total_return * 100:.2f}%, "
+                f"Daily Return: {self.daily_return * 100:.2f}%, "
                 f"Active Positions: {self.active_positions}"
             )
         except Exception as e:
-            self.logger.error(f"Error updating metrics: {str(e)}")
+            logger.error(f"Error updating metrics: {e}")
+            raise
