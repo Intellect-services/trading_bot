@@ -19,34 +19,35 @@ load_dotenv()
 # Configure logging
 logger = logging.getLogger(__name__)
 
+
 def setup_logging() -> None:
     """Set up logging configuration."""
     logging.basicConfig(
         level=logging.INFO,
-        format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
-        handlers=[
-            logging.StreamHandler(),
-            logging.FileHandler('trading_bot.log')
-        ]
+        format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
+        handlers=[logging.StreamHandler(), logging.FileHandler("trading_bot.log")],
     )
+
 
 def load_config() -> Dict[str, Any]:
     """Load configuration from environment variables."""
     config = {
-        'api_key': os.environ['ALPACA_API_KEY'],
-        'api_secret': os.environ['ALPACA_API_SECRET'],
-        'base_url': os.environ.get('ALPACA_API_BASE_URL', 'https://paper-api.alpaca.markets'),
-        'data_feed': os.environ.get('DATA_FEED', 'iex')
+        "api_key": os.environ["ALPACA_API_KEY"],
+        "api_secret": os.environ["ALPACA_API_SECRET"],
+        "base_url": os.environ.get("ALPACA_API_BASE_URL", "https://paper-api.alpaca.markets"),
+        "data_feed": os.environ.get("DATA_FEED", "iex"),
     }
     return config
+
 
 def setup_bot(config: Dict[str, Any]) -> TradingBot:
     """Set up the trading bot with the given configuration."""
     # Initialize components
     alpaca_service = AlpacaService()
-    
+
     # Create and return the bot
     return TradingBot(alpaca_service)
+
 
 def run_bot(bot: TradingBot) -> None:
     """Run the trading bot."""
@@ -60,22 +61,24 @@ def run_bot(bot: TradingBot) -> None:
         bot.stop()
         raise
 
+
 def main() -> None:
     """Main function to run the trading bot."""
     try:
         # Set up logging
         setup_logging()
-        
+
         # Load configuration
         config = load_config()
-        
+
         # Set up and run the bot
         bot = setup_bot(config)
         run_bot(bot)
-        
+
     except Exception as e:
         logger.error(f"Fatal error: {e}")
         sys.exit(1)
+
 
 # Initialize Flask app
 app = Flask(__name__)
@@ -104,7 +107,7 @@ bot_status = {
 }
 
 
-def update_bot_status():
+def update_bot_status() -> None:
     """Update bot status and emit updates to connected clients"""
     while True:
         try:
@@ -153,14 +156,14 @@ socketio.start_background_task(update_bot_status)
 
 
 @app.route("/")
-def index():
+def index() -> Response:
     if "username" not in session:
         return redirect(url_for("login"))
     return render_template("index.html")
 
 
 @app.route("/login", methods=["GET", "POST"])
-def login():
+def login() -> Union[Response, str]:
     if request.method == "POST":
         username = request.form.get("username")
         password = request.form.get("password")
@@ -177,103 +180,103 @@ def login():
 
 
 @app.route("/logout")
-def logout():
+def logout() -> Response:
     session.pop("username", None)
     return redirect(url_for("login"))
 
 
-@app.route('/api/status', methods=['GET'])
+@app.route("/api/status", methods=["GET"])
 def get_status() -> Union[Response, Tuple[Response, int]]:
     """Get the current status of the trading bot."""
     try:
-        bot = app.config.get('bot')
+        bot = app.config.get("bot")
         if not bot:
-            return jsonify({'error': 'Bot not initialized'}), 500
-        
+            return jsonify({"error": "Bot not initialized"}), 500
+
         status = bot.get_status()
         return jsonify(status)
     except Exception as e:
         logger.error(f"Error getting bot status: {e}")
-        return jsonify({'error': str(e)}), 500
+        return jsonify({"error": str(e)}), 500
 
 
-@app.route('/api/start', methods=['POST'])
+@app.route("/api/start", methods=["POST"])
 def start_bot() -> Union[Response, Tuple[Response, int]]:
     """Start the trading bot."""
     try:
-        bot = app.config.get('bot')
+        bot = app.config.get("bot")
         if not bot:
-            return jsonify({'error': 'Bot not initialized'}), 500
-        
+            return jsonify({"error": "Bot not initialized"}), 500
+
         bot.start()
-        return jsonify({'message': 'Bot started successfully'})
+        return jsonify({"message": "Bot started successfully"})
     except Exception as e:
         logger.error(f"Error starting bot: {e}")
-        return jsonify({'error': str(e)}), 500
+        return jsonify({"error": str(e)}), 500
 
 
-@app.route('/api/stop', methods=['POST'])
+@app.route("/api/stop", methods=["POST"])
 def stop_bot() -> Union[Response, Tuple[Response, int]]:
     """Stop the trading bot."""
     try:
-        bot = app.config.get('bot')
+        bot = app.config.get("bot")
         if not bot:
-            return jsonify({'error': 'Bot not initialized'}), 500
-        
+            return jsonify({"error": "Bot not initialized"}), 500
+
         bot.stop()
-        return jsonify({'message': 'Bot stopped successfully'})
+        return jsonify({"message": "Bot stopped successfully"})
     except Exception as e:
         logger.error(f"Error stopping bot: {e}")
-        return jsonify({'error': str(e)}), 500
+        return jsonify({"error": str(e)}), 500
 
 
-@app.route('/api/config', methods=['GET'])
+@app.route("/api/config", methods=["GET"])
 def get_config() -> Union[Response, Tuple[Response, int]]:
     """Get the current configuration of the trading bot."""
     try:
-        bot = app.config.get('bot')
+        bot = app.config.get("bot")
         if not bot:
-            return jsonify({'error': 'Bot not initialized'}), 500
-        
+            return jsonify({"error": "Bot not initialized"}), 500
+
         config = bot.get_config()
         return jsonify(config)
     except Exception as e:
         logger.error(f"Error getting bot configuration: {e}")
-        return jsonify({'error': str(e)}), 500
+        return jsonify({"error": str(e)}), 500
 
 
-@app.route('/api/config', methods=['PUT'])
+@app.route("/api/config", methods=["PUT"])
 def update_config() -> Union[Response, Tuple[Response, int]]:
     """Update the configuration of the trading bot."""
     try:
-        bot = app.config.get('bot')
+        bot = app.config.get("bot")
         if not bot:
-            return jsonify({'error': 'Bot not initialized'}), 500
-        
+            return jsonify({"error": "Bot not initialized"}), 500
+
         new_config = request.get_json()
         if not new_config:
-            return jsonify({'error': 'No configuration data provided'}), 400
-        
+            return jsonify({"error": "No configuration data provided"}), 400
+
         bot.update_config(new_config)
-        return jsonify({'message': 'Configuration updated successfully'})
+        return jsonify({"message": "Configuration updated successfully"})
     except Exception as e:
         logger.error(f"Error updating bot configuration: {e}")
-        return jsonify({'error': str(e)}), 500
+        return jsonify({"error": str(e)}), 500
 
 
-@socketio.on('connect')
+@socketio.on("connect")
 def handle_connect() -> None:
     """Handle WebSocket connection."""
-    if hasattr(request, 'sid'):
+    if hasattr(request, "sid"):
         logger.info(f"Client connected: {request.sid}")
     else:
         logger.info("Client connected (no session ID available)")
 
 
-@socketio.on('disconnect')
+@socketio.on("disconnect")
 def handle_disconnect() -> None:
     """Handle WebSocket disconnection."""
-    if hasattr(request, 'sid'):
+    if hasattr(request, "sid"):
         logger.info(f"Client disconnected: {request.sid}")
     else:
         logger.info("Client disconnected (no session ID available)")

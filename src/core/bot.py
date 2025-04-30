@@ -71,7 +71,9 @@ class TradingBot:
         """Update the current positions."""
         try:
             positions = self.trading_client.get_all_positions()
-            self.positions = {cast(AlpacaPosition, position).symbol: position for position in positions}
+            self.positions = {
+                cast(AlpacaPosition, position).symbol: position for position in positions
+            }
         except Exception as e:
             logger.error(f"Error updating positions: {e}")
             self.positions = {}

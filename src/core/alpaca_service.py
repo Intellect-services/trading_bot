@@ -74,7 +74,9 @@ class AlpacaService:
             self.logger.error(f"Error getting market status: {str(e)}")
             raise
 
-    def create_order(self, symbol: str, quantity: float, side: str, order_type: str = "market") -> Dict[str, Any]:
+    def create_order(
+        self, symbol: str, quantity: float, side: str, order_type: str = "market"
+    ) -> Dict[str, Any]:
         try:
             order_data = MarketOrderRequest(
                 symbol=symbol,
@@ -181,7 +183,9 @@ class AlpacaService:
             self.logger.error(f"Failed to get asset info for {symbol}: {str(e)}")
             raise
 
-    def get_calendar(self, start: Optional[str] = None, end: Optional[str] = None) -> List[Dict[str, Any]]:
+    def get_calendar(
+        self, start: Optional[str] = None, end: Optional[str] = None
+    ) -> List[Dict[str, Any]]:
         """Get market calendar."""
         try:
             calendar = cast(List[Calendar], self.client.get_calendar())
@@ -204,7 +208,9 @@ class AlpacaService:
             self.logger.error(f"Failed to get market calendar: {str(e)}")
             raise
 
-    def get_account_activities(self, date: Optional[datetime] = None) -> List[Dict[str, Union[str, float, datetime, UUID, None]]]:
+    def get_account_activities(
+        self, date: Optional[datetime] = None
+    ) -> List[Dict[str, Union[str, float, datetime, UUID, None]]]:
         """Get account activities for a specific date.
 
         Args:
@@ -218,7 +224,7 @@ class AlpacaService:
             nested=True,
             limit=500,
             after=date.replace(hour=0, minute=0, second=0, microsecond=0) if date else None,
-            until=date.replace(hour=23, minute=59, second=59, microsecond=999999) if date else None
+            until=date.replace(hour=23, minute=59, second=59, microsecond=999999) if date else None,
         )
 
         orders = self.client.get_orders(filter=request_params)
@@ -233,13 +239,13 @@ class AlpacaService:
             filled_qty = float(order.filled_qty) if order.filled_qty is not None else 0.0
             if filled_qty > 0:
                 activity = {
-                    'timestamp': order.filled_at,
-                    'symbol': order.symbol,
-                    'side': order.side,
-                    'qty': filled_qty,
-                    'price': order.filled_avg_price if order.filled_avg_price is not None else 0.0,
-                    'order_id': order.id,
-                    'status': order.status
+                    "timestamp": order.filled_at,
+                    "symbol": order.symbol,
+                    "side": order.side,
+                    "qty": filled_qty,
+                    "price": order.filled_avg_price if order.filled_avg_price is not None else 0.0,
+                    "order_id": order.id,
+                    "status": order.status,
                 }
                 activities.append(activity)
 

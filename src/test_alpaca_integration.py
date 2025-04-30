@@ -33,6 +33,7 @@ def mock_env_vars() -> Generator[None, None, None]:
 def alpaca_service(mock_env_vars: None) -> "AlpacaService":
     """Fixture to create a test instance of AlpacaService."""
     from src.core.alpaca_service import AlpacaService
+
     return AlpacaService()
 
 
@@ -102,10 +103,11 @@ if __name__ == "__main__":
     # Set up test environment variables
     os.environ["ALPACA_API_KEY"] = "test_api_key"
     os.environ["ALPACA_API_SECRET"] = "test_secret_key"
-    
+
     # Create AlpacaService instance
     from src.core.alpaca_service import AlpacaService
+
     service = AlpacaService()
-    
+
     # Run the test
     test_alpaca_connection(service)

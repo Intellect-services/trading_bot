@@ -52,6 +52,6 @@ if __name__ == "__main__":
     # Set up test environment variables
     os.environ["ALPACA_API_KEY"] = "test_api_key"
     os.environ["ALPACA_API_SECRET"] = "test_secret_key"
-    
+
     # Create AlpacaService instance
     test_alpaca_connection()

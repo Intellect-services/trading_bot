@@ -2,51 +2,71 @@
 
 import logging
 import os
-import sys
 from datetime import datetime
+from typing import Optional
+
+# Configure logging
+logging.basicConfig(
+    level=logging.INFO,
+    format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
+    handlers=[logging.StreamHandler(), logging.FileHandler("trading_bot.log")],
+)
+
+logger = logging.getLogger(__name__)
 
 
-def setup_logger(name: str) -> logging.Logger:
-    """Set up a logger with the specified name.
+def setup_logger(name: Optional[str] = None) -> logging.Logger:
+    """Set up a logger with the given name.
 
     Args:
-        name: Name of the logger
+        name: Optional name for the logger. If None, uses the root logger.
 
     Returns:
-        Configured logger instance
+        A configured logger instance.
     """
-    logger = logging.getLogger(name)
-
-    # Only configure handlers if they haven't been added yet
-    if not logger.handlers:
-        logger.setLevel(logging.INFO)
-
-        # Create formatters
-        fmt = "%(asctime)s - %(name)s - %(levelname)s - %(message)s"
-        console_formatter = logging.Formatter(fmt)
-        file_formatter = logging.Formatter(fmt)
-
-        # Create console handler
-        console_handler = logging.StreamHandler(sys.stdout)
-        console_handler.setLevel(logging.INFO)
-        console_handler.setFormatter(console_formatter)
-
-        # Create file handler
-        log_dir = "logs"
-        if not os.path.exists(log_dir):
-            os.makedirs(log_dir)
-
-        timestamp = datetime.now().strftime("%Y%m%d")
-        log_file = os.path.join(log_dir, f"trading_bot_{timestamp}.log")
-        file_handler = logging.FileHandler(log_file)
-        file_handler.setLevel(logging.INFO)
-        file_handler.setFormatter(file_formatter)
-
-        # Add handlers to logger
-        logger.addHandler(console_handler)
-        logger.addHandler(file_handler)
-
+    if name:
+        return logging.getLogger(name)
     return logger
+
+
+def log_error(message: str, error: Optional[Exception] = None) -> None:
+    """Log an error message with optional exception details.
+
+    Args:
+        message: The error message to log.
+        error: Optional exception object to include in the log.
+    """
+    if error:
+        logger.error(f"{message}: {str(error)}")
+    else:
+        logger.error(message)
+
+
+def log_info(message: str) -> None:
+    """Log an info message.
+
+    Args:
+        message: The info message to log.
+    """
+    logger.info(message)
+
+
+def log_warning(message: str) -> None:
+    """Log a warning message.
+
+    Args:
+        message: The warning message to log.
+    """
+    logger.warning(message)
+
+
+def log_debug(message: str) -> None:
+    """Log a debug message.
+
+    Args:
+        message: The debug message to log.
+    """
+    logger.debug(message)
 
 
 class BotLogger:
@@ -72,7 +92,9 @@ class BotLogger:
 
         self.logger = logging.getLogger("TradingBot")
 
-    def log_trade(self, symbol: str, action: str, quantity: float, price: float, status: str) -> None:
+    def log_trade(
+        self, symbol: str, action: str, quantity: float, price: float, status: str
+    ) -> None:
         """Log trade execution"""
         self.logger.info(
             f"Trade Executed - {symbol}: {action} {quantity} shares @ ${price:.2f} - Status: {status}"
