@@ -6,6 +6,7 @@ from typing import Any, Dict, List, Optional, Union
 
 import numpy as np
 import pandas as pd
+from pandas import Series
 
 from ..types import BacktestMetrics, BacktestResult
 from ..utils.logger import setup_logger
@@ -16,7 +17,7 @@ logger = setup_logger(__name__)
 class Backtest:
     """Backtesting engine for trading strategies."""
 
-    def __init__(self, strategy, initial_capital: float = 100000.0):
+    def __init__(self, strategy: Any, initial_capital: float = 100000.0):
         """Initialize backtesting engine.
 
         Args:
@@ -49,7 +50,7 @@ class Backtest:
                 data = data[(data.index >= start_date) & (data.index <= end_date)]
 
             # Initialize portfolio
-            portfolio = {
+            portfolio: Dict[str, Any] = {
                 "cash": self.initial_capital,
                 "positions": {},
                 "trades": [],
@@ -57,7 +58,7 @@ class Backtest:
 
             # Run strategy on each bar
             for i in range(len(data)):
-                current_bar = data.iloc[i]
+                current_bar: Series[float] = data.iloc[i]
                 current_time = data.index[i]
 
                 # Update strategy state
@@ -88,10 +89,10 @@ class Backtest:
     def _execute_trades(
         self,
         signals: Dict[str, float],
-        current_bar: pd.Series,
+        current_bar: Series[float],
         current_time: datetime,
-        portfolio: Dict,
-    ):
+        portfolio: Dict[str, Any],
+    ) -> None:
         """Execute trades based on strategy signals.
 
         Args:
@@ -147,7 +148,7 @@ class Backtest:
                         }
                     )
 
-    def _update_portfolio_value(self, portfolio: Dict, current_bar: pd.Series):
+    def _update_portfolio_value(self, portfolio: Dict[str, Any], current_bar: Series[float]) -> None:
         """Update portfolio value based on current prices.
 
         Args:
@@ -159,7 +160,7 @@ class Backtest:
             if symbol in current_bar.index:
                 portfolio["value"] += position["shares"] * current_bar["close"]
 
-    def _calculate_metrics(self, portfolio: Dict, data: pd.DataFrame) -> BacktestMetrics:
+    def _calculate_metrics(self, portfolio: Dict[str, Any], data: pd.DataFrame) -> BacktestMetrics:
         """Calculate backtest performance metrics.
 
         Args:
@@ -170,19 +171,19 @@ class Backtest:
             Performance metrics
         """
         # Calculate returns
-        returns = []
+        returns: List[float] = []
         for i in range(1, len(data)):
             prev_value = portfolio["value"] if i == 1 else returns[-1]
             current_value = portfolio["value"]
             returns.append((current_value - prev_value) / prev_value)
 
-        returns = np.array(returns)
+        returns_array = np.array(returns)
 
         # Calculate metrics
         total_return = (portfolio["value"] - self.initial_capital) / self.initial_capital
         annual_return = (1 + total_return) ** (252 / len(data)) - 1
-        sharpe_ratio = np.mean(returns) / np.std(returns) * np.sqrt(252)
-        max_drawdown = np.min(returns)
+        sharpe_ratio = np.mean(returns_array) / np.std(returns_array) * np.sqrt(252)
+        max_drawdown = np.min(returns_array)
 
         return BacktestMetrics(
             total_return=total_return,

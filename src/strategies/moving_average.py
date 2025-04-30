@@ -1,113 +1,78 @@
-from typing import Any, Dict, List, Optional
-
-import numpy as np
+from typing import Dict, Any, Optional, List, Union
 import pandas as pd
+from datetime import datetime
 
-from .base import BaseStrategy
+from src.core.strategy import Strategy
+from src.utils.logger import setup_logger
 
+logger = setup_logger(__name__)
 
-class MovingAverageCrossover(BaseStrategy):
-    """Moving Average Crossover trading strategy."""
+class MovingAverageStrategy(Strategy):
+    """Moving average crossover strategy."""
 
-    def __init__(
+    def __init__(self, config: Optional[Dict[str, Any]] = None) -> None:
+        """Initialize moving average strategy.
+
+        Args:
+            config: Strategy configuration with parameters:
+                - short_window: Short moving average window (default: 20)
+                - long_window: Long moving average window (default: 50)
+                - symbols: List of symbols to trade
+        """
+        super().__init__(config)
+        self.short_window = self.config.get('short_window', 20)
+        self.long_window = self.config.get('long_window', 50)
+        self.symbols = self.config.get('symbols', [])
+        self.price_history: Dict[str, List[float]] = {}
+
+    def update_state(
         self,
-        short_window: int = 20,
-        long_window: int = 50,
-        signal_threshold: float = 0.0,
+        data: Union[pd.Series[Any], Dict[str, Any]],
+        timestamp: datetime
     ) -> None:
-        """Initialize the Moving Average Crossover strategy.
+        """Update the strategy state with new market data."""
+        if isinstance(data, pd.Series):
+            data_dict = data.to_dict()
+        else:
+            data_dict = data
 
-        Args:
-            short_window: Period for short-term moving average
-            long_window: Period for long-term moving average
-            signal_threshold: Minimum difference threshold for signal generation
-        """
-        super().__init__()
-        self.short_window = short_window
-        self.long_window = long_window
-        self.signal_threshold = signal_threshold
-        self.warmup_period = max(short_window, long_window)
+        # Update price history for each symbol
+        for symbol in self.symbols:
+            if symbol in data_dict:
+                price = float(data_dict[symbol])
+                if symbol not in self.price_history:
+                    self.price_history[symbol] = []
+                self.price_history[symbol].append(price)
+                # Keep only the necessary history
+                if len(self.price_history[symbol]) > self.long_window:
+                    self.price_history[symbol] = self.price_history[symbol][-self.long_window:]
 
-    def calculate_indicators(self, data: pd.DataFrame) -> pd.DataFrame:
-        """Calculate moving averages and their differences.
+        # Update the base state
+        super().update_state(data_dict, timestamp)
 
-        Args:
-            data: Market data DataFrame with at least 'close' prices
+    def generate_signals(self) -> Dict[str, float]:
+        """Generate trading signals based on moving average crossovers."""
+        signals: Dict[str, float] = {}
+        
+        for symbol in self.symbols:
+            if symbol not in self.price_history or len(self.price_history[symbol]) < self.long_window:
+                signals[symbol] = 0.0
+                continue
 
-        Returns:
-            DataFrame with added indicator columns
-        """
-        df = data.copy()
+            prices = pd.Series(self.price_history[symbol])
+            short_ma = prices.rolling(window=self.short_window).mean()
+            long_ma = prices.rolling(window=self.long_window).mean()
 
-        # Calculate moving averages
-        df["short_ma"] = df["close"].rolling(window=self.short_window).mean()
-        df["long_ma"] = df["close"].rolling(window=self.long_window).mean()
+            if short_ma.iloc[-1] > long_ma.iloc[-1] and short_ma.iloc[-2] <= long_ma.iloc[-2]:
+                signals[symbol] = 1.0  # Buy signal
+            elif short_ma.iloc[-1] < long_ma.iloc[-1] and short_ma.iloc[-2] >= long_ma.iloc[-2]:
+                signals[symbol] = -1.0  # Sell signal
+            else:
+                signals[symbol] = 0.0  # No signal
 
-        # Calculate differences
-        df["ma_diff"] = df["short_ma"] - df["long_ma"]
-        df["ma_diff_pct"] = (df["ma_diff"] / df["long_ma"]) * 100
+        return signals
 
-        return df
-
-    def generate_signals(self, data: pd.DataFrame) -> Optional[pd.DataFrame]:
-        """Generate trading signals based on moving average crossovers.
-
-        Args:
-            data: Market data DataFrame
-
-        Returns:
-            DataFrame with signals or None if data is invalid
-        """
-        if not self.validate_data(data):
-            self.logger.error("Invalid input data format")
-            return None
-
-        df = self.calculate_indicators(data)
-
-        # Initialize signals column
-        df["signal"] = 0.0
-
-        # Generate signals based on MA crossover with threshold
-        df.loc[df["ma_diff_pct"] > self.signal_threshold, "signal"] = 1.0  # Buy signal
-        df.loc[df["ma_diff_pct"] < -self.signal_threshold, "signal"] = -1.0  # Sell signal
-
-        # Set signals to NaN during warmup period
-        df.loc[: self.warmup_period, "signal"] = np.nan
-
-        return df
-
-    def get_parameters(self) -> Dict[str, float]:
-        """Get the strategy parameters.
-
-        Returns:
-            Dictionary of parameter names and values
-        """
-        return {
-            "short_window": self.short_window,
-            "long_window": self.long_window,
-            "signal_threshold": self.signal_threshold,
-        }
-
-    def set_parameters(self, params: Dict[str, Any]) -> None:
-        """Update strategy parameters.
-
-        Args:
-            params: Dictionary of parameters to update
-        """
-        if "short_window" in params:
-            self.short_window = int(params["short_window"])
-        if "long_window" in params:
-            self.long_window = int(params["long_window"])
-        if "signal_threshold" in params:
-            self.signal_threshold = float(params["signal_threshold"])
-
-        # Update warmup period if windows changed
-        self.warmup_period = max(self.short_window, self.long_window)
-
-    def get_required_data(self) -> List[str]:
-        """Get the list of required data fields.
-
-        Returns:
-            List of required column names
-        """
-        return ["timestamp", "close"]  # Only need close prices for this strategy
+    def reset(self) -> None:
+        """Reset the strategy state and price history."""
+        super().reset()
+        self.price_history = {}

@@ -8,219 +8,216 @@ from uuid import UUID
 
 import pandas as pd
 from alpaca.data.historical import StockHistoricalDataClient
+from alpaca.data.requests import StockBarsRequest
+from alpaca.data.timeframe import TimeFrame
 from alpaca.trading.client import TradingClient
-from alpaca.trading.enums import OrderSide, QueryOrderStatus, TimeInForce
-from alpaca.trading.models import Asset, Calendar, Clock, Order, Position, TradeAccount
-from alpaca.trading.requests import GetOrdersRequest, MarketOrderRequest
+from alpaca.trading.enums import OrderSide, QueryOrderStatus, TimeInForce, OrderStatus, Sort, AssetStatus, AssetClass, OrderType
+from alpaca.trading.models import Asset, Calendar, Clock, Order, Position, TradeAccount, PortfolioHistory
+from alpaca.trading.requests import (
+    GetOrdersRequest,
+    LimitOrderRequest,
+    MarketOrderRequest,
+    StopOrderRequest,
+    GetAssetsRequest,
+    GetCalendarRequest,
+)
+from alpaca.data.enums import Adjustment
+from alpaca.data.models import BarSet
 
+from ..utils.config import get_config
 from ..utils.logger import setup_logger
+from .alpaca_client import AlpacaClient
+from .config import Config
 
 logger = setup_logger(__name__)
 
 
 class AlpacaService:
-    def __init__(self) -> None:
-        """Initialize Alpaca service with API credentials from environment variables."""
-        self.api_key = os.getenv("ALPACA_API_KEY")
-        self.secret_key = os.getenv("ALPACA_API_SECRET")
-
-        if not self.api_key or not self.secret_key:
-            raise ValueError("Alpaca API credentials not found in environment variables")
-
-        self.client = TradingClient(self.api_key, self.secret_key, paper=True)
-        self.data_client = StockHistoricalDataClient(self.api_key, self.secret_key)
-        self.logger = logger
-        self.logger.info("AlpacaService initialized successfully")
+    def __init__(self, config: Config) -> None:
+        self.client = AlpacaClient(config.alpaca_api_key, config.alpaca_api_secret)
 
     def get_account(self) -> Dict[str, Any]:
-        try:
-            account = cast(TradeAccount, self.client.get_account())
-            buying_power = account.buying_power
-            equity = account.equity
-            cash = account.cash
-            return {
-                "account_id": account.account_number,
-                "buying_power": float(str(buying_power)) if buying_power is not None else 0.0,
-                "equity": float(str(equity)) if equity is not None else 0.0,
-                "cash": float(str(cash)) if cash is not None else 0.0,
-                "status": account.status,
-                "last_updated": datetime.now().isoformat(),
-            }
-        except Exception as e:
-            self.logger.error(f"Error fetching account info: {str(e)}")
-            raise
+        return self.client.get_account()
 
     def get_positions(self) -> List[Dict[str, Any]]:
-        try:
-            positions = cast(List[Position], self.client.get_all_positions())
-            return [
-                {
-                    "symbol": position.symbol,
-                    "quantity": float(position.qty or 0),
-                    "market_value": float(position.market_value or 0),
-                    "unrealized_pl": float(position.unrealized_pl or 0),
-                    "current_price": float(position.current_price or 0),
-                }
-                for position in positions
-            ]
-        except Exception as e:
-            self.logger.error(f"Error fetching positions: {str(e)}")
-            raise
+        return self.client.get_positions()
 
-    def get_market_status(self) -> Dict[str, Any]:
-        """Get current market status."""
-        try:
-            clock = cast(Clock, self.client.get_clock())
-            return {
-                "is_open": clock.is_open,
-                "next_open": clock.next_open.isoformat() if clock.next_open else None,
-                "next_close": clock.next_close.isoformat() if clock.next_close else None,
-            }
-        except Exception as e:
-            self.logger.error(f"Error getting market status: {str(e)}")
-            raise
-
-    def create_order(
-        self, symbol: str, quantity: float, side: str, order_type: str = "market"
+    def get_historical_data(
+        self,
+        symbol: str,
+        start: datetime,
+        end: datetime,
+        timeframe: TimeFrame = TimeFrame.Day
     ) -> Dict[str, Any]:
-        try:
-            order_data = MarketOrderRequest(
-                symbol=symbol,
-                qty=quantity,
-                side=OrderSide.BUY if side == "buy" else OrderSide.SELL,
-                time_in_force=TimeInForce.DAY,
-            )
-            order = cast(Order, self.client.submit_order(order_data))
-            # Check if we have enough buying power for the trade
-            if order.side == OrderSide.BUY and float(self.get_account()["buying_power"]) < float(
-                order.notional
-            ):
-                raise ValueError(
-                    "Insufficient buying power for the trade. "
-                    f"Required: {order.notional}, Available: {self.get_account()['buying_power']}"
-                )
-            return {
-                "order_id": order.id,
-                "status": order.status,
-                "symbol": order.symbol,
-                "quantity": float(order.qty or 0),
-                "side": order.side,
-                "created_at": order.created_at.isoformat(),
-            }
-        except Exception as e:
-            self.logger.error(f"Error creating order: {str(e)}")
-            raise
+        return self.client.get_historical_data(symbol, start, end, timeframe)
 
-    def cancel_order(self, order_id: str) -> Dict[str, str]:
-        try:
-            self.client.cancel_order_by_id(order_id)
-            return {
-                "status": "success",
-                "message": f"Order {order_id} canceled successfully",
-            }
-        except Exception as e:
-            self.logger.error(f"Error canceling order: {str(e)}")
-            raise
+    def submit_order(
+        self,
+        symbol: str,
+        qty: float,
+        side: OrderSide,
+        type: OrderType = OrderType.MARKET,
+        time_in_force: TimeInForce = TimeInForce.DAY,
+        limit_price: Optional[float] = None,
+        stop_price: Optional[float] = None
+    ) -> Dict[str, Any]:
+        return self.client.submit_order(
+            symbol=symbol,
+            qty=qty,
+            side=side,
+            type=type,
+            time_in_force=time_in_force,
+            limit_price=limit_price,
+            stop_price=stop_price
+        )
 
     def get_orders(self, status: Optional[str] = None) -> List[Dict[str, Any]]:
-        try:
-            orders = cast(List[Order], self.client.get_orders())
-            if status:
-                orders = [order for order in orders if order.status == status]
-            return [
-                {
-                    "order_id": order.id,
-                    "symbol": order.symbol,
-                    "quantity": float(order.qty or 0),
-                    "side": order.side,
-                    "status": order.status,
-                    "created_at": order.created_at.isoformat(),
-                    "filled_at": order.filled_at.isoformat() if order.filled_at else None,
-                    "filled_quantity": float(order.filled_qty or 0),
-                    "filled_price": float(order.filled_avg_price or 0),
-                }
-                for order in orders
-            ]
-        except Exception as e:
-            self.logger.error(f"Error fetching orders: {str(e)}")
-            raise
+        return self.client.get_orders(status)
+
+    def get_market_clock(self) -> Dict[str, Any]:
+        return self.client.get_market_clock()
 
     def get_position(self, symbol: str) -> Dict[str, Any]:
-        """Get position for a specific symbol."""
-        try:
-            position = cast(Position, self.client.get_open_position(symbol))
-            self.logger.info(f"Retrieved position for {symbol}")
-            return {
-                "symbol": position.symbol,
-                "quantity": float(position.qty or 0),
-                "market_value": float(position.market_value or 0),
-                "unrealized_pl": float(position.unrealized_pl or 0),
-                "current_price": float(position.current_price or 0),
-            }
-        except Exception as e:
-            self.logger.error(f"Failed to get position for {symbol}: {str(e)}")
-            raise
-
-    def get_assets(
-        self, status: Optional[str] = None, asset_class: Optional[str] = None
-    ) -> List[Dict[str, Any]]:
-        """Get all assets with optional filters."""
-        try:
-            assets = cast(List[Asset], self.client.get_all_assets())
-            if status:
-                assets = [asset for asset in assets if asset.status == status]
-            if asset_class:
-                assets = [asset for asset in assets if asset.asset_class == asset_class]
-            self.logger.info(f"Retrieved {len(assets)} assets")
-            return [
-                {
-                    "symbol": asset.symbol,
-                    "name": asset.name,
-                    "class": asset.asset_class,
-                    "status": asset.status,
-                }
-                for asset in assets
-            ]
-        except Exception as e:
-            self.logger.error(f"Failed to get assets: {str(e)}")
-            raise
+        return self.client.get_position(symbol)
 
     def get_asset(self, symbol: str) -> Dict[str, Any]:
-        """Get a specific asset by symbol."""
-        try:
-            asset = cast(Asset, self.client.get_asset(symbol))
-            self.logger.info(f"Retrieved asset info for {symbol}")
+        return self.client.get_asset(symbol)
+
+    def cancel_order(self, order_id: str) -> Dict[str, Any]:
+        return self.client.cancel_order(order_id)
+
+    def submit_bracket_order(
+        self,
+        symbol: str,
+        qty: float,
+        side: OrderSide,
+        take_profit_price: float,
+        stop_loss_price: float,
+        type: OrderType = OrderType.MARKET,
+        time_in_force: TimeInForce = TimeInForce.DAY,
+        limit_price: Optional[float] = None
+    ) -> Dict[str, Any]:
+        return self.client.submit_bracket_order(
+            symbol=symbol,
+            qty=qty,
+            side=side,
+            take_profit_price=take_profit_price,
+            stop_loss_price=stop_loss_price,
+            type=type,
+            time_in_force=time_in_force,
+            limit_price=limit_price
+        )
+
+    def get_order(self, order_id: str) -> Dict[str, Any]:
+        return self.client.get_order(order_id)
+
+    def get_assets(self) -> List[Dict[str, Any]]:
+        return self.client.get_assets()
+
+    def get_portfolio_history(
+        self,
+        period: str = "1M",
+        timeframe: str = "1D",
+        extended_hours: bool = False
+    ) -> Dict[str, Any]:
+        account = self.get_account()
+        current_value = float(account.get("portfolio_value", 0))
+        
+        # Calculate start date based on period
+        end_date = datetime.now()
+        if period == "1D":
+            start_date = end_date - timedelta(days=1)
+        elif period == "1W":
+            start_date = end_date - timedelta(weeks=1)
+        elif period == "1M":
+            start_date = end_date - timedelta(days=30)
+        elif period == "3M":
+            start_date = end_date - timedelta(days=90)
+        elif period == "1Y":
+            start_date = end_date - timedelta(days=365)
+        else:
+            start_date = end_date - timedelta(days=30)  # Default to 1M
+            
+        # Get positions
+        positions = self.get_positions()
+        symbols = [pos["symbol"] for pos in positions]
+        
+        # Initialize result dictionary
+        result = {
+            "timestamp": [],
+            "equity": [],
+            "profit_loss": [],
+            "profit_loss_pct": []
+        }
+        
+        # If no positions, return empty result with current value
+        if not symbols:
             return {
-                "symbol": asset.symbol,
-                "name": asset.name,
-                "class": asset.asset_class,
-                "status": asset.status,
+                "timestamp": [end_date],
+                "equity": [current_value],
+                "profit_loss": [0.0],
+                "profit_loss_pct": [0.0]
+            }
+            
+        # Get historical data for each position
+        portfolio_values = []
+        for symbol in symbols:
+            position = next((pos for pos in positions if pos["symbol"] == symbol), None)
+            if position:
+                qty = float(position["qty"])
+                df = self.get_historical_data(symbol, start_date, end_date)
+                if not df.empty:
+                    df["value"] = df["close"] * qty
+                    portfolio_values.append(df["value"])
+                    
+        if portfolio_values:
+            # Combine all position values
+            total_value = pd.concat(portfolio_values, axis=1).sum(axis=1)
+            
+            # Calculate metrics
+            result["timestamp"] = total_value.index.tolist()
+            result["equity"] = total_value.values.tolist()
+            result["profit_loss"] = [v - result["equity"][0] for v in result["equity"]]
+            result["profit_loss_pct"] = [
+                (v - result["equity"][0]) / result["equity"][0] * 100 
+                if result["equity"][0] != 0 else 0.0 
+                for v in result["equity"]
+            ]
+            
+        return result
+
+    def get_market_status(self) -> Dict[str, Any]:
+        """Get market status."""
+        try:
+            clock = self.client.get_clock()
+            return {
+                'is_open': clock.is_open,
+                'next_open': clock.next_open,
+                'next_close': clock.next_close,
+                'timestamp': clock.timestamp
             }
         except Exception as e:
-            self.logger.error(f"Failed to get asset info for {symbol}: {str(e)}")
-            raise
+            self.logger.error(f"Error getting market status: {e}")
+            return {}
 
     def get_calendar(
-        self, start: Optional[str] = None, end: Optional[str] = None
+        self,
+        start: Optional[datetime] = None,
+        end: Optional[datetime] = None
     ) -> List[Dict[str, Any]]:
         """Get market calendar."""
         try:
-            calendar = cast(List[Calendar], self.client.get_calendar())
-            if start:
-                start_date = datetime.fromisoformat(start)
-                calendar = [entry for entry in calendar if entry.date >= start_date]
-            if end:
-                end_date = datetime.fromisoformat(end)
-                calendar = [entry for entry in calendar if entry.date <= end_date]
+            request = GetCalendarRequest(
+                start=start,
+                end=end
+            )
+            calendar = self.client.get_calendar(request)
             self.logger.info(f"Retrieved market calendar with {len(calendar)} entries")
-            return [
-                {
-                    "date": entry.date.isoformat(),
-                    "open": entry.open.isoformat(),
-                    "close": entry.close.isoformat(),
-                }
-                for entry in calendar
-            ]
+            return [{
+                'date': day.date,
+                'open': day.open,
+                'close': day.close
+            } for day in calendar]
         except Exception as e:
             self.logger.error(f"Failed to get market calendar: {str(e)}")
             raise
@@ -271,60 +268,46 @@ class AlpacaService:
 
     def get_portfolio_history(
         self,
-        period: Optional[str] = None,
-        timeframe: Optional[str] = None,
-        date_end: Optional[str] = None,
+        period: str = "1M",
+        timeframe: str = "1D",
+        extended_hours: bool = False
     ) -> Dict[str, Any]:
         """Get portfolio history."""
         try:
-            # Get current account info for base value
-            account = self.get_account()
-            base_value = float(account["equity"])
-
-            # Get positions for current value
-            positions = self.get_positions()
-            current_value = sum(float(pos["market_value"]) for pos in positions)
-
-            # Create a simple history with just current values
-            now = datetime.now().isoformat()
+            timeframe_obj = TimeFrame(1, timeframe.lower().replace('d', 'Day').replace('m', 'Min'))
+            history = self.client.get_portfolio_history(
+                timeframe=timeframe_obj,
+                period=period,
+                extended_hours=extended_hours
+            )
             return {
-                "equity": [base_value, current_value],
-                "timestamp": [now, now],
-                "profit_loss": [0, current_value - base_value],
-                "profit_loss_pct": [
-                    0,
-                    ((current_value - base_value) / base_value * 100) if base_value > 0 else 0,
-                ],
-                "base_value": base_value,
+                "timestamp": history.timestamp,
+                "equity": history.equity,
+                "profit_loss": history.profit_loss,
+                "profit_loss_pct": history.profit_loss_pct,
+                "base_value": history.base_value
             }
         except Exception as e:
-            self.logger.error(f"Failed to get portfolio history: {str(e)}")
-            raise
+            self.logger.error(f"Error getting portfolio history: {e}")
+            return {}
 
     def get_historical_data(
         self,
         symbol: str,
-        timeframe: str,
         start: datetime,
         end: datetime,
-        limit: int = 1000,
-    ) -> pd.DataFrame:
-        """Get historical market data for a symbol."""
+        timeframe: TimeFrame = TimeFrame.Day
+    ) -> Dict[str, Any]:
+        """Get historical data for a specific symbol."""
         try:
-            bars = self.client.get_bars(
-                symbol,
-                timeframe,
+            request = StockBarsRequest(
+                symbol_or_symbols=symbol,
+                timeframe=timeframe,
                 start=start,
-                end=end,
-                limit=limit,
-            ).df
-
-            # Convert string values to float
-            for col in ["open", "high", "low", "close", "volume"]:
-                if col in bars.columns:
-                    bars[col] = pd.to_numeric(bars[col], errors="coerce")
-
-            return bars
+                end=end
+            )
+            bars = self.client.get_stock_bars(request)
+            return bars.dict() if bars else {}
         except Exception as e:
-            self.logger.error(f"Error fetching historical data: {str(e)}")
-            raise
+            self.logger.error(f"Error getting historical data for {symbol}: {e}")
+            return {}

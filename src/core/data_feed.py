@@ -4,29 +4,35 @@ import os
 import threading
 import time
 from datetime import datetime, timedelta
-from typing import Callable, Dict, List, Optional
+from typing import Any, Callable, Dict, List, Optional, Union
 
 import numpy as np
 import pandas as pd
+from alpaca.data.timeframe import TimeFrame
+from pandas import DataFrame
+from alpaca.data.models import Bar
+from alpaca.trading.models import Position
 
 from src.core.alpaca_client import AlpacaClient
 from src.utils.logger import setup_logger
+from .alpaca_service import AlpacaService
+from src.core.alpaca_types import Bar
 
 logger = setup_logger(__name__)
 
 
-class DataFeed:
-    """Class for fetching and processing market data."""
+class AlpacaDataFeed:
+    """Class for fetching and managing market data from Alpaca."""
 
     def __init__(self, client: AlpacaClient) -> None:
-        """Initialize data feed.
+        """Initialize the data feed with an Alpaca client.
 
         Args:
-            client: Alpaca client instance
+            client: An instance of AlpacaClient for making API calls.
         """
         self.client = client
         self.symbols: List[str] = []
-        self.data: Dict[str, pd.DataFrame] = {}
+        self._data_cache: Dict[str, pd.DataFrame] = {}
         self.callbacks: List[Callable[[str, pd.DataFrame], None]] = []
         self._running = False
         self._thread: Optional[threading.Thread] = None
@@ -51,27 +57,52 @@ class DataFeed:
             self.logger.error("Error adding symbol %s: %s", symbol, str(e))
             return False
 
-    def get_historical_data(self, symbol: str, start: datetime, end: datetime) -> pd.DataFrame:
-        """Get historical data for a symbol."""
-        try:
-            # Calculate number of days between start and end
-            days = (end - start).days
-            if days <= 0:
-                days = 1
+    def get_historical_data(
+        self,
+        symbol: str,
+        start: Optional[datetime] = None,
+        end: Optional[datetime] = None,
+        timeframe: str = "1Day"
+    ) -> DataFrame:
+        """Fetch historical market data for a symbol.
 
-            # Get data from Alpaca
-            df = self.client.get_historical_data(
-                symbol=symbol, timeframe="1D", start=start, end=end, limit=days
-            )
-            if df.empty:
-                self.logger.warning("No historical data found for %s", symbol)
+        Args:
+            symbol: The stock symbol to fetch data for.
+            start: Start datetime for the data range.
+            end: End datetime for the data range.
+            timeframe: The timeframe for the data (e.g., "1Day", "1Hour", "1Min").
+
+        Returns:
+            DataFrame containing the historical market data.
+        """
+        try:
+            data = self.client.get_historical_data(symbol, start, end, timeframe)
+            if not data or symbol not in data:
                 return pd.DataFrame()
 
-            # Set timestamp as index
-            df.index = pd.to_datetime(df.index)
+            bars = data[symbol]
+            df_data = []
+            for bar in bars:
+                df_data.append({
+                    'timestamp': bar.timestamp,
+                    'open': float(bar.open),
+                    'high': float(bar.high),
+                    'low': float(bar.low),
+                    'close': float(bar.close),
+                    'volume': int(bar.volume),
+                    'trade_count': int(bar.trade_count),
+                    'vwap': float(bar.vwap)
+                })
+
+            if not df_data:
+                return pd.DataFrame()
+
+            df = pd.DataFrame(df_data)
+            df.set_index('timestamp', inplace=True)
             return df
+
         except Exception as e:
-            self.logger.error("Error getting historical data for %s: %s", symbol, e)
+            print(f"Error fetching historical data for {symbol}: {str(e)}")
             return pd.DataFrame()
 
     def get_latest_data(self, symbol: str) -> pd.DataFrame:
@@ -80,15 +111,20 @@ class DataFeed:
             # Get last 100 bars
             end = datetime.now()
             start = end - timedelta(days=100)
-            df = self.client.get_historical_data(
-                symbol=symbol, timeframe="1D", start=start, end=end, limit=100
+            data = self.client.get_historical_data(
+                symbol=symbol, timeframe="1D", start=start, end=end
             )
-            if df.empty:
+            if not data or not data.get("bars"):
                 self.logger.warning("No data found for %s", symbol)
                 return pd.DataFrame()
 
+            # Convert to DataFrame
+            df = pd.DataFrame(data["bars"])
+            df["timestamp"] = pd.to_datetime(df["timestamp"])
+            df.set_index("timestamp", inplace=True)
+
             # Update stored data
-            self.data[symbol] = df
+            self._data_cache[symbol] = df
 
             # Calculate indicators
             self._calculate_indicators(symbol)
@@ -103,13 +139,21 @@ class DataFeed:
             return pd.DataFrame()
 
     def get_latest_price(self, symbol: str) -> Optional[float]:
-        """Get latest price for a symbol."""
+        """Get the latest price for a symbol.
+
+        Args:
+            symbol: The stock symbol to get the price for.
+
+        Returns:
+            The latest price as a float, or None if the price cannot be retrieved.
+        """
         try:
-            if symbol in self.data and not self.data[symbol].empty:
-                return float(self.data[symbol]["close"].iloc[-1])
+            df = self.get_historical_data(symbol, timeframe="1Min", start=None, end=None)
+            if not df.empty:
+                return float(df['close'].iloc[-1])
             return None
         except Exception as e:
-            self.logger.error(f"Error getting latest price for {symbol}: {e}")
+            print(f"Error getting latest price for {symbol}: {str(e)}")
             return None
 
     def add_callback(self, callback: Callable[[str, pd.DataFrame], None]) -> None:
@@ -128,10 +172,10 @@ class DataFeed:
     def _calculate_indicators(self, symbol: str) -> None:
         """Calculate technical indicators for a symbol."""
         try:
-            if symbol not in self.data or self.data[symbol].empty:
+            if symbol not in self._data_cache or self._data_cache[symbol].empty:
                 return
 
-            df = self.data[symbol]
+            df = self._data_cache[symbol]
 
             # Calculate SMA
             df["sma_20"] = df["close"].rolling(window=20).mean()
@@ -148,7 +192,7 @@ class DataFeed:
             df["rsi"] = pd.to_numeric(df["rsi"], errors="coerce").fillna(50)
 
             # Update stored data
-            self.data[symbol] = df
+            self._data_cache[symbol] = df
         except Exception as e:
             self.logger.error(f"Error calculating indicators for {symbol}: {e}")
 
@@ -180,160 +224,201 @@ class DataFeed:
                 self.logger.error(f"Error in data feed loop: {e}")
                 time.sleep(60)  # Wait before retrying
 
+    def get_market_status(self) -> Dict[str, Any]:
+        """Get the current market status."""
+        try:
+            return self.client.get_clock()
+        except Exception as e:
+            print(f"Error getting market status: {e}")
+            return {"is_open": False, "next_open": None, "next_close": None, "timestamp": None}
 
-class MockDataFeed(DataFeed):
-    """Mock data feed for testing purposes."""
+    def get_assets(self, status: str = "active") -> List[Dict[str, Any]]:
+        """Get all available assets."""
+        try:
+            return self.client.get_assets(status)
+        except Exception as e:
+            print(f"Error getting assets: {e}")
+            return []
 
-    def __init__(self, client: Optional[AlpacaClient] = None) -> None:
-        """Initialize mock data feed.
-
-        Args:
-            client: Optional Alpaca client instance (not used in mock)
-        """
-        if client is None:
-            client = AlpacaClient(
-                api_key=os.getenv("ALPACA_API_KEY", ""),
-                secret_key=os.getenv("ALPACA_API_SECRET", ""),
-                paper=True,
-            )
-        super().__init__(client)
-        self._mock_data: Dict[str, pd.DataFrame] = {}
-        self._mock_prices: Dict[str, float] = {}
-        self._mock_trends: Dict[str, str] = {}  # 'up', 'down', or 'sideways'
-        self._mock_volatility: Dict[str, float] = {}  # Price volatility factor
-
-    def add_symbol(self, symbol: str) -> bool:
-        """Add a symbol to track with mock data.
-
-        Args:
-            symbol: Trading symbol to add
+    def get_positions(self) -> Dict[str, Dict[str, Any]]:
+        """Get current positions.
 
         Returns:
-            True if symbol was added successfully, False otherwise
+            A dictionary mapping symbols to position information.
         """
         try:
-            if symbol not in self.symbols:
-                self.symbols.append(symbol)
-                self._mock_prices[symbol] = 100.0  # Initial price
-                self._mock_trends[symbol] = "sideways"
-                self._mock_volatility[symbol] = 0.02  # 2% daily volatility
-                self._generate_mock_data(symbol)
-                self.logger.info("Added mock symbol %s to data feed", symbol)
-                return True
-            return False
+            positions = self.client.get_positions()
+            return {
+                position.symbol: {
+                    'symbol': position.symbol,
+                    'qty': float(position.qty),
+                    'market_value': float(position.market_value),
+                    'current_price': float(position.current_price),
+                    'lastday_price': float(position.lastday_price),
+                    'change_today': float(position.change_today),
+                    'unrealized_pl': float(position.unrealized_pl),
+                    'unrealized_plpc': float(position.unrealized_plpc),
+                    'unrealized_intraday_pl': float(position.unrealized_intraday_pl),
+                    'unrealized_intraday_plpc': float(position.unrealized_intraday_plpc),
+                    'avg_entry_price': float(position.avg_entry_price),
+                    'side': position.side,
+                    'exchange': position.exchange
+                }
+                for position in positions
+            }
         except Exception as e:
-            self.logger.error("Error adding mock symbol %s: %s", symbol, str(e))
-            return False
+            print(f"Error getting positions: {str(e)}")
+            return {}
 
-    def _generate_mock_data(self, symbol: str) -> None:
-        """Generate mock historical data for a symbol."""
+    def get_account(self) -> Dict[str, Any]:
+        """Get the trading account information."""
         try:
-            # Generate 100 days of mock data
-            dates = pd.date_range(end=datetime.now(), periods=100, freq="D")
-            base_price = self._mock_prices[symbol]
-            volatility = self._mock_volatility[symbol]
-
-            # Generate random walk prices
-            np.random.seed(hash(symbol) % 2**32)  # Consistent random data per symbol
-            returns = np.random.normal(0, volatility, len(dates))
-            prices = base_price * (1 + returns).cumprod()
-
-            # Create DataFrame
-            df = pd.DataFrame(
-                {
-                    "open": prices * (1 + np.random.normal(0, volatility / 2, len(dates))),
-                    "high": prices * (1 + np.abs(np.random.normal(0, volatility, len(dates)))),
-                    "low": prices * (1 - np.abs(np.random.normal(0, volatility, len(dates)))),
-                    "close": prices,
-                    "volume": np.random.randint(1000000, 5000000, len(dates)),
-                },
-                index=dates,
-            )
-
-            # Calculate indicators
-            self._calculate_indicators(symbol)
-
-            # Store mock data
-            self._mock_data[symbol] = df
-            self.data[symbol] = df
-
+            return self.client.get_account()
         except Exception as e:
-            self.logger.error("Error generating mock data for %s: %s", symbol, str(e))
+            print(f"Error getting account: {e}")
+            return {}
 
-    def get_historical_data(self, symbol: str, start: datetime, end: datetime) -> pd.DataFrame:
-        """Get mock historical data for a symbol."""
+    def get_asset(self, symbol: str) -> Optional[Dict[str, Any]]:
+        """Get information about a specific asset."""
         try:
-            if symbol not in self._mock_data:
-                return pd.DataFrame()
-
-            df = self._mock_data[symbol]
-            mask = (df.index >= start) & (df.index <= end)
-            return df[mask]
+            return self.client.get_asset(symbol)
         except Exception as e:
-            self.logger.error("Error getting mock historical data for %s: %s", symbol, str(e))
-            return pd.DataFrame()
+            print(f"Error getting asset: {e}")
+            return None
 
-    def get_latest_data(self, symbol: str) -> pd.DataFrame:
-        """Get latest mock data for a symbol."""
+    def get_current_data(self, symbol: str) -> Dict[str, Any]:
+        """
+        Get current market data for a symbol.
+        
+        Args:
+            symbol: The stock symbol
+            
+        Returns:
+            Dictionary containing current market data
+        """
         try:
-            if symbol not in self._mock_data:
-                return pd.DataFrame()
-
-            # Update mock price based on trend
-            current_price = self._mock_prices[symbol]
-            volatility = self._mock_volatility[symbol]
-
-            if self._mock_trends[symbol] == "up":
-                new_price = current_price * (1 + np.random.normal(0.001, volatility))
-            elif self._mock_trends[symbol] == "down":
-                new_price = current_price * (1 + np.random.normal(-0.001, volatility))
-            else:  # sideways
-                new_price = current_price * (1 + np.random.normal(0, volatility))
-
-            self._mock_prices[symbol] = new_price
-
-            # Update mock data
-            self._generate_mock_data(symbol)
-
-            # Get latest data
-            df = self._mock_data[symbol].iloc[-1:]
-
-            # Notify callbacks
-            for callback in self.callbacks:
-                callback(symbol, df)
-
-            return df
+            latest_price = self.get_latest_price(symbol)
+            if latest_price is None:
+                return {}
+                
+            position = self.client.get_position(symbol)
+            
+            return {
+                "symbol": symbol,
+                "price": latest_price,
+                "position": position if position else {},
+                "timestamp": datetime.now()
+            }
         except Exception as e:
-            self.logger.error("Error getting latest mock data for %s: %s", symbol, str(e))
-            return pd.DataFrame()
+            print(f"Error getting current data for {symbol}: {e}")
+            return {}
+
+    def clear_cache(self) -> None:
+        """Clear the data cache."""
+        self._data_cache.clear()
+
+    def update_cache(self, symbol: str, data: pd.DataFrame) -> None:
+        """
+        Update the cache with new data for a symbol.
+        
+        Args:
+            symbol: The stock symbol
+            data: DataFrame containing the new data
+        """
+        if not data.empty:
+            self._data_cache[symbol] = data
+
+
+class MockDataFeed:
+    """Mock data feed for testing purposes."""
+
+    def __init__(self) -> None:
+        """Initialize the mock data feed."""
+        self._data: Dict[str, DataFrame] = {}
+        self._positions: Dict[str, Dict[str, Any]] = {}
+
+    def get_historical_data(
+        self,
+        symbol: str,
+        start: Optional[datetime] = None,
+        end: Optional[datetime] = None,
+        timeframe: str = "1Day"
+    ) -> DataFrame:
+        """Get mock historical data.
+
+        Args:
+            symbol: The stock symbol.
+            start: Start datetime (optional).
+            end: End datetime (optional).
+            timeframe: The timeframe for the data (ignored in mock).
+
+        Returns:
+            DataFrame with mock data.
+        """
+        if symbol not in self._data:
+            # Generate mock data
+            dates = pd.date_range(start='2020-01-01', end='2023-12-31', freq='D')
+            n = len(dates)
+            price = 100.0
+            data = []
+            for i in range(n):
+                price *= (1 + np.random.normal(0, 0.02))
+                data.append({
+                    'timestamp': dates[i],
+                    'open': price * (1 + np.random.normal(0, 0.005)),
+                    'high': price * (1 + np.random.normal(0, 0.01)),
+                    'low': price * (1 - np.random.normal(0, 0.01)),
+                    'close': price,
+                    'volume': int(np.random.normal(1000000, 200000)),
+                    'trade_count': int(np.random.normal(5000, 1000)),
+                    'vwap': price * (1 + np.random.normal(0, 0.002))
+                })
+            df = pd.DataFrame(data)
+            df.set_index('timestamp', inplace=True)
+            self._data[symbol] = df
+
+        df = self._data[symbol].copy()
+        if start:
+            df = df[df.index >= start]
+        if end:
+            df = df[df.index <= end]
+        return df
 
     def get_latest_price(self, symbol: str) -> Optional[float]:
-        """Get latest mock price for a symbol."""
-        try:
-            if symbol in self._mock_prices:
-                return self._mock_prices[symbol]
-            return None
-        except Exception as e:
-            self.logger.error("Error getting latest mock price for %s: %s", symbol, str(e))
-            return None
-
-    def set_mock_trend(self, symbol: str, trend: str) -> None:
-        """Set the trend for a mock symbol.
+        """Get mock latest price.
 
         Args:
-            symbol: Trading symbol
-            trend: 'up', 'down', or 'sideways'
-        """
-        if trend in ["up", "down", "sideways"]:
-            self._mock_trends[symbol] = trend
-            self.logger.info("Set mock trend for %s to %s", symbol, trend)
+            symbol: The stock symbol.
 
-    def set_mock_volatility(self, symbol: str, volatility: float) -> None:
-        """Set the volatility for a mock symbol.
+        Returns:
+            The latest mock price.
+        """
+        df = self.get_historical_data(symbol)
+        if not df.empty:
+            return float(df['close'].iloc[-1])
+        return None
+
+    def get_positions(self) -> Dict[str, Dict[str, Any]]:
+        """Get mock positions.
+
+        Returns:
+            Dictionary of mock positions.
+        """
+        return self._positions.copy()
+
+    def set_positions(self, positions: Dict[str, Dict[str, Any]]) -> None:
+        """Set mock positions for testing.
 
         Args:
-            symbol: Trading symbol
-            volatility: Daily volatility factor (e.g., 0.02 for 2%)
+            positions: Dictionary of positions to set.
         """
-        self._mock_volatility[symbol] = volatility
-        self.logger.info("Set mock volatility for %s to %.2f%%", symbol, volatility * 100)
+        self._positions = positions.copy()
+
+    def set_historical_data(self, symbol: str, data: DataFrame) -> None:
+        """Set mock historical data for testing.
+
+        Args:
+            symbol: The stock symbol.
+            data: DataFrame containing the historical data.
+        """
+        self._data[symbol] = data.copy()

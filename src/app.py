@@ -137,7 +137,7 @@ def update_bot_status() -> None:
     while True:
         try:
             if not demo_mode:
-                status = trading_bot.get_status()
+                status = trading_bot.get_metrics()
                 bot_status.update(status)
             else:
                 # Simulate status updates in demo mode
@@ -197,7 +197,8 @@ def login() -> Union[WerkzeugResponse, str]:
 
 
 @app.route("/login/<provider>")
-def oauth_login(provider):
+def oauth_login(provider: str) -> WerkzeugResponse:
+    """Handle OAuth login requests."""
     if provider == "google":
         return google.authorize_redirect(url_for("google_authorize", _external=True))
     elif provider == "github":
@@ -208,7 +209,8 @@ def oauth_login(provider):
 
 
 @app.route("/authorize/google")
-def google_authorize():
+def google_authorize() -> WerkzeugResponse:
+    """Handle Google OAuth authorization."""
     google.authorize_access_token()
     resp = google.get("userinfo")
     user_info = resp.json()
@@ -217,7 +219,8 @@ def google_authorize():
 
 
 @app.route("/authorize/github")
-def github_authorize():
+def github_authorize() -> WerkzeugResponse:
+    """Handle GitHub OAuth authorization."""
     github.authorize_access_token()
     resp = github.get("user")
     user_info = resp.json()
@@ -226,12 +229,13 @@ def github_authorize():
 
 
 @app.route("/authorize/linkedin")
-def linkedin_authorize():
+def linkedin_authorize() -> WerkzeugResponse:
+    """Handle LinkedIn OAuth authorization."""
     linkedin.authorize_access_token()
     resp = linkedin.get("me")
     user_info = resp.json()
     session["username"] = user_info["emailAddress"]
-    return redirect(url_for("index"))
+    return redirect(url_for("login"))
 
 
 @app.route("/logout")
@@ -250,14 +254,14 @@ def index() -> str:
 
 @app.route("/api/status")
 @login_required
-def get_status() -> Response:
+def get_status() -> WerkzeugResponse:
     """Get bot status."""
     return jsonify(bot_status)
 
 
 @app.route("/api/start", methods=["POST"])
 @login_required
-def start_bot() -> Response:
+def start_bot() -> WerkzeugResponse:
     """Start the trading bot."""
     try:
         if not demo_mode:
@@ -268,12 +272,12 @@ def start_bot() -> Response:
         return jsonify({"status": "success"})
     except Exception as e:
         logger.error(f"Error starting bot: {e}")
-        return jsonify({"status": "error", "message": str(e)}), 500
+        return jsonify({"status": "error", "message": str(e)})
 
 
 @app.route("/api/stop", methods=["POST"])
 @login_required
-def stop_bot() -> Response:
+def stop_bot() -> WerkzeugResponse:
     """Stop the trading bot."""
     try:
         if not demo_mode:
@@ -283,13 +287,13 @@ def stop_bot() -> Response:
         return jsonify({"status": "success"})
     except Exception as e:
         logger.error(f"Error stopping bot: {e}")
-        return jsonify({"status": "error", "message": str(e)}), 500
+        return jsonify({"status": "error", "message": str(e)})
 
 
 @app.route("/api/positions")
 @login_required
-def get_positions():
-    """Get current positions"""
+def get_positions() -> WerkzeugResponse:
+    """Get current positions."""
     if demo_mode:
         return jsonify([])
 
@@ -302,8 +306,8 @@ def get_positions():
 
 @app.route("/api/portfolio-history")
 @login_required
-def get_portfolio_history():
-    """Get portfolio history"""
+def get_portfolio_history() -> WerkzeugResponse:
+    """Get portfolio history."""
     if demo_mode:
         return jsonify(
             {
@@ -324,8 +328,8 @@ def get_portfolio_history():
 
 @app.route("/api/market-status")
 @login_required
-def get_market_status():
-    """Get current market status"""
+def get_market_status() -> WerkzeugResponse:
+    """Get current market status."""
     if demo_mode:
         market_open = datetime.now().hour >= 9 and datetime.now().hour < 16
         return jsonify(

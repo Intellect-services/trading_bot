@@ -47,167 +47,157 @@ class BacktestEngine:
     def __init__(
         self,
         strategy: Strategy,
-        historical_data: pd.DataFrame,
-        initial_capital: float = 100000.0,
-        commission: float = 0.001,
+        initial_capital: float,
+        commission: float = 0.0,
+        slippage: float = 0.0
     ) -> None:
-        """Initialize backtesting engine.
-
-        Args:
-            strategy: Trading strategy
-            historical_data: Historical price data
-            initial_capital: Initial capital amount
-            commission: Commission rate
-        """
         self.strategy = strategy
-        self.historical_data = historical_data
         self.initial_capital = initial_capital
         self.commission = commission
-        self.portfolio = Portfolio(initial_capital)
-        self.trades: List[BacktestTrade] = []
-        self.equity_curve: List[float] = []
-        self.logger = logging.getLogger(__name__)
+        self.slippage = slippage
+        self.portfolio_value = initial_capital
+        self.positions: Dict[str, float] = {}
+        self.trades: List[Dict[str, Any]] = []
+        self.metrics: Dict[str, float] = {}
 
-    def run(self) -> BacktestResult:
-        """Run backtest.
+    def run(
+        self,
+        data: pd.DataFrame,
+        start_date: Optional[datetime] = None,
+        end_date: Optional[datetime] = None
+    ) -> Dict[str, Any]:
+        """Run the backtest."""
+        if start_date is not None:
+            data = data[data.index >= start_date]
+        if end_date is not None:
+            data = data[data.index <= end_date]
 
-        Returns:
-            Backtest results
-        """
-        try:
-            for i in range(len(self.historical_data)):
-                current_data = self.historical_data.iloc[i]
-                current_date = self.historical_data.index[i]
+        self.portfolio_value = self.initial_capital
+        self.positions = {}
+        self.trades = []
+        self.metrics = {}
 
-                # Update portfolio prices
-                self.portfolio.update_prices({"AAPL": float(current_data["close"])})
+        for timestamp, row in data.iterrows():
+            # Update strategy state
+            self.strategy.update_state(row, timestamp)
 
-                # Generate signals
-                signals = self.strategy.generate_signals(pd.DataFrame([current_data]))
-                if signals is not None and not signals.empty:
-                    # Get the latest signal
-                    latest_signal = signals.iloc[-1]["signal"]
+            # Generate signals
+            signals = self.strategy.generate_signals()
 
-                    # Execute trades
-                    if latest_signal > 0:  # Buy signal
-                        position = self.portfolio.get_position("AAPL")
-                        if not position:
-                            size = self.portfolio.calculate_position_size(current_data["close"])
-                            self.portfolio.execute_order("AAPL", size, "buy", current_data["close"])
-                            self.trades.append(
-                                {
-                                    "timestamp": current_date.isoformat(),
-                                    "symbol": "AAPL",
-                                    "side": "buy",
-                                    "size": size,
-                                    "price": current_data["close"],
-                                    "pnl": 0.0,
-                                }
-                            )
-                    elif latest_signal < 0:  # Sell signal
-                        position = self.portfolio.get_position("AAPL")
-                        if position:
-                            size = position["size"]
-                            self.portfolio.execute_order(
-                                "AAPL", size, "sell", current_data["close"]
-                            )
-                            self.trades.append(
-                                {
-                                    "timestamp": current_date.isoformat(),
-                                    "symbol": "AAPL",
-                                    "side": "sell",
-                                    "size": size,
-                                    "price": current_data["close"],
-                                    "pnl": 0.0,
-                                }
-                            )
+            # Execute trades based on signals
+            self._execute_trades(signals, row, timestamp)
 
-                # Record equity
-                self.equity_curve.append(self.portfolio.get_value())
+            # Update portfolio value
+            self._update_portfolio_value(row)
 
-            # Calculate performance metrics
-            return self._calculate_metrics()
-        except Exception as e:
-            logger.error(f"Error running backtest: {e}")
-            return {
-                "trades": [],
-                "total_return": 0.0,
-                "sharpe_ratio": 0.0,
-                "max_drawdown": 0.0,
+        # Calculate final metrics
+        self._calculate_metrics()
+
+        return {
+            "initial_capital": self.initial_capital,
+            "final_value": self.portfolio_value,
+            "total_return": (self.portfolio_value - self.initial_capital) / self.initial_capital,
+            "trades": self.trades,
+            "metrics": self.metrics
+        }
+
+    def _execute_trades(
+        self,
+        signals: Dict[str, float],
+        current_bar: pd.Series,
+        current_time: datetime
+    ) -> None:
+        """Execute trades based on signals."""
+        for symbol, signal in signals.items():
+            if signal == 0.0:
+                continue
+
+            # Calculate position size
+            price = float(current_bar[symbol])
+            position_value = self.portfolio_value * abs(signal)
+            shares = position_value / price
+
+            # Apply slippage
+            execution_price = price * (1 + self.slippage * (1 if signal > 0 else -1))
+
+            # Calculate commission
+            commission = execution_price * shares * self.commission
+
+            # Record trade
+            self.trades.append({
+                "timestamp": current_time.isoformat(),
+                "symbol": symbol,
+                "signal": signal,
+                "price": execution_price,
+                "shares": shares,
+                "commission": commission,
+                "value": position_value
+            })
+
+            # Update positions
+            self.positions[symbol] = shares if signal > 0 else -shares
+
+    def _update_portfolio_value(self, current_bar: pd.Series) -> None:
+        """Update portfolio value based on current prices."""
+        portfolio_value = self.initial_capital
+
+        for symbol, shares in self.positions.items():
+            price = float(current_bar[symbol])
+            portfolio_value += shares * price
+
+        self.portfolio_value = portfolio_value
+
+    def _calculate_metrics(self) -> None:
+        """Calculate performance metrics."""
+        if not self.trades:
+            self.metrics = {
+                "total_trades": 0,
+                "winning_trades": 0,
+                "losing_trades": 0,
                 "win_rate": 0.0,
-                "profit_factor": 0.0,
-                "avg_trade": 0.0,
-                "avg_win": 0.0,
-                "avg_loss": 0.0,
-                "max_win": 0.0,
-                "max_loss": 0.0,
-            }
-
-    def _calculate_metrics(self) -> BacktestResult:
-        try:
-            trades_dict = [dict(trade) for trade in self.trades]
-
-            # Calculate returns
-            returns = [trade["pnl"] for trade in self.trades]
-            total_return = float(np.sum(returns))
-
-            # Calculate Sharpe ratio
-            if len(returns) > 1:
-                sharpe_ratio = float(np.mean(returns) / np.std(returns) * np.sqrt(252))
-            else:
-                sharpe_ratio = 0.0
-
-            # Calculate maximum drawdown
-            cumulative_returns = np.cumsum(returns)
-            rolling_max = np.maximum.accumulate(cumulative_returns)
-            drawdowns = rolling_max - cumulative_returns
-            max_drawdown = float(np.max(drawdowns)) if len(drawdowns) > 0 else 0.0
-
-            # Calculate win rate and profit factor
-            winning_trades = [t for t in self.trades if t["pnl"] > 0]
-            losing_trades = [t for t in self.trades if t["pnl"] < 0]
-
-            win_rate = float(len(winning_trades) / len(self.trades)) if self.trades else 0.0
-
-            total_profits = sum(t["pnl"] for t in winning_trades)
-            total_losses = abs(sum(t["pnl"] for t in losing_trades))
-            profit_factor = float(total_profits / total_losses) if total_losses != 0 else 0.0
-
-            # Calculate average metrics
-            avg_trade = float(np.mean(returns)) if returns else 0.0
-            avg_win = float(np.mean([t["pnl"] for t in winning_trades])) if winning_trades else 0.0
-            avg_loss = float(np.mean([t["pnl"] for t in losing_trades])) if losing_trades else 0.0
-            max_win = float(max(t["pnl"] for t in winning_trades)) if winning_trades else 0.0
-            max_loss = float(min(t["pnl"] for t in losing_trades)) if losing_trades else 0.0
-
-            return {
-                "trades": trades_dict,
-                "total_return": total_return,
-                "sharpe_ratio": sharpe_ratio,
-                "max_drawdown": max_drawdown,
-                "win_rate": win_rate,
-                "profit_factor": profit_factor,
-                "avg_trade": avg_trade,
-                "avg_win": avg_win,
-                "avg_loss": avg_loss,
-                "max_win": max_win,
-                "max_loss": max_loss,
-            }
-        except Exception as e:
-            self.logger.error(f"Error calculating metrics: {e}")
-            return {
-                "trades": [],
-                "total_return": 0.0,
+                "avg_return": 0.0,
                 "sharpe_ratio": 0.0,
-                "max_drawdown": 0.0,
-                "win_rate": 0.0,
-                "profit_factor": 0.0,
-                "avg_trade": 0.0,
-                "avg_win": 0.0,
-                "avg_loss": 0.0,
-                "max_win": 0.0,
-                "max_loss": 0.0,
+                "max_drawdown": 0.0
             }
+            return
+
+        # Calculate returns
+        returns = []
+        equity = self.initial_capital
+        peak = self.initial_capital
+        max_drawdown = 0.0
+
+        for trade in self.trades:
+            pnl = trade["shares"] * trade["price"] - trade["commission"]
+            equity += pnl
+            returns.append(pnl / equity)
+
+            # Update max drawdown
+            if equity > peak:
+                peak = equity
+            drawdown = (peak - equity) / peak
+            max_drawdown = max(max_drawdown, drawdown)
+
+        # Convert returns to numpy array for calculations
+        returns_array = np.array(returns)
+
+        # Calculate metrics
+        total_trades = len(self.trades)
+        winning_trades = sum(1 for r in returns if r > 0)
+        losing_trades = sum(1 for r in returns if r < 0)
+        win_rate = winning_trades / total_trades if total_trades > 0 else 0.0
+        avg_return = float(np.mean(returns_array)) if len(returns_array) > 0 else 0.0
+        sharpe_ratio = float(np.mean(returns_array) / np.std(returns_array)) if len(returns_array) > 1 else 0.0
+
+        self.metrics = {
+            "total_trades": total_trades,
+            "winning_trades": winning_trades,
+            "losing_trades": losing_trades,
+            "win_rate": win_rate,
+            "avg_return": avg_return,
+            "sharpe_ratio": sharpe_ratio,
+            "max_drawdown": max_drawdown
+        }
 
     def calculate_returns(self) -> float:
         """Calculate total returns.
