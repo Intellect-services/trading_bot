@@ -2,30 +2,37 @@
 
 import logging
 from datetime import datetime, timedelta
-from typing import Any, Dict, List, Optional, Union, cast, TypeVar, TypedDict
+from typing import Any, Dict, List, Optional, TypedDict, TypeVar, Union, cast
 
+import alpaca_trade_api as tradeapi
 import pandas as pd
 from alpaca.data import StockHistoricalDataClient
-from alpaca.data.requests import StockBarsRequest, GetAssetsRequest
+from alpaca.data.models import BarSet
+from alpaca.data.requests import GetAssetsRequest, StockBarsRequest
 from alpaca.data.timeframe import TimeFrame, TimeFrameUnit
 from alpaca.trading import TradingClient
-from alpaca.trading.enums import OrderSide, TimeInForce, OrderType, QueryOrderStatus, AssetClass
-from alpaca.trading.models import Asset, Order, Position, TradeAccount as AlpacaTradeAccount, Clock
+from alpaca.trading.enums import (
+    AssetClass,
+    OrderSide,
+    OrderType,
+    QueryOrderStatus,
+    TimeInForce,
+)
+from alpaca.trading.models import Asset, Clock, Order, Position
+from alpaca.trading.models import TradeAccount as AlpacaTradeAccount
 from alpaca.trading.requests import (
+    GetOrdersRequest,
     LimitOrderRequest,
     MarketOrderRequest,
-    StopOrderRequest,
-    GetOrdersRequest,
     OrderRequest,
+    StopOrderRequest,
 )
-import alpaca_trade_api as tradeapi
 from alpaca_trade_api.rest import APIError
-from alpaca.data.models import BarSet
 
+from src.core.alpaca_types import Bar
+from src.types import Order, TradeAccount
 from src.utils.config import get_config
 from src.utils.logger import setup_logger
-from src.types import TradeAccount, Order
-from src.core.alpaca_types import Bar
 
 logger = logging.getLogger(__name__)
 

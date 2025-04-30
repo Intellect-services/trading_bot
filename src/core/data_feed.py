@@ -8,15 +8,16 @@ from typing import Any, Callable, Dict, List, Optional, Union
 
 import numpy as np
 import pandas as pd
-from alpaca.data.timeframe import TimeFrame
-from pandas import DataFrame
 from alpaca.data.models import Bar
+from alpaca.data.timeframe import TimeFrame
 from alpaca.trading.models import Position
+from pandas import DataFrame
 
 from src.core.alpaca_client import AlpacaClient
-from src.utils.logger import setup_logger
-from .alpaca_service import AlpacaService
 from src.core.alpaca_types import Bar
+from src.utils.logger import setup_logger
+
+from .alpaca_service import AlpacaService
 
 logger = setup_logger(__name__)
 

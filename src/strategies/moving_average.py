@@ -1,6 +1,7 @@
-from typing import Dict, Any, Optional, List, Union
-import pandas as pd
 from datetime import datetime
+from typing import Any, Dict, List, Optional, Union
+
+import pandas as pd
 
 from src.core.strategy import Strategy
 from src.utils.logger import setup_logger

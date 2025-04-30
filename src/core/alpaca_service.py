@@ -7,39 +7,39 @@ from typing import Any, Dict, List, Optional, Union, cast
 from uuid import UUID
 
 import pandas as pd
+from alpaca.data.enums import Adjustment
 from alpaca.data.historical import StockHistoricalDataClient
+from alpaca.data.models import BarSet
 from alpaca.data.requests import StockBarsRequest
 from alpaca.data.timeframe import TimeFrame
 from alpaca.trading.client import TradingClient
 from alpaca.trading.enums import (
-    OrderSide,
-    QueryOrderStatus,
-    TimeInForce,
-    OrderStatus,
-    Sort,
-    AssetStatus,
     AssetClass,
+    AssetStatus,
+    OrderSide,
+    OrderStatus,
     OrderType,
+    QueryOrderStatus,
+    Sort,
+    TimeInForce,
 )
 from alpaca.trading.models import (
     Asset,
     Calendar,
     Clock,
     Order,
+    PortfolioHistory,
     Position,
     TradeAccount,
-    PortfolioHistory,
 )
 from alpaca.trading.requests import (
+    GetAssetsRequest,
+    GetCalendarRequest,
     GetOrdersRequest,
     LimitOrderRequest,
     MarketOrderRequest,
     StopOrderRequest,
-    GetAssetsRequest,
-    GetCalendarRequest,
 )
-from alpaca.data.enums import Adjustment
-from alpaca.data.models import BarSet
 
 from ..utils.config import get_config
 from ..utils.logger import setup_logger
