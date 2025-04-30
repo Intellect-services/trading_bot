@@ -96,10 +96,7 @@ class BaseStrategy(ABC):
         Returns:
             Dictionary containing strategy status information
         """
-        return {
-            "name": self.__class__.__name__,
-            "parameters": self.get_parameters()
-        }
+        return {"name": self.__class__.__name__, "parameters": self.get_parameters()}
 
     @abstractmethod
     def calculate_indicators(self, data: pd.DataFrame) -> pd.DataFrame:

@@ -222,18 +222,21 @@ class AlpacaClient:
         order = self.trading_client.submit_order(order_data)
         if isinstance(order, dict):
             return order
-        return cast(Dict[str, Any], {
-            "id": order.id,
-            "symbol": order.symbol,
-            "qty": order.qty,
-            "side": order.side,
-            "type": order.type,
-            "time_in_force": order.time_in_force,
-            "status": order.status,
-            "filled_at": order.filled_at,
-            "filled_qty": order.filled_qty,
-            "filled_avg_price": order.filled_avg_price,
-        })
+        return cast(
+            Dict[str, Any],
+            {
+                "id": order.id,
+                "symbol": order.symbol,
+                "qty": order.qty,
+                "side": order.side,
+                "type": order.type,
+                "time_in_force": order.time_in_force,
+                "status": order.status,
+                "filled_at": order.filled_at,
+                "filled_qty": order.filled_qty,
+                "filled_avg_price": order.filled_avg_price,
+            },
+        )
 
     def cancel_order(self, order_id: str) -> bool:
         """
@@ -259,7 +262,7 @@ class AlpacaClient:
         Get order information.
 
         Args:
-            order_id: ID of the order to retrieve.
+            order_id: ID of the order.
 
         Returns:
             Dictionary containing order information or None if not found.
