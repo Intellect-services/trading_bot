@@ -1,20 +1,25 @@
 import logging
 import os
 from datetime import datetime
+from typing import Generator, Any, TYPE_CHECKING, cast
 from unittest.mock import MagicMock, patch
 
 import pytest
 from alpaca.trading.client import TradingClient
 from alpaca.trading.enums import OrderSide, TimeInForce
 from alpaca.trading.requests import MarketOrderRequest
+from alpaca.trading.models import TradeAccount, Position, Clock, Order
 
 # Configure logging
 logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s")
 logger = logging.getLogger(__name__)
 
+if TYPE_CHECKING:
+    from src.core.alpaca_service import AlpacaService
+
 
 @pytest.fixture
-def mock_env_vars():
+def mock_env_vars() -> Generator[None, None, None]:
     """Fixture to set up test environment variables."""
     original_env = dict(os.environ)
     os.environ["ALPACA_API_KEY"] = "test_api_key"
@@ -25,14 +30,13 @@ def mock_env_vars():
 
 
 @pytest.fixture
-def alpaca_service(mock_env_vars):
+def alpaca_service(mock_env_vars: None) -> "AlpacaService":
     """Fixture to create a test instance of AlpacaService."""
-    from core.alpaca_service import AlpacaService
-
+    from src.core.alpaca_service import AlpacaService
     return AlpacaService()
 
 
-def test_alpaca_connection():
+def test_alpaca_connection(alpaca_service: "AlpacaService") -> None:
     try:
         # Initialize trading client
         logger.info("Initializing Alpaca trading client...")
@@ -42,7 +46,7 @@ def test_alpaca_connection():
 
         # Test account information
         logger.info("Fetching account information...")
-        account = trading_client.get_account()
+        account = cast(TradeAccount, trading_client.get_account())
         logger.info(f"Account ID: {account.account_number}")
         logger.info(f"Buying Power: ${account.buying_power}")
         logger.info(f"Equity: ${account.equity}")
@@ -51,7 +55,7 @@ def test_alpaca_connection():
 
         # Test positions
         logger.info("\nFetching positions...")
-        positions = trading_client.get_all_positions()
+        positions = cast(list[Position], trading_client.get_all_positions())
         if positions:
             for position in positions:
                 logger.info(f"Symbol: {position.symbol}")
@@ -64,7 +68,7 @@ def test_alpaca_connection():
 
         # Test market status
         logger.info("\nFetching market status...")
-        clock = trading_client.get_clock()
+        clock = cast(Clock, trading_client.get_clock())
         logger.info(f"Market is {'open' if clock.is_open else 'closed'}")
         logger.info(f"Next market open: {clock.next_open}")
         logger.info(f"Next market close: {clock.next_close}")
@@ -76,7 +80,7 @@ def test_alpaca_connection():
         )
 
         try:
-            order = trading_client.submit_order(order_data)
+            order = cast(Order, trading_client.submit_order(order_data))
             logger.info(f"Order submitted successfully: {order.id}")
             logger.info(f"Order status: {order.status}")
 
@@ -95,4 +99,13 @@ def test_alpaca_connection():
 
 
 if __name__ == "__main__":
-    test_alpaca_connection()
+    # Set up test environment variables
+    os.environ["ALPACA_API_KEY"] = "test_api_key"
+    os.environ["ALPACA_API_SECRET"] = "test_secret_key"
+    
+    # Create AlpacaService instance
+    from src.core.alpaca_service import AlpacaService
+    service = AlpacaService()
+    
+    # Run the test
+    test_alpaca_connection(service)

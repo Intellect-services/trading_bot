@@ -1,46 +1,57 @@
 import logging
+import os
+from typing import cast, List
 
-from src.core.alpaca_service import AlpacaService
+from alpaca.trading.client import TradingClient
+from alpaca.trading.models import TradeAccount, Position
 
 # Configure logging
-logging.basicConfig(level=logging.DEBUG)
+logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s")
 logger = logging.getLogger(__name__)
 
 
-def test_alpaca_connection():
+def test_alpaca_connection() -> None:
+    """Test the Alpaca API connection and basic functionality."""
     try:
-        # Initialize AlpacaService
-        service = AlpacaService()
+        # Initialize trading client
+        logger.info("Initializing Alpaca trading client...")
+        trading_client = TradingClient(
+            os.environ["ALPACA_API_KEY"], os.environ["ALPACA_API_SECRET"], paper=True
+        )
 
-        # Get account information
-        account = service.get_account()
-        if account:
-            print("\nAccount Information:")
-            print(f"Account ID: {account.get('account_id', 'N/A')}")
-            print(f"Buying Power: ${float(account.get('buying_power', 0)):.2f}")
-            print(f"Equity: ${float(account.get('equity', 0)):.2f}")
-            print(f"Cash: ${float(account.get('cash', 0)):.2f}")
-            print(f"Status: {account.get('status', 'N/A')}")
+        # Test account information
+        logger.info("Fetching account information...")
+        account = cast(TradeAccount, trading_client.get_account())
+        logger.info(f"Account ID: {account.account_number}")
+        logger.info(f"Buying Power: ${account.buying_power}")
+        logger.info(f"Equity: ${account.equity}")
+        logger.info(f"Cash: ${account.cash}")
+        logger.info(f"Status: {account.status}")
 
-            # Get positions
-            positions = service.get_positions()
-            print("\nPositions:")
-            for position in positions.get("positions", []):
-                print(f"Symbol: {position.get('symbol')}")
-                print(f"Quantity: {position.get('qty')}")
-                print(f"Market Value: ${float(position.get('market_value', 0)):.2f}")
-                print(f"Unrealized P/L: ${float(position.get('unrealized_pl', 0)):.2f}")
-                print("---")
-
-            return True
+        # Test positions
+        logger.info("\nFetching positions...")
+        positions = cast(List[Position], trading_client.get_all_positions())
+        if positions:
+            for position in positions:
+                logger.info(f"Symbol: {position.symbol}")
+                logger.info(f"Quantity: {position.qty}")
+                logger.info(f"Market Value: ${position.market_value}")
+                logger.info(f"Unrealized PL: ${position.unrealized_pl}")
+                logger.info("---")
         else:
-            print("Failed to get account information")
-            return False
+            logger.info("No positions found")
+
+        logger.info("\nAlpaca API integration test completed successfully!")
 
     except Exception as e:
-        print(f"Error connecting to Alpaca: {str(e)}")
-        return False
+        logger.error(f"Error testing Alpaca integration: {str(e)}")
+        raise
 
 
 if __name__ == "__main__":
+    # Set up test environment variables
+    os.environ["ALPACA_API_KEY"] = "test_api_key"
+    os.environ["ALPACA_API_SECRET"] = "test_secret_key"
+    
+    # Create AlpacaService instance
     test_alpaca_connection()

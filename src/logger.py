@@ -50,11 +50,11 @@ def setup_logger(name: str) -> logging.Logger:
 
 
 class BotLogger:
-    def __init__(self):
+    def __init__(self) -> None:
         self.log_dir = "logs"
         self._setup_logging()
 
-    def _setup_logging(self):
+    def _setup_logging(self) -> None:
         """Setup logging configuration"""
         if not os.path.exists(self.log_dir):
             os.makedirs(self.log_dir)
@@ -72,26 +72,26 @@ class BotLogger:
 
         self.logger = logging.getLogger("TradingBot")
 
-    def log_trade(self, symbol, action, quantity, price, status):
+    def log_trade(self, symbol: str, action: str, quantity: float, price: float, status: str) -> None:
         """Log trade execution"""
         self.logger.info(
             f"Trade Executed - {symbol}: {action} {quantity} shares @ ${price:.2f} - Status: {status}"
         )
 
-    def log_account_update(self, equity, cash, buying_power):
+    def log_account_update(self, equity: float, cash: float, buying_power: float) -> None:
         """Log account information"""
         self.logger.info(
             f"Account Update - Equity: ${equity:.2f}, Cash: ${cash:.2f}, Buying Power: ${buying_power:.2f}"
         )
 
-    def log_error(self, error_message):
+    def log_error(self, error_message: str) -> None:
         """Log error messages"""
         self.logger.error(error_message)
 
-    def log_warning(self, warning_message):
+    def log_warning(self, warning_message: str) -> None:
         """Log warning messages"""
         self.logger.warning(warning_message)
 
-    def log_info(self, info_message):
+    def log_info(self, info_message: str) -> None:
         """Log general information"""
         self.logger.info(info_message)

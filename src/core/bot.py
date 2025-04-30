@@ -4,7 +4,7 @@ import logging
 import secrets  # For secure random number generation
 import time
 from datetime import datetime
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List, Optional, Mapping, cast
 
 from alpaca.data.historical import StockHistoricalDataClient
 from alpaca.data.requests import StockBarsRequest
@@ -12,6 +12,8 @@ from alpaca.data.timeframe import TimeFrame
 from alpaca.trading.client import TradingClient
 from alpaca.trading.enums import OrderSide, TimeInForce
 from alpaca.trading.requests import MarketOrderRequest
+from alpaca.trading.models import Position as AlpacaPosition, Order
+from alpaca.data.models import Bar
 
 from src.core.portfolio import Portfolio
 from src.core.position import Position
@@ -28,7 +30,7 @@ logger = logging.getLogger(__name__)
 class TradingBot:
     """Main trading bot class that manages trading operations."""
 
-    def __init__(self, config: Config, strategy: BaseStrategy):
+    def __init__(self, config: Config, strategy: BaseStrategy) -> None:
         """Initialize the trading bot.
 
         Args:
@@ -45,8 +47,8 @@ class TradingBot:
         self.data_client = StockHistoricalDataClient(
             api_key=config.ALPACA_API_KEY, secret_key=config.ALPACA_SECRET_KEY
         )
-        self.positions: Dict[str, Any] = {}
-        self.is_running = False
+        self.positions: Dict[str, AlpacaPosition] = {}
+        self.is_running: bool = False
         logger.info("Trading bot initialized")
 
     def start(self) -> None:
@@ -69,12 +71,12 @@ class TradingBot:
         """Update the current positions."""
         try:
             positions = self.trading_client.get_all_positions()
-            self.positions = {position.symbol: position for position in positions}
+            self.positions = {cast(AlpacaPosition, position).symbol: position for position in positions}
         except Exception as e:
             logger.error(f"Error updating positions: {e}")
             self.positions = {}
 
-    def get_position(self, symbol: str) -> Optional[Any]:
+    def get_position(self, symbol: str) -> Optional[AlpacaPosition]:
         """Get position for a specific symbol.
 
         Args:
@@ -98,7 +100,7 @@ class TradingBot:
             "timestamp": datetime.now().isoformat(),
         }
 
-    def execute_trade(self, symbol: str, side: OrderSide, quantity: float) -> Optional[Any]:
+    def execute_trade(self, symbol: str, side: OrderSide, quantity: float) -> Optional[Order]:
         """Execute a trade.
 
         Args:
@@ -113,7 +115,7 @@ class TradingBot:
             order_data = MarketOrderRequest(
                 symbol=symbol, qty=quantity, side=side, time_in_force=TimeInForce.DAY
             )
-            order = self.trading_client.submit_order(order_data)
+            order = cast(Order, self.trading_client.submit_order(order_data))
             logger.info(f"Order submitted: {order}")
             return order
         except Exception as e:
@@ -122,7 +124,7 @@ class TradingBot:
 
     def get_historical_data(
         self, symbol: str, timeframe: TimeFrame, limit: int = 100
-    ) -> Optional[List[Any]]:
+    ) -> Optional[List[Bar]]:
         """Get historical price data.
 
         Args:
@@ -138,7 +140,7 @@ class TradingBot:
                 symbol_or_symbols=symbol, timeframe=timeframe, limit=limit
             )
             bars = self.data_client.get_stock_bars(request_params)
-            return bars[symbol] if bars else None
+            return list(bars[symbol]) if bars else None
         except Exception as e:
             logger.error(f"Error getting historical data: {e}")
             return None

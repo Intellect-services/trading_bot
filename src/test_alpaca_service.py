@@ -1,4 +1,5 @@
 import logging
+from typing import Dict, Any, NoReturn
 
 from core.alpaca_service import AlpacaService
 
@@ -7,7 +8,7 @@ logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(levelname)s - %(
 logger = logging.getLogger(__name__)
 
 
-def test_alpaca_service():
+def test_alpaca_service() -> None:
     try:
         # Initialize service
         logger.info("Initializing AlpacaService...")

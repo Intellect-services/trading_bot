@@ -101,7 +101,7 @@ class OrderModel(Protocol):
     stop_price: Optional[float]
     status: str
     extended_hours: bool
-    legs: List[Any]
+    legs: List[Dict[str, Any]]
     trail_percent: Optional[float]
     trail_price: Optional[float]
     hwm: Optional[float]
@@ -163,7 +163,7 @@ class Order(TypedDict):
     stop_price: Optional[float]
     status: str
     extended_hours: bool
-    legs: Optional[List]
+    legs: Optional[List[Dict[str, Any]]]
     trail_percent: Optional[float]
     trail_price: Optional[float]
     hwm: Optional[float]

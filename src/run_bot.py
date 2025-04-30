@@ -1,9 +1,11 @@
 import logging
 import os
 from datetime import datetime
+from typing import Dict, Any, Optional, Tuple, Union
+import sys
 
 from dotenv import load_dotenv
-from flask import Flask, jsonify, redirect, render_template, request, session, url_for
+from flask import Flask, jsonify, redirect, render_template, request, session, url_for, Response
 from flask_socketio import SocketIO, emit
 
 from app import app, socketio
@@ -15,8 +17,65 @@ from src.utils.config import Config
 load_dotenv()
 
 # Configure logging
-logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
+
+def setup_logging() -> None:
+    """Set up logging configuration."""
+    logging.basicConfig(
+        level=logging.INFO,
+        format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
+        handlers=[
+            logging.StreamHandler(),
+            logging.FileHandler('trading_bot.log')
+        ]
+    )
+
+def load_config() -> Dict[str, Any]:
+    """Load configuration from environment variables."""
+    config = {
+        'api_key': os.environ['ALPACA_API_KEY'],
+        'api_secret': os.environ['ALPACA_API_SECRET'],
+        'base_url': os.environ.get('ALPACA_API_BASE_URL', 'https://paper-api.alpaca.markets'),
+        'data_feed': os.environ.get('DATA_FEED', 'iex')
+    }
+    return config
+
+def setup_bot(config: Dict[str, Any]) -> TradingBot:
+    """Set up the trading bot with the given configuration."""
+    # Initialize components
+    alpaca_service = AlpacaService()
+    
+    # Create and return the bot
+    return TradingBot(alpaca_service)
+
+def run_bot(bot: TradingBot) -> None:
+    """Run the trading bot."""
+    try:
+        bot.start()
+    except KeyboardInterrupt:
+        logger.info("Received keyboard interrupt, stopping bot...")
+        bot.stop()
+    except Exception as e:
+        logger.error(f"Error running bot: {e}")
+        bot.stop()
+        raise
+
+def main() -> None:
+    """Main function to run the trading bot."""
+    try:
+        # Set up logging
+        setup_logging()
+        
+        # Load configuration
+        config = load_config()
+        
+        # Set up and run the bot
+        bot = setup_bot(config)
+        run_bot(bot)
+        
+    except Exception as e:
+        logger.error(f"Fatal error: {e}")
+        sys.exit(1)
 
 # Initialize Flask app
 app = Flask(__name__)
@@ -123,69 +182,102 @@ def logout():
     return redirect(url_for("login"))
 
 
-@app.route("/api/status")
-def get_status():
-    if "username" not in session:
-        return jsonify({"error": "Unauthorized"}), 401
-    return jsonify(bot_status)
-
-
-@app.route("/api/start", methods=["POST"])
-def start_bot():
-    if "username" not in session:
-        return jsonify({"error": "Unauthorized"}), 401
-
+@app.route('/api/status', methods=['GET'])
+def get_status() -> Union[Response, Tuple[Response, int]]:
+    """Get the current status of the trading bot."""
     try:
-        if not bot_status["is_running"]:
-            trading_bot.start()
-            bot_status["is_running"] = True
-            bot_status["last_update"] = datetime.now()
-            return jsonify({"status": "success"})
-        return jsonify({"status": "already_running"})
+        bot = app.config.get('bot')
+        if not bot:
+            return jsonify({'error': 'Bot not initialized'}), 500
+        
+        status = bot.get_status()
+        return jsonify(status)
     except Exception as e:
-        logger.error(f"Error starting bot: {str(e)}")
-        return jsonify({"error": str(e)}), 500
+        logger.error(f"Error getting bot status: {e}")
+        return jsonify({'error': str(e)}), 500
 
 
-@app.route("/api/stop", methods=["POST"])
-def stop_bot():
-    if "username" not in session:
-        return jsonify({"error": "Unauthorized"}), 401
-
+@app.route('/api/start', methods=['POST'])
+def start_bot() -> Union[Response, Tuple[Response, int]]:
+    """Start the trading bot."""
     try:
-        if bot_status["is_running"]:
-            trading_bot.stop()
-            bot_status["is_running"] = False
-            bot_status["runtime"] = "00:00:00"
-            return jsonify({"status": "success"})
-        return jsonify({"status": "already_stopped"})
+        bot = app.config.get('bot')
+        if not bot:
+            return jsonify({'error': 'Bot not initialized'}), 500
+        
+        bot.start()
+        return jsonify({'message': 'Bot started successfully'})
     except Exception as e:
-        logger.error(f"Error stopping bot: {str(e)}")
-        return jsonify({"error": str(e)}), 500
+        logger.error(f"Error starting bot: {e}")
+        return jsonify({'error': str(e)}), 500
 
 
-@socketio.on("connect")
-def handle_connect():
-    logger.info(f"Client connected: {request.sid}")
-    emit("bot_update", bot_status)
+@app.route('/api/stop', methods=['POST'])
+def stop_bot() -> Union[Response, Tuple[Response, int]]:
+    """Stop the trading bot."""
+    try:
+        bot = app.config.get('bot')
+        if not bot:
+            return jsonify({'error': 'Bot not initialized'}), 500
+        
+        bot.stop()
+        return jsonify({'message': 'Bot stopped successfully'})
+    except Exception as e:
+        logger.error(f"Error stopping bot: {e}")
+        return jsonify({'error': str(e)}), 500
 
 
-@socketio.on("disconnect")
-def handle_disconnect():
-    logger.info(f"Client disconnected: {request.sid}")
+@app.route('/api/config', methods=['GET'])
+def get_config() -> Union[Response, Tuple[Response, int]]:
+    """Get the current configuration of the trading bot."""
+    try:
+        bot = app.config.get('bot')
+        if not bot:
+            return jsonify({'error': 'Bot not initialized'}), 500
+        
+        config = bot.get_config()
+        return jsonify(config)
+    except Exception as e:
+        logger.error(f"Error getting bot configuration: {e}")
+        return jsonify({'error': str(e)}), 500
+
+
+@app.route('/api/config', methods=['PUT'])
+def update_config() -> Union[Response, Tuple[Response, int]]:
+    """Update the configuration of the trading bot."""
+    try:
+        bot = app.config.get('bot')
+        if not bot:
+            return jsonify({'error': 'Bot not initialized'}), 500
+        
+        new_config = request.get_json()
+        if not new_config:
+            return jsonify({'error': 'No configuration data provided'}), 400
+        
+        bot.update_config(new_config)
+        return jsonify({'message': 'Configuration updated successfully'})
+    except Exception as e:
+        logger.error(f"Error updating bot configuration: {e}")
+        return jsonify({'error': str(e)}), 500
+
+
+@socketio.on('connect')
+def handle_connect() -> None:
+    """Handle WebSocket connection."""
+    if hasattr(request, 'sid'):
+        logger.info(f"Client connected: {request.sid}")
+    else:
+        logger.info("Client connected (no session ID available)")
+
+
+@socketio.on('disconnect')
+def handle_disconnect() -> None:
+    """Handle WebSocket disconnection."""
+    if hasattr(request, 'sid'):
+        logger.info(f"Client disconnected: {request.sid}")
+    else:
+        logger.info("Client disconnected (no session ID available)")
 
 
 if __name__ == "__main__":
-    # Get configuration from environment variables
-    debug_mode = os.getenv("FLASK_DEBUG", "False").lower() == "true"
-    host = os.getenv("FLASK_HOST", "127.0.0.1")  # Default to localhost
-    port = int(os.getenv("FLASK_PORT", "5001"))
-
-    # Start the Flask application with secure defaults
-    socketio.run(
-        app,
-        host=host,
-        port=port,
-        debug=debug_mode,
-        allow_unsafe_werkzeug=False,  # Disable Werkzeug debugger in production
-    )
+    main()
