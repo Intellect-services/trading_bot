@@ -6,7 +6,7 @@ from typing import Any, Dict, List, Optional
 
 import pandas as pd
 
-from src.backtesting.engine import BacktestingEngine
+from src.backtesting.engine import BacktestEngine
 from src.core.bot import TradingBot
 from src.core.data_feed import DataFeed
 from src.core.portfolio import Portfolio
@@ -29,7 +29,8 @@ def run_backtest():
             {
                 "max_position_size": config.RISK_MAX_POSITION_SIZE,
                 "stop_loss": config.RISK_STOP_LOSS_PCT,
-                "take_profit": config.RISK_STOP_LOSS_PCT * 2,  # Use 2x stop loss as take profit
+                "take_profit": config.RISK_STOP_LOSS_PCT
+                * 2,  # Use 2x stop loss as take profit
                 "max_drawdown": config.RISK_MAX_DRAWDOWN,
                 "max_leverage": config.RISK_MAX_LEVERAGE,
                 "risk_per_trade": config.RISK_PER_TRADE,

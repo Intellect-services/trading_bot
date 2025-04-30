@@ -54,7 +54,7 @@ def test_update_portfolio(portfolio, sample_data):
     portfolio.update_portfolio("AAPL", quantity, price, "buy")
 
     assert len(portfolio.positions) == 1
-    assert portfolio.positions["AAPL"]["quantity"] == quantity
+    assert portfolio.positions["AAPL"]["size"] == quantity
     assert portfolio.positions["AAPL"]["entry_price"] == price
     assert portfolio.current_balance < portfolio.initial_capital
 
@@ -124,7 +124,10 @@ def test_calculate_total_returns(portfolio, sample_data):
     assert total_returns > 0
     assert (
         total_returns
-        == (portfolio.calculate_portfolio_value(current_prices) - portfolio.initial_capital)
+        == (
+            portfolio.calculate_portfolio_value(current_prices)
+            - portfolio.initial_capital
+        )
         / portfolio.initial_capital
     )
 
@@ -136,7 +139,7 @@ def test_get_position(portfolio, sample_data):
     portfolio.update_portfolio("AAPL", quantity, price, "buy")
 
     position = portfolio.get_position("AAPL")
-    assert position["quantity"] == quantity
+    assert position["size"] == quantity
     assert position["entry_price"] == price
 
 

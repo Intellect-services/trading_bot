@@ -27,7 +27,9 @@ def setup_logger(
     logger.setLevel(level)
 
     # Create formatters
-    formatter = logging.Formatter("%(asctime)s - %(name)s - %(levelname)s - %(message)s")
+    formatter = logging.Formatter(
+        "%(asctime)s - %(name)s - %(levelname)s - %(message)s"
+    )
 
     # Create and configure console handler
     console_handler = logging.StreamHandler(sys.stdout)
@@ -62,7 +64,9 @@ class BotLogger:
         """
         self.logger = setup_logger(name, log_file=log_file)
 
-    def log_trade(self, symbol: str, side: str, quantity: float, price: float, status: str) -> None:
+    def log_trade(
+        self, symbol: str, side: str, quantity: float, price: float, status: str
+    ) -> None:
         """Log trade execution details.
 
         Args:
@@ -81,7 +85,9 @@ class BotLogger:
             status,
         )
 
-    def log_account_update(self, equity: float, cash: float, buying_power: float) -> None:
+    def log_account_update(
+        self, equity: float, cash: float, buying_power: float
+    ) -> None:
         """Log account balance updates.
 
         Args:

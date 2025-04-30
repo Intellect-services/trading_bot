@@ -26,26 +26,17 @@ logger = setup_logger(__name__)
 class AlpacaClient:
     """Client for interacting with Alpaca API."""
 
-    def __init__(self) -> None:
-        """Initialize Alpaca client with API credentials."""
-        self.api_key = os.environ.get("ALPACA_API_KEY", get_config("API_KEY"))
-        self.secret_key = os.environ.get("ALPACA_SECRET_KEY", get_config("SECRET_KEY"))
-        self.paper = os.environ.get("ALPACA_PAPER", "true").lower() == "true"
+    def __init__(self, api_key: str, secret_key: str, paper: bool = True) -> None:
+        """Initialize Alpaca client.
 
-        self.trading_client: Optional[TradingClient] = None
-        self.historical_client: Optional[StockHistoricalDataClient] = None
-
-        self._initialize_clients()
-
-    def _initialize_clients(self) -> None:
-        """Initialize Alpaca API clients."""
-        try:
-            self.trading_client = TradingClient(self.api_key, self.secret_key, paper=self.paper)
-            self.historical_client = StockHistoricalDataClient(self.api_key, self.secret_key)
-            logger.info("Alpaca clients initialized successfully")
-        except Exception as e:
-            logger.error(f"Failed to initialize Alpaca clients: {e}")
-            raise
+        Args:
+            api_key: Alpaca API key
+            secret_key: Alpaca API secret key
+            paper: Whether to use paper trading
+        """
+        self.trading_client = TradingClient(api_key, secret_key, paper=paper)
+        self.data_client = StockHistoricalDataClient(api_key, secret_key)
+        self.logger = logger
 
     def get_account(self) -> Dict[str, Any]:
         """
@@ -122,7 +113,7 @@ class AlpacaClient:
         Returns:
             DataFrame containing historical data.
         """
-        if self.historical_client is None:
+        if self.data_client is None:
             raise RuntimeError("Historical client not initialized")
 
         if start is None:
@@ -138,7 +129,7 @@ class AlpacaClient:
             limit=limit,
         )
 
-        bars = self.historical_client.get_stock_bars(request)
+        bars = self.data_client.get_stock_bars(request)
         if isinstance(bars, dict):
             return bars[symbol].df
         return bars.df

@@ -100,7 +100,9 @@ class BotLogger:
             f"Trade Executed - {symbol}: {action} {quantity} shares @ ${price:.2f} - Status: {status}"
         )
 
-    def log_account_update(self, equity: float, cash: float, buying_power: float) -> None:
+    def log_account_update(
+        self, equity: float, cash: float, buying_power: float
+    ) -> None:
         """Log account information"""
         self.logger.info(
             f"Account Update - Equity: ${equity:.2f}, Cash: ${cash:.2f}, Buying Power: ${buying_power:.2f}"

@@ -2,7 +2,7 @@
 
 import logging
 from datetime import datetime
-from typing import Any, Dict, List, Optional, Union
+from typing import Any, Dict, List, Optional, TypedDict, Union
 
 import numpy as np
 import pandas as pd
@@ -10,6 +10,26 @@ import pandas as pd
 from src.utils.logger import setup_logger
 
 logger = setup_logger(__name__)
+
+
+class PositionDict(TypedDict):
+    """Type definition for position dictionary."""
+
+    size: float
+    cost: float
+    avg_price: float
+    current_price: float
+    entry_price: float
+
+
+class OrderDict(TypedDict):
+    """Type definition for order dictionary."""
+
+    symbol: str
+    qty: float
+    side: str
+    price: float
+    timestamp: datetime
 
 
 class Portfolio:
@@ -25,8 +45,8 @@ class Portfolio:
         self.current_balance = float(initial_capital)
         self.max_position_size = 0.1  # Maximum position size as fraction of portfolio
         self.commission = 0.001  # 0.1% commission
-        self.positions: Dict[str, Dict[str, Any]] = {}
-        self.trades: List[Dict[str, Any]] = []
+        self.positions: Dict[str, PositionDict] = {}
+        self.trades: List[OrderDict] = []
         self.peak_value = float(initial_capital)
         logger.info("Portfolio initialized with %.2f capital", initial_capital)
 
@@ -53,7 +73,7 @@ class Portfolio:
         """
         return self.current_balance
 
-    def get_position(self, symbol: str) -> Optional[Dict[str, Any]]:
+    def get_position(self, symbol: str) -> Optional[PositionDict]:
         """Get position for a symbol.
 
         Args:
@@ -64,7 +84,7 @@ class Portfolio:
         """
         return self.positions.get(symbol)
 
-    def get_all_positions(self) -> Dict[str, Dict[str, Any]]:
+    def get_all_positions(self) -> Dict[str, PositionDict]:
         """Get all positions.
 
         Returns:
@@ -91,7 +111,9 @@ class Portfolio:
             logger.error(f"Error calculating position size: {e}")
             return 0.0
 
-    def execute_order(self, symbol: str, qty: float, side: str, price: float) -> Dict[str, Any]:
+    def execute_order(
+        self, symbol: str, qty: float, side: str, price: float
+    ) -> OrderDict:
         """Execute a trading order.
 
         Args:
@@ -104,7 +126,7 @@ class Portfolio:
             Order details dictionary
         """
         try:
-            order = {
+            order: OrderDict = {
                 "symbol": symbol,
                 "qty": qty,
                 "side": side,
@@ -116,7 +138,7 @@ class Portfolio:
                 cost = qty * price
                 if cost > self.current_balance:
                     logger.warning("Insufficient funds for buy order")
-                    return {}
+                    return order
 
                 self.current_balance -= cost
                 if symbol in self.positions:
@@ -139,12 +161,12 @@ class Portfolio:
             elif side.lower() == "sell":
                 if symbol not in self.positions:
                     logger.warning("No position to sell")
-                    return {}
+                    return order
 
                 position = self.positions[symbol]
                 if position["size"] < qty:
                     logger.warning("Insufficient shares for sell order")
-                    return {}
+                    return order
 
                 proceeds = qty * price
                 self.current_balance += proceeds
@@ -164,7 +186,7 @@ class Portfolio:
             return order
         except Exception as e:
             logger.error(f"Error executing order: {e}")
-            return {}
+            return order
 
     def update_prices(self, prices: Dict[str, float]) -> None:
         """Update current prices for positions.
@@ -193,7 +215,8 @@ class Portfolio:
                 "current_balance": self.current_balance,
                 "current_value": current_value,
                 "peak_value": self.peak_value,
-                "total_return": (current_value - self.initial_capital) / self.initial_capital,
+                "total_return": (current_value - self.initial_capital)
+                / self.initial_capital,
                 "positions": self.positions,
                 "trades": len(self.trades),
             }
@@ -201,7 +224,9 @@ class Portfolio:
             logger.error(f"Error getting portfolio summary: {e}")
             return {}
 
-    def update_position(self, symbol: str, quantity: float, price: float, action: str) -> bool:
+    def update_position(
+        self, symbol: str, quantity: float, price: float, action: str
+    ) -> bool:
         """Update position for a symbol.
 
         Args:
@@ -224,111 +249,110 @@ class Portfolio:
                     return False
                 self.current_balance -= total_cost
                 if symbol in self.positions:
-                    self.positions[symbol]["quantity"] += quantity
-                    self.positions[symbol]["cost_basis"] = (
-                        self.positions[symbol]["cost_basis"] * self.positions[symbol]["quantity"]
+                    self.positions[symbol]["size"] += quantity
+                    self.positions[symbol]["cost"] = (
+                        self.positions[symbol]["cost"] * self.positions[symbol]["size"]
                         + cost
-                    ) / (self.positions[symbol]["quantity"] + quantity)
+                    ) / (self.positions[symbol]["size"] + quantity)
                 else:
                     self.positions[symbol] = {
-                        "quantity": quantity,
-                        "cost_basis": price,
+                        "size": quantity,
+                        "cost": cost,
+                        "avg_price": price,
+                        "current_price": price,
                         "entry_price": price,
-                        "timestamp": datetime.now(),
                     }
             else:  # sell
                 if symbol not in self.positions:
                     logger.warning("No position to sell")
                     return False
-                if quantity > self.positions[symbol]["quantity"]:
+                if quantity > self.positions[symbol]["size"]:
                     logger.warning("Insufficient quantity to sell")
                     return False
                 self.current_balance += cost - commission
-                self.positions[symbol]["quantity"] -= quantity
-                if self.positions[symbol]["quantity"] <= 0:
+                self.positions[symbol]["size"] -= quantity
+                if self.positions[symbol]["size"] <= 0:
                     del self.positions[symbol]
 
-            # Record trade
-            self.trades.append(
-                {
-                    "timestamp": datetime.now(),
-                    "symbol": symbol,
-                    "action": action,
-                    "quantity": quantity,
-                    "price": price,
-                    "commission": commission,
-                    "balance": self.current_balance,
-                }
-            )
-
-            # Update peak value
-            current_value = self.get_value()
-            if current_value > self.peak_value:
-                self.peak_value = current_value
-
-            logger.info("%s %s shares of %s at %.2f", action.capitalize(), quantity, symbol, price)
             return True
-
         except Exception as e:
-            logger.error("Error updating position: %s", e)
+            logger.error(f"Error updating position: {e}")
             return False
 
     def get_returns(self) -> float:
-        """Get portfolio returns.
+        """Calculate total returns.
 
         Returns:
-            Portfolio returns as decimal
+            Total returns as a percentage
         """
-        return (self.current_balance - self.initial_capital) / self.initial_capital
+        try:
+            current_value = self.get_value()
+            return (current_value - self.initial_capital) / self.initial_capital
+        except Exception as e:
+            logger.error(f"Error calculating returns: {e}")
+            return 0.0
 
-    def update_portfolio(self, symbol: str, quantity: float, price: float, action: str) -> None:
-        """Update portfolio with a trade.
+    def update_portfolio(
+        self, symbol: str, quantity: float, price: float, action: str
+    ) -> None:
+        """Update portfolio with a new trade.
 
         Args:
             symbol: Trading symbol
             quantity: Trade quantity
-            price: Execution price
+            price: Trade price
             action: Trade action (buy/sell)
         """
         self.update_position(symbol, quantity, price, action)
 
     def calculate_position_value(self, symbol: str, current_price: float) -> float:
-        """Calculate current value of a position.
+        """Calculate value of a position.
 
         Args:
             symbol: Trading symbol
-            current_price: Current price
+            current_price: Current price of the asset
 
         Returns:
-            Current position value
+            Position value
         """
-        position = self.get_position(symbol)
-        if position and "quantity" in position:
-            return position["quantity"] * current_price
-        return 0.0
+        try:
+            if symbol in self.positions:
+                return self.positions[symbol]["size"] * current_price
+            return 0.0
+        except Exception as e:
+            logger.error(f"Error calculating position value: {e}")
+            return 0.0
 
     def calculate_portfolio_value(self, current_prices: Dict[str, float]) -> float:
         """Calculate total portfolio value.
 
         Args:
-            current_prices: Dictionary of current prices
+            current_prices: Dictionary mapping symbols to current prices
 
         Returns:
             Total portfolio value
         """
-        position_values = sum(
-            self.calculate_position_value(symbol, price) for symbol, price in current_prices.items()
-        )
-        return self.current_balance + position_values
+        try:
+            total_value = self.current_balance
+            for symbol, price in current_prices.items():
+                total_value += self.calculate_position_value(symbol, price)
+            return total_value
+        except Exception as e:
+            logger.error(f"Error calculating portfolio value: {e}")
+            return self.current_balance
 
     def calculate_total_returns(self, current_prices: Dict[str, float]) -> float:
-        """Calculate total portfolio returns.
+        """Calculate total returns.
 
         Args:
-            current_prices: Dictionary of current prices
+            current_prices: Dictionary mapping symbols to current prices
 
         Returns:
-            Total portfolio returns
+            Total returns as a percentage
         """
-        current_value = self.calculate_portfolio_value(current_prices)
-        return (current_value - self.initial_capital) / self.initial_capital
+        try:
+            current_value = self.calculate_portfolio_value(current_prices)
+            return (current_value - self.initial_capital) / self.initial_capital
+        except Exception as e:
+            logger.error(f"Error calculating total returns: {e}")
+            return 0.0

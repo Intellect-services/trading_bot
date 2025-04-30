@@ -118,68 +118,63 @@ def validate_config(config: Dict[str, Any]) -> bool:
 class Config:
     """Configuration class for the trading bot."""
 
-    def __init__(self) -> None:
-        # Load environment variables
-        load_dotenv()
-        logger.info("Configuration initialized")
-
-        # Alpaca API Configuration
-        self.ALPACA_API_KEY: Optional[str] = os.getenv("ALPACA_API_KEY")
-        self.ALPACA_SECRET_KEY: Optional[str] = os.getenv("ALPACA_SECRET_KEY")
-        self.ALPACA_PAPER: bool = os.getenv("ALPACA_PAPER", "true").lower() == "true"
-
-        # Trading Parameters
-        self.INITIAL_BALANCE: float = float(os.getenv("INITIAL_BALANCE", "100000.0"))
-        self.RISK_MAX_POSITION_SIZE: float = float(os.getenv("RISK_MAX_POSITION_SIZE", "0.1"))
-        self.RISK_STOP_LOSS_PCT: float = float(os.getenv("RISK_STOP_LOSS_PCT", "0.02"))
-        self.RISK_MAX_DRAWDOWN: float = float(os.getenv("RISK_MAX_DRAWDOWN", "0.20"))
-        self.RISK_MAX_LEVERAGE: float = float(os.getenv("RISK_MAX_LEVERAGE", "2.00"))
-        self.RISK_PER_TRADE: float = float(os.getenv("RISK_PER_TRADE", "0.01"))
-
-        # Strategy Parameters
-        self.STRATEGY_PARAMS: Dict[str, Union[str, list[str], Dict[str, Any]]] = {
-            "symbols": os.getenv("STRATEGY_SYMBOLS", "SPY").split(","),
-            "timeframe": os.getenv("STRATEGY_TIMEFRAME", "1D"),
-            "parameters": json.loads(os.getenv("STRATEGY_PARAMETERS", "{}")),
-        }
-
-        # Default Trading Symbol
-        self.DEFAULT_SYMBOL: str = os.getenv("DEFAULT_SYMBOL", "SPY")
-
-        # Market Hours (EST)
-        self.MARKET_OPEN: str = os.getenv("MARKET_OPEN", "09:30")
-        self.MARKET_CLOSE: str = os.getenv("MARKET_CLOSE", "16:00")
-
-        # System Configuration
-        self.UPDATE_INTERVAL: int = int(os.getenv("UPDATE_INTERVAL", "60"))
-        self.ERROR_RETRY_INTERVAL: int = int(os.getenv("ERROR_RETRY_INTERVAL", "60"))
-        self.LOG_LEVEL: str = os.getenv("LOG_LEVEL", "INFO")
-
-        # Flask Configuration
-        self.FLASK_DEBUG: bool = os.getenv("FLASK_DEBUG", "false").lower() == "true"
-        self.FLASK_SECRET_KEY: str = os.getenv("FLASK_SECRET_KEY", "default-secret-key")
-
-    def get(self, key: str, default: Any = None) -> Any:
-        """Get configuration value by key.
+    def __init__(self, config_data: Dict[str, Any]) -> None:
+        """Initialize configuration.
 
         Args:
-            key: Configuration key to retrieve
-            default: Default value if key is not found
+            config_data: Configuration data dictionary
+        """
+        self.ALPACA_API_KEY = config_data.get("ALPACA_API_KEY", "")
+        self.ALPACA_SECRET_KEY = config_data.get("ALPACA_SECRET_KEY", "")
+        self.ALPACA_PAPER = config_data.get("ALPACA_PAPER", True)
+        self.INITIAL_CAPITAL = float(config_data.get("INITIAL_CAPITAL", 100000.0))
+        self.RISK_MAX_POSITION_SIZE = float(
+            config_data.get("RISK_MAX_POSITION_SIZE", 0.1)
+        )
+        self.RISK_STOP_LOSS_PCT = float(config_data.get("RISK_STOP_LOSS_PCT", 0.02))
+        self.RISK_MAX_DRAWDOWN = float(config_data.get("RISK_MAX_DRAWDOWN", 0.1))
+        self.RISK_MAX_LEVERAGE = float(config_data.get("RISK_MAX_LEVERAGE", 1.0))
+        self.RISK_PER_TRADE = float(config_data.get("RISK_PER_TRADE", 0.01))
+
+    @classmethod
+    def from_file(cls, config_file: str) -> "Config":
+        """Create Config instance from file.
+
+        Args:
+            config_file: Path to configuration file
 
         Returns:
-            Configuration value or default
+            Config instance
         """
-        return getattr(self, key, default)
+        with open(config_file, "r") as f:
+            config_data = json.load(f)
+        return cls(config_data)
+
+    @classmethod
+    def from_dict(cls, config_data: Dict[str, Any]) -> "Config":
+        """Create Config instance from dictionary.
+
+        Args:
+            config_data: Configuration data dictionary
+
+        Returns:
+            Config instance
+        """
+        return cls(config_data)
 
     @property
     def is_valid(self) -> bool:
-        """Check if the configuration is valid."""
+        """Check if configuration is valid.
+
+        Returns:
+            True if configuration is valid, False otherwise
+        """
         return bool(self.ALPACA_API_KEY and self.ALPACA_SECRET_KEY)
 
     def __str__(self) -> str:
         """Return a string representation of the configuration."""
-        return f"Config(paper={self.ALPACA_PAPER}, debug={self.FLASK_DEBUG})"
+        return f"Config(paper={self.ALPACA_PAPER})"
 
 
 # Create a global instance
-config = Config()
+config = Config(dict(os.environ))

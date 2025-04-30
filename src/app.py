@@ -4,13 +4,20 @@ import threading
 import time
 from datetime import datetime
 from functools import wraps
+from typing import Any, Dict, List, Optional, Union
 
-from authlib.integrations.flask_client import OAuth
+from authlib.integrations.flask_client import OAuth  # type: ignore
 from flask import Flask, jsonify, redirect, render_template, request, session, url_for
-from flask_socketio import SocketIO, emit
+from flask_socketio import SocketIO, emit  # type: ignore
 
 from .core.alpaca_service import AlpacaService
 from .core.trading_bot import TradingBot
+from .core.portfolio import Portfolio
+from .core.data_feed import DataFeed
+from .core.risk_manager import RiskManager
+from .core.alpaca_client import AlpacaClient
+from .strategies.moving_average import MovingAverageCrossover
+from .utils.config import Config
 from .utils.logger import setup_logger
 
 # Configure logging
@@ -21,6 +28,9 @@ app = Flask(__name__)
 app.secret_key = os.getenv("FLASK_SECRET_KEY", "your-secret-key")
 socketio = SocketIO(app, cors_allowed_origins="*")
 
+# Initialize configuration
+config = Config({})  # Initialize with empty config
+
 # Initialize services
 try:
     alpaca_service = AlpacaService()
@@ -28,7 +38,11 @@ try:
     logger.info("Successfully initialized AlpacaService and TradingBot")
 except Exception as e:
     logger.error(f"Failed to initialize services: {e}")
-    raise
+    # Initialize in demo mode if services fail
+    demo_mode = True
+    logger.info("Running in demo mode")
+else:
+    demo_mode = False
 
 # Global state
 bot_status = {
@@ -37,6 +51,7 @@ bot_status = {
     "runtime": 0,
     "last_update": None,
     "error": None,
+    "demo_mode": demo_mode,
 }
 
 # OAuth configuration
@@ -78,6 +93,14 @@ linkedin = oauth.register(
 )
 
 
+def format_runtime(seconds: int) -> str:
+    """Format runtime in HH:MM:SS"""
+    hours = seconds // 3600
+    minutes = (seconds % 3600) // 60
+    seconds = seconds % 60
+    return f"{hours:02d}:{minutes:02d}:{seconds:02d}"
+
+
 def login_required(f):
     @wraps(f)
     def decorated_function(*args, **kwargs):
@@ -90,68 +113,128 @@ def login_required(f):
 
 def update_bot_status():
     """Update bot status and emit updates to connected clients."""
+    start_time = time.time()
+
     while True:
         try:
-            # Get market status
-            market_status = alpaca_service.get_market_status()
-            is_market_open = market_status.get("is_open", False)
+            # Calculate runtime
+            runtime = int(time.time() - start_time)
 
-            # Get account information
-            account = alpaca_service.get_account()
+            if not demo_mode:
+                # Get market status
+                market_status = alpaca_service.get_market_status()
+                is_market_open = market_status.get("is_open", False)
 
-            # Get positions
-            positions = alpaca_service.get_positions()
+                # Get account information
+                account = alpaca_service.get_account()
 
-            # Get portfolio history for the last 30 days
-            portfolio_history = alpaca_service.get_portfolio_history(period="30D", timeframe="1D")
+                # Get positions
+                positions = alpaca_service.get_positions()
 
-            # Update bot status
-            bot_status.update(
-                {
-                    "status": "RUNNING" if trading_bot.is_running else "STOPPED",
-                    "market_status": "open" if is_market_open else "closed",
-                    "runtime": trading_bot.get_runtime(),
-                    "account": {
-                        "account_id": account.get("id"),
-                        "buying_power": float(account.get("buying_power", 0)),
-                        "equity": float(account.get("equity", 0)),
-                        "cash": float(account.get("cash", 0)),
-                        "status": account.get("status"),
-                        "daytrade_count": account.get("daytrade_count", 0),
-                        "trading_blocked": account.get("trading_blocked", False),
-                        "transfers_blocked": account.get("transfers_blocked", False),
-                        "account_blocked": account.get("account_blocked", False),
-                        "shorting_enabled": account.get("shorting_enabled", False),
-                        "multiplier": account.get("multiplier", 1),
-                        "regt_buying_power": float(account.get("regt_buying_power", 0)),
-                        "daytrading_buying_power": float(account.get("daytrading_buying_power", 0)),
-                        "non_marginable_buying_power": float(
-                            account.get("non_marginable_buying_power", 0)
-                        ),
-                        "maintenance_margin": float(account.get("maintenance_margin", 0)),
-                        "last_equity": float(account.get("last_equity", 0)),
-                        "last_maintenance_margin": float(account.get("last_maintenance_margin", 0)),
-                    },
-                    "positions": positions,
-                    "portfolio_history": portfolio_history,
-                    "metrics": {
-                        "initial_capital": float(account.get("equity", 0)),
-                        "current_capital": float(account.get("equity", 0)),
-                        "active_positions": len(positions),
-                        "total_trades": trading_bot.get_total_trades(),
-                        "win_rate": trading_bot.get_win_rate(),
-                        "avg_return": trading_bot.get_average_return(),
-                        "daily_pnl": float(account.get("equity", 0))
-                        - float(account.get("last_equity", 0)),
-                        "unrealized_pl": sum(
-                            float(pos.get("unrealized_pl", 0)) for pos in positions
-                        ),
-                        "realized_pl": float(account.get("equity", 0))
-                        - float(account.get("last_equity", 0))
-                        - sum(float(pos.get("unrealized_pl", 0)) for pos in positions),
-                    },
+                # Get portfolio history for the last 30 days
+                portfolio_history = alpaca_service.get_portfolio_history(
+                    period="30D", timeframe="1D"
+                )
+
+                # Update bot status
+                bot_status.update(
+                    {
+                        "status": "RUNNING" if trading_bot.is_running else "STOPPED",
+                        "market_status": "open" if is_market_open else "closed",
+                        "runtime": format_runtime(runtime),
+                        "account": {
+                            "account_id": account.get("id"),
+                            "buying_power": float(account.get("buying_power", 0)),
+                            "equity": float(account.get("equity", 0)),
+                            "cash": float(account.get("cash", 0)),
+                            "status": account.get("status"),
+                            "daytrade_count": account.get("daytrade_count", 0),
+                            "trading_blocked": account.get("trading_blocked", False),
+                            "transfers_blocked": account.get(
+                                "transfers_blocked", False
+                            ),
+                            "account_blocked": account.get("account_blocked", False),
+                            "shorting_enabled": account.get("shorting_enabled", False),
+                            "multiplier": account.get("multiplier", 1),
+                            "regt_buying_power": float(
+                                account.get("regt_buying_power", 0)
+                            ),
+                            "daytrading_buying_power": float(
+                                account.get("daytrading_buying_power", 0)
+                            ),
+                            "non_marginable_buying_power": float(
+                                account.get("non_marginable_buying_power", 0)
+                            ),
+                            "maintenance_margin": float(
+                                account.get("maintenance_margin", 0)
+                            ),
+                            "last_equity": float(account.get("last_equity", 0)),
+                            "last_maintenance_margin": float(
+                                account.get("last_maintenance_margin", 0)
+                            ),
+                        },
+                        "positions": positions,
+                        "portfolio_history": portfolio_history,
+                        "metrics": {
+                            "initial_capital": float(account.get("equity", 0)),
+                            "current_capital": float(account.get("equity", 0)),
+                            "active_positions": len(positions),
+                            "total_trades": trading_bot.get_total_trades(),
+                            "win_rate": trading_bot.get_win_rate(),
+                            "avg_return": trading_bot.get_average_return(),
+                            "daily_pnl": float(account.get("equity", 0))
+                            - float(account.get("last_equity", 0)),
+                            "unrealized_pl": sum(
+                                float(pos.get("unrealized_pl", 0)) for pos in positions
+                            ),
+                            "realized_pl": float(account.get("equity", 0))
+                            - float(account.get("last_equity", 0))
+                            - sum(
+                                float(pos.get("unrealized_pl", 0)) for pos in positions
+                            ),
+                        },
+                    }
+                )
+            else:
+                # Demo mode with mock data
+                market_open = datetime.now().hour >= 9 and datetime.now().hour < 16
+                positions = {}  # No positions in demo mode
+                account_info = {
+                    "equity": config.get("initial_balance", 10000.0),
+                    "cash": config.get("initial_balance", 10000.0),
+                    "buying_power": config.get("initial_balance", 10000.0) * 2,
                 }
-            )
+
+                bot_status.update(
+                    {
+                        "status": "DEMO",
+                        "market_status": "open" if market_open else "closed",
+                        "runtime": format_runtime(runtime),
+                        "account": account_info,
+                        "positions": positions,
+                        "portfolio_history": {
+                            "equity": [account_info["equity"], account_info["equity"]],
+                            "timestamp": [
+                                datetime.now().isoformat(),
+                                datetime.now().isoformat(),
+                            ],
+                            "profit_loss": [0, 0],
+                            "profit_loss_pct": [0, 0],
+                            "base_value": account_info["equity"],
+                        },
+                        "metrics": {
+                            "initial_capital": account_info["equity"],
+                            "current_capital": account_info["equity"],
+                            "active_positions": 0,
+                            "total_trades": 0,
+                            "win_rate": 0,
+                            "avg_return": 0,
+                            "daily_pnl": 0,
+                            "unrealized_pl": 0,
+                            "realized_pl": 0,
+                        },
+                    }
+                )
 
             # Emit update to all connected clients
             socketio.emit("status_update", bot_status)
@@ -163,6 +246,41 @@ def update_bot_status():
             socketio.emit("status_update", bot_status)
 
         time.sleep(5)  # Update every 5 seconds
+
+
+def initialize_bot(config_data: Dict[str, Any]) -> TradingBot:
+    """Initialize the trading bot with configuration.
+
+    Args:
+        config_data: Configuration data dictionary
+
+    Returns:
+        Initialized trading bot instance
+    """
+    try:
+        # Set environment variables for Alpaca API
+        os.environ["ALPACA_API_KEY"] = config_data.get("ALPACA_API_KEY", "")
+        os.environ["ALPACA_API_SECRET"] = config_data.get("ALPACA_SECRET_KEY", "")
+        
+        # Initialize services
+        alpaca_service = AlpacaService()
+        bot = TradingBot(alpaca_service)
+        return bot
+    except Exception as e:
+        logger.error(f"Error initializing bot: {e}")
+        raise
+
+
+def run_bot():
+    """Start the trading bot"""
+    if not demo_mode and trading_bot:
+        try:
+            trading_bot.start()
+            logger.info("Bot started successfully")
+        except Exception as e:
+            logger.error(f"Error starting bot: {e}")
+    else:
+        logger.info("Bot not initialized. Running in demo mode.")
 
 
 @app.route("/login", methods=["GET", "POST"])
@@ -185,13 +303,15 @@ def oauth_login(provider):
     elif provider == "github":
         return github.authorize_redirect(url_for("github_authorize", _external=True))
     elif provider == "linkedin":
-        return linkedin.authorize_redirect(url_for("linkedin_authorize", _external=True))
+        return linkedin.authorize_redirect(
+            url_for("linkedin_authorize", _external=True)
+        )
     return redirect(url_for("login"))
 
 
 @app.route("/authorize/google")
 def google_authorize():
-    token = google.authorize_access_token()
+    google.authorize_access_token()
     resp = google.get("userinfo")
     user_info = resp.json()
     session["username"] = user_info["email"]
@@ -200,7 +320,7 @@ def google_authorize():
 
 @app.route("/authorize/github")
 def github_authorize():
-    token = github.authorize_access_token()
+    github.authorize_access_token()
     resp = github.get("user")
     user_info = resp.json()
     session["username"] = user_info["email"]
@@ -209,7 +329,7 @@ def github_authorize():
 
 @app.route("/authorize/linkedin")
 def linkedin_authorize():
-    token = linkedin.authorize_access_token()
+    linkedin.authorize_access_token()
     resp = linkedin.get("me")
     user_info = resp.json()
     session["username"] = user_info["emailAddress"]
@@ -225,233 +345,131 @@ def logout():
 @app.route("/")
 @login_required
 def index():
-    return render_template("index.html")
+    """Render the dashboard"""
+    return render_template(
+        "index.html",
+        default_symbol=config.get("DEFAULT_SYMBOL", "AAPL"),
+        demo_mode=demo_mode,
+    )
 
 
 @app.route("/api/status")
 @login_required
 def get_status():
-    try:
-        # Get current account info
-        account_info = alpaca_service.get_account()
-        if account_info:
-            logger.debug(f"Current account info: {account_info}")
-            return jsonify(
-                {
-                    "success": True,
-                    "status": bot_status["status"],
-                    "market_status": bot_status["market_status"],
-                    "runtime": bot_status["runtime"],
-                    "last_update": bot_status["last_update"],
-                    "error": bot_status["error"],
-                    "account": {
-                        "account_id": account_info.get("id"),
-                        "buying_power": float(account_info.get("buying_power", 0)),
-                        "equity": float(account_info.get("equity", 0)),
-                        "cash": float(account_info.get("cash", 0)),
-                        "status": account_info.get("status"),
-                        "daytrade_count": account_info.get("daytrade_count", 0),
-                        "trading_blocked": account_info.get("trading_blocked", False),
-                        "transfers_blocked": account_info.get("transfers_blocked", False),
-                        "account_blocked": account_info.get("account_blocked", False),
-                        "shorting_enabled": account_info.get("shorting_enabled", False),
-                        "multiplier": account_info.get("multiplier", 1),
-                        "regt_buying_power": float(account_info.get("regt_buying_power", 0)),
-                        "daytrading_buying_power": float(
-                            account_info.get("daytrading_buying_power", 0)
-                        ),
-                        "non_marginable_buying_power": float(
-                            account_info.get("non_marginable_buying_power", 0)
-                        ),
-                        "maintenance_margin": float(account_info.get("maintenance_margin", 0)),
-                        "last_equity": float(account_info.get("last_equity", 0)),
-                        "last_maintenance_margin": float(
-                            account_info.get("last_maintenance_margin", 0)
-                        ),
-                    },
-                    "metrics": {
-                        "initial_capital": float(account_info.get("equity", 0)),
-                        "current_capital": float(account_info.get("equity", 0)),
-                        "active_positions": len(alpaca_service.get_positions()),
-                        "total_trades": trading_bot.get_total_trades(),
-                        "win_rate": trading_bot.get_win_rate(),
-                        "avg_return": trading_bot.get_average_return(),
-                        "daily_pnl": float(account_info.get("equity", 0))
-                        - float(account_info.get("last_equity", 0)),
-                        "unrealized_pl": sum(
-                            float(pos.get("unrealized_pl", 0))
-                            for pos in alpaca_service.get_positions()
-                        ),
-                        "realized_pl": float(account_info.get("equity", 0))
-                        - float(account_info.get("last_equity", 0))
-                        - sum(
-                            float(pos.get("unrealized_pl", 0))
-                            for pos in alpaca_service.get_positions()
-                        ),
-                    },
-                }
-            )
-        return jsonify({"success": False, "error": "Failed to get account information"})
-    except Exception as e:
-        logger.error(f"Error getting status: {e}")
-        return jsonify({"success": False, "error": str(e)})
+    """Get current bot status"""
+    return jsonify(bot_status)
 
 
 @app.route("/api/start", methods=["POST"])
+@login_required
 def start_bot():
-    if "username" not in session:
-        return jsonify({"error": "Unauthorized"}), 401
+    """Start the trading bot"""
+    if demo_mode:
+        return jsonify({"status": "error", "message": "Cannot start bot in demo mode"})
 
     try:
-        if bot_status["status"] == "stopped":
-            # Get detailed market status
-            market_status = alpaca_service.get_market_status()
-            if not market_status.get("is_open", False):
-                next_open = market_status.get("next_open")
-                next_close = market_status.get("next_close")
-                return (
-                    jsonify(
-                        {
-                            "error": "Market is closed",
-                            "market_status": {
-                                "is_open": False,
-                                "next_open": next_open,
-                                "next_close": next_close,
-                            },
-                        }
-                    ),
-                    400,
-                )
-
-            bot_status["status"] = "running"
-            bot_status["runtime"] = 0
-            bot_status["last_update"] = datetime.now().isoformat()
-            bot_status["error"] = None
-            trading_bot.start()
-            logger.info("Bot started successfully")
-            return jsonify({"success": True})
-        return jsonify({"error": "Bot already running"}), 400
+        run_bot()
+        return jsonify({"status": "success", "message": "Bot started successfully"})
     except Exception as e:
-        logger.error(f"Error starting bot: {e}")
-        bot_status["error"] = str(e)
-        return jsonify({"error": str(e)}), 500
+        return jsonify({"status": "error", "message": str(e)})
 
 
 @app.route("/api/stop", methods=["POST"])
+@login_required
 def stop_bot():
-    if "username" not in session:
-        return jsonify({"error": "Unauthorized"}), 401
+    """Stop the trading bot"""
+    if demo_mode:
+        return jsonify({"status": "error", "message": "Cannot stop bot in demo mode"})
 
     try:
-        if bot_status["status"] == "running":
-            bot_status["status"] = "stopped"
-            bot_status["last_update"] = datetime.now().isoformat()
-            bot_status["error"] = None
-            trading_bot.stop()
-            logger.info("Bot stopped successfully")
-            return jsonify({"success": True})
-        return jsonify({"error": "Bot not running"}), 400
+        trading_bot.stop()
+        return jsonify({"status": "success", "message": "Bot stopped successfully"})
     except Exception as e:
-        logger.error(f"Error stopping bot: {e}")
-        bot_status["error"] = str(e)
-        return jsonify({"error": str(e)}), 500
+        return jsonify({"status": "error", "message": str(e)})
 
 
 @app.route("/api/positions")
+@login_required
 def get_positions():
-    if "username" not in session:
-        return jsonify({"error": "Unauthorized"}), 401
+    """Get current positions"""
+    if demo_mode:
+        return jsonify([])
 
     try:
         positions = alpaca_service.get_positions()
-        return jsonify({"success": True, "positions": positions})
+        return jsonify(positions)
     except Exception as e:
-        logger.error(f"Error getting positions: {e}")
-        return jsonify({"success": False, "error": str(e)})
+        return jsonify({"status": "error", "message": str(e)})
 
 
 @app.route("/api/portfolio-history")
+@login_required
 def get_portfolio_history():
-    if "username" not in session:
-        return jsonify({"error": "Unauthorized"}), 401
+    """Get portfolio history"""
+    if demo_mode:
+        return jsonify(
+            {
+                "equity": [10000.0, 10000.0],
+                "timestamp": [datetime.now().isoformat(), datetime.now().isoformat()],
+                "profit_loss": [0, 0],
+                "profit_loss_pct": [0, 0],
+                "base_value": 10000.0,
+            }
+        )
 
     try:
         history = alpaca_service.get_portfolio_history(period="30D", timeframe="1D")
-        return jsonify({"success": True, "history": history})
+        return jsonify(history)
     except Exception as e:
-        logger.error(f"Error getting portfolio history: {e}")
-        return jsonify({"success": False, "error": str(e)})
+        return jsonify({"status": "error", "message": str(e)})
 
 
 @app.route("/api/market-status")
+@login_required
 def get_market_status():
-    if "username" not in session:
-        return jsonify({"error": "Unauthorized"}), 401
+    """Get current market status"""
+    if demo_mode:
+        market_open = datetime.now().hour >= 9 and datetime.now().hour < 16
+        return jsonify(
+            {
+                "is_open": market_open,
+                "next_open": None,
+                "next_close": None,
+            }
+        )
 
     try:
-        market_status = alpaca_service.get_market_status()
-        # Format dates to ISO string if they exist
-        if market_status.get("next_open"):
-            market_status["next_open"] = market_status["next_open"].isoformat()
-        if market_status.get("next_close"):
-            market_status["next_close"] = market_status["next_close"].isoformat()
-
-        return jsonify({"success": True, "market_status": market_status})
+        status = alpaca_service.get_market_status()
+        return jsonify(status)
     except Exception as e:
-        logger.error(f"Error getting market status: {e}")
-        return jsonify({"success": False, "error": str(e)})
+        return jsonify({"status": "error", "message": str(e)})
 
 
 @socketio.on("connect")
 def handle_connect():
-    if "username" in session:
-        logger.info(f"Client connected: {request.sid}")
-        try:
-            # Send initial status
-            emit("status_update", bot_status)
-
-            # Send initial account info
-            account_info = alpaca_service.get_account()
-            if account_info:
-                logger.debug(f"Sending initial account info: {account_info}")
-                emit("alpaca_account_update", account_info)
-
-            # Send initial positions
-            positions = alpaca_service.get_positions()
-            if positions:
-                logger.debug(f"Sending initial positions: {positions}")
-                emit("positions_update", positions)
-
-            # Send initial metrics
-            metrics = trading_bot.get_metrics()
-            if metrics:
-                logger.debug(f"Sending initial metrics: {metrics}")
-                emit("metrics_update", metrics)
-        except Exception as e:
-            logger.error(f"Error sending initial data to client: {e}")
+    """Handle WebSocket connection"""
+    logger.info("Client connected")
+    emit("status_update", bot_status)
 
 
 @socketio.on("disconnect")
 def handle_disconnect():
-    logger.info(f"Client disconnected: {request.sid}")
+    """Handle WebSocket disconnection"""
+    logger.info("Client disconnected")
 
 
 if __name__ == "__main__":
-    # Get configuration from environment variables
-    debug_mode = os.getenv("FLASK_DEBUG", "False").lower() == "true"
-    host = os.getenv("FLASK_HOST", "127.0.0.1")  # Default to localhost
-    port = int(os.getenv("FLASK_PORT", "5001"))
+    # Start bot in a separate thread
+    bot_thread = threading.Thread(target=run_bot)
+    bot_thread.daemon = True
+    bot_thread.start()
 
-    # Start the status update thread
-    status_thread = threading.Thread(target=update_bot_status)
-    status_thread.daemon = True
-    status_thread.start()
+    # Start update emitter in a separate thread
+    update_thread = threading.Thread(target=update_bot_status)
+    update_thread.daemon = True
+    update_thread.start()
 
-    # Start the Flask application with secure defaults
-    socketio.run(
-        app,
-        host=host,
-        port=port,
-        debug=debug_mode,
-        allow_unsafe_werkzeug=False,  # Disable Werkzeug debugger in production
-    )
+    # Start web server
+    logger.info("Starting web server on http://127.0.0.1:5050")
+    debug_mode = os.environ.get("FLASK_DEBUG", "false").lower() == "true"
+    socketio.run(app, host="127.0.0.1", port=5050, debug=debug_mode)

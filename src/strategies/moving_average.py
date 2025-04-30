@@ -10,7 +10,10 @@ class MovingAverageCrossover(BaseStrategy):
     """Moving Average Crossover trading strategy."""
 
     def __init__(
-        self, short_window: int = 20, long_window: int = 50, signal_threshold: float = 0.0
+        self,
+        short_window: int = 20,
+        long_window: int = 50,
+        signal_threshold: float = 0.0,
     ) -> None:
         """Initialize the Moving Average Crossover strategy.
 
@@ -66,7 +69,9 @@ class MovingAverageCrossover(BaseStrategy):
 
         # Generate signals based on MA crossover with threshold
         df.loc[df["ma_diff_pct"] > self.signal_threshold, "signal"] = 1.0  # Buy signal
-        df.loc[df["ma_diff_pct"] < -self.signal_threshold, "signal"] = -1.0  # Sell signal
+        df.loc[
+            df["ma_diff_pct"] < -self.signal_threshold, "signal"
+        ] = -1.0  # Sell signal
 
         # Set signals to NaN during warmup period
         df.loc[: self.warmup_period, "signal"] = np.nan

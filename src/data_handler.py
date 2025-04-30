@@ -3,10 +3,14 @@
 import json
 import os
 from datetime import datetime, timedelta
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List, Optional, Union
 
 import numpy as np
 import pandas as pd
+
+from alpaca.data.timeframe import TimeFrame
+from alpaca.trading.enums import OrderSide, TimeInForce
+from alpaca.trading.models import Position
 
 from src.core.alpaca_client import AlpacaClient
 from src.utils.config import Config
@@ -25,10 +29,15 @@ class DataHandler:
             config: Configuration instance
         """
         self.config = config
-        self._client = AlpacaClient(config)
+        self.client = AlpacaClient(
+            api_key=config.ALPACA_API_KEY,
+            secret_key=config.ALPACA_SECRET_KEY,
+            paper=config.ALPACA_PAPER,
+        )
         self._data: Dict[str, Dict[str, List[Dict[str, Any]]]] = {}
         self._cache_dir = "data/cache"
         os.makedirs(self._cache_dir, exist_ok=True)
+        self.logger = logger
         logger.info("Data handler initialized")
 
     def _get_cache_path(self, symbol: str, timeframe: str) -> str:
@@ -43,7 +52,9 @@ class DataHandler:
         """
         return os.path.join(self._cache_dir, f"{symbol}_{timeframe}.json")
 
-    def _load_cache(self, symbol: str, timeframe: str) -> Optional[List[Dict[str, Any]]]:
+    def _load_cache(
+        self, symbol: str, timeframe: str
+    ) -> Optional[List[Dict[str, Any]]]:
         """Load cached data for a symbol and timeframe.
 
         Args:
@@ -92,65 +103,59 @@ class DataHandler:
             logger.error(f"Error saving cache: {e}")
 
     def get_historical_data(
-        self, symbol: str, days: int = 30, timeframe: str = "1Day"
+        self,
+        symbol: str,
+        start_date: Optional[str] = None,
+        end_date: Optional[str] = None,
+        timeframe: str = "1D",
     ) -> pd.DataFrame:
-        """Get historical market data.
+        """Get historical data for a symbol.
 
         Args:
             symbol: Trading symbol
-            days: Number of days of historical data
-            timeframe: Time frame for the data
+            start_date: Start date in ISO format (YYYY-MM-DD)
+            end_date: End date in ISO format (YYYY-MM-DD)
+            timeframe: Data timeframe (e.g., "1D" for daily)
 
         Returns:
-            DataFrame containing historical data
+            DataFrame with historical data
         """
         try:
-            end_date = datetime.now()
-            start_date = end_date - timedelta(days=days)
+            # Convert datetime objects to ISO format strings
+            start = (datetime.now() - timedelta(days=30)).isoformat() if not start_date else start_date
+            end = datetime.now().isoformat() if not end_date else end_date
 
-            data = self._client.get_bars(
-                symbol=symbol, timeframe=timeframe, start=start_date, end=end_date
+            # Get data from Alpaca
+            data = self.client.get_historical_data(
+                symbol,
+                start,
+                end,
+                timeframe
             )
-
-            if data.empty:
-                logger.warning(f"No historical data found for {symbol}")
-                return pd.DataFrame()
-
             return data
-
         except Exception as e:
-            logger.error(f"Error getting historical data for {symbol}: {str(e)}")
+            self.logger.error(f"Error getting historical data for {symbol}: {e}")
             return pd.DataFrame()
 
-    def get_latest_data(self, symbol: str) -> Optional[Dict[str, Any]]:
+    def get_latest_data(self, symbol: str) -> pd.DataFrame:
         """Get latest market data.
 
         Args:
             symbol: Trading symbol
 
         Returns:
-            Dictionary containing latest data or None if not available
+            DataFrame containing latest data
         """
         try:
-            data = self._client.get_bars(symbol=symbol, timeframe="1Min", limit=1)
-
-            if data.empty:
-                logger.warning(f"No latest data found for {symbol}")
-                return None
-
-            return {
-                "symbol": symbol,
-                "timestamp": data.index[-1],
-                "open": data["open"].iloc[-1],
-                "high": data["high"].iloc[-1],
-                "low": data["low"].iloc[-1],
-                "close": data["close"].iloc[-1],
-                "volume": data["volume"].iloc[-1],
-            }
-
+            end = datetime.now().isoformat()
+            start = (datetime.now() - timedelta(minutes=1)).isoformat()
+            data = self.client.get_historical_data(symbol, start, end)
+            if isinstance(data, pd.DataFrame):
+                return data
+            return pd.DataFrame()
         except Exception as e:
-            logger.error(f"Error getting latest data for {symbol}: {str(e)}")
-            return None
+            self.logger.error(f"Error getting latest data: {e}")
+            return pd.DataFrame()
 
     def get_account_info(self) -> Dict[str, Any]:
         """Get account information.
@@ -159,57 +164,47 @@ class DataHandler:
             Dictionary containing account information
         """
         try:
-            return self._client.get_account()
+            return self.client.get_account()
         except Exception as e:
             logger.error(f"Error getting account information: {str(e)}")
             return {}
 
-    def get_positions(self) -> List[Dict[str, Any]]:
+    def get_positions(self) -> List[Position]:
         """Get current positions.
 
         Returns:
-            List of dictionaries containing position information
+            List of positions
         """
         try:
-            return self._client.get_positions()
+            positions = self.client.get_all_positions()
+            return positions if isinstance(positions, list) else []
         except Exception as e:
-            logger.error(f"Error getting positions: {str(e)}")
+            logger.error(f"Error getting positions: {e}")
             return []
 
     def submit_order(
         self,
         symbol: str,
         qty: float,
-        side: str,
-        type: str = "market",
-        time_in_force: str = "day",
-        limit_price: Optional[float] = None,
-        stop_price: Optional[float] = None,
+        side: OrderSide,
+        time_in_force: TimeInForce = TimeInForce.DAY,
     ) -> Optional[Dict[str, Any]]:
         """Submit a trading order.
 
         Args:
             symbol: Trading symbol
             qty: Order quantity
-            side: Order side ('buy' or 'sell')
-            type: Order type ('market', 'limit', or 'stop')
-            time_in_force: Time in force ('day' or 'gtc')
-            limit_price: Limit price for limit orders
-            stop_price: Stop price for stop orders
+            side: Order side (buy/sell)
+            time_in_force: Time in force for the order
 
         Returns:
-            Dictionary containing order information or None if failed
+            Order information if successful, None otherwise
         """
         try:
-            return self._client.submit_order(
-                symbol=symbol,
-                qty=qty,
-                side=side,
-                type=type,
-                time_in_force=time_in_force,
-                limit_price=limit_price,
-                stop_price=stop_price,
+            order = self.client.submit_order(
+                symbol=symbol, qty=qty, side=side, time_in_force=time_in_force
             )
+            return order
         except Exception as e:
-            logger.error(f"Error submitting order for {symbol}: {str(e)}")
+            logger.error(f"Error submitting order: {e}")
             return None

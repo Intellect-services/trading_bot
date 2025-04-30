@@ -4,6 +4,7 @@ import threading
 import time
 from datetime import datetime, timedelta
 from typing import Callable, Dict, List, Optional
+import os
 
 import numpy as np
 import pandas as pd
@@ -50,7 +51,9 @@ class DataFeed:
             self.logger.error("Error adding symbol %s: %s", symbol, str(e))
             return False
 
-    def get_historical_data(self, symbol: str, start: datetime, end: datetime) -> pd.DataFrame:
+    def get_historical_data(
+        self, symbol: str, start: datetime, end: datetime
+    ) -> pd.DataFrame:
         """Get historical data for a symbol."""
         try:
             # Calculate number of days between start and end
@@ -189,7 +192,13 @@ class MockDataFeed(DataFeed):
         Args:
             client: Optional Alpaca client instance (not used in mock)
         """
-        super().__init__(client or AlpacaClient())
+        if client is None:
+            client = AlpacaClient(
+                api_key=os.getenv("ALPACA_API_KEY", ""),
+                secret_key=os.getenv("ALPACA_API_SECRET", ""),
+                paper=True
+            )
+        super().__init__(client)
         self._mock_data: Dict[str, pd.DataFrame] = {}
         self._mock_prices: Dict[str, float] = {}
         self._mock_trends: Dict[str, str] = {}  # 'up', 'down', or 'sideways'
@@ -234,9 +243,12 @@ class MockDataFeed(DataFeed):
             # Create DataFrame
             df = pd.DataFrame(
                 {
-                    "open": prices * (1 + np.random.normal(0, volatility / 2, len(dates))),
-                    "high": prices * (1 + np.abs(np.random.normal(0, volatility, len(dates)))),
-                    "low": prices * (1 - np.abs(np.random.normal(0, volatility, len(dates)))),
+                    "open": prices
+                    * (1 + np.random.normal(0, volatility / 2, len(dates))),
+                    "high": prices
+                    * (1 + np.abs(np.random.normal(0, volatility, len(dates)))),
+                    "low": prices
+                    * (1 - np.abs(np.random.normal(0, volatility, len(dates)))),
                     "close": prices,
                     "volume": np.random.randint(1000000, 5000000, len(dates)),
                 },
@@ -253,7 +265,9 @@ class MockDataFeed(DataFeed):
         except Exception as e:
             self.logger.error("Error generating mock data for %s: %s", symbol, str(e))
 
-    def get_historical_data(self, symbol: str, start: datetime, end: datetime) -> pd.DataFrame:
+    def get_historical_data(
+        self, symbol: str, start: datetime, end: datetime
+    ) -> pd.DataFrame:
         """Get mock historical data for a symbol."""
         try:
             if symbol not in self._mock_data:
@@ -263,7 +277,9 @@ class MockDataFeed(DataFeed):
             mask = (df.index >= start) & (df.index <= end)
             return df[mask]
         except Exception as e:
-            self.logger.error("Error getting mock historical data for %s: %s", symbol, str(e))
+            self.logger.error(
+                "Error getting mock historical data for %s: %s", symbol, str(e)
+            )
             return pd.DataFrame()
 
     def get_latest_data(self, symbol: str) -> pd.DataFrame:
@@ -297,7 +313,9 @@ class MockDataFeed(DataFeed):
 
             return df
         except Exception as e:
-            self.logger.error("Error getting latest mock data for %s: %s", symbol, str(e))
+            self.logger.error(
+                "Error getting latest mock data for %s: %s", symbol, str(e)
+            )
             return pd.DataFrame()
 
     def get_latest_price(self, symbol: str) -> Optional[float]:
@@ -307,7 +325,9 @@ class MockDataFeed(DataFeed):
                 return self._mock_prices[symbol]
             return None
         except Exception as e:
-            self.logger.error("Error getting latest mock price for %s: %s", symbol, str(e))
+            self.logger.error(
+                "Error getting latest mock price for %s: %s", symbol, str(e)
+            )
             return None
 
     def set_mock_trend(self, symbol: str, trend: str) -> None:
@@ -329,4 +349,6 @@ class MockDataFeed(DataFeed):
             volatility: Daily volatility factor (e.g., 0.02 for 2%)
         """
         self._mock_volatility[symbol] = volatility
-        self.logger.info("Set mock volatility for %s to %.2f%%", symbol, volatility * 100)
+        self.logger.info(
+            "Set mock volatility for %s to %.2f%%", symbol, volatility * 100
+        )

@@ -9,6 +9,13 @@ from .portfolio import Portfolio
 from .risk_manager import RiskManager
 from .strategy import Strategy
 
-__all__ = ["Strategy", "RiskManager", "TradingBot", "Portfolio", "DataFeed", "AlpacaService"]
+__all__ = [
+    "Strategy",
+    "RiskManager",
+    "TradingBot",
+    "Portfolio",
+    "DataFeed",
+    "AlpacaService",
+]
 
 # Core package initialization

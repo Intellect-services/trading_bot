@@ -10,9 +10,11 @@ from src.core.bot import TradingBot
 from src.core.data_feed import DataFeed
 from src.core.portfolio import Portfolio
 from src.core.risk_manager import RiskManager
-from src.core.strategy import Strategy
+from src.core.alpaca_client import AlpacaClient
+from src.strategies.moving_average import MovingAverageCrossover
 from src.utils.config import Config
 from src.utils.logger import setup_logger
+from src.core.alpaca_service import AlpacaService
 
 logger = setup_logger(__name__)
 
@@ -27,55 +29,40 @@ def load_config(config_file: str = "config.json") -> Config:
         Configuration instance
     """
     try:
-        return Config(config_file)
+        with open(config_file, "r") as f:
+            config_data = json.load(f)
+        return Config(config_data)
     except Exception as e:
         logger.error(f"Error loading config: {str(e)}")
         sys.exit(1)
 
 
-def initialize_bot(config: Config) -> TradingBot:
-    """Initialize trading bot.
+def initialize_bot(config_data: Dict[str, Any]) -> TradingBot:
+    """Initialize the trading bot with configuration.
 
     Args:
-        config: Configuration instance
+        config_data: Configuration data dictionary
 
     Returns:
-        Trading bot instance
+        Initialized trading bot instance
     """
     try:
-        # Initialize components
-        strategy = Strategy(config)
-        risk_manager = RiskManager(
-            {
-                "max_position_size": config.RISK_MAX_POSITION_SIZE,
-                "stop_loss": config.RISK_STOP_LOSS_PCT,
-                "take_profit": config.RISK_STOP_LOSS_PCT * 2,
-                "max_drawdown": config.RISK_MAX_DRAWDOWN,
-                "max_leverage": config.RISK_MAX_LEVERAGE,
-                "risk_per_trade": config.RISK_PER_TRADE,
-            }
+        # Set environment variables for Alpaca API
+        os.environ["ALPACA_API_KEY"] = config_data.get("ALPACA_API_KEY", "")
+        os.environ["ALPACA_API_SECRET"] = config_data.get("ALPACA_SECRET_KEY", "")
+        
+        # Initialize services
+        alpaca_client = AlpacaClient(
+            api_key=config_data.get("ALPACA_API_KEY", ""),
+            secret_key=config_data.get("ALPACA_SECRET_KEY", ""),
+            paper=config_data.get("ALPACA_PAPER", True)
         )
-        data_feed = DataFeed(config)
-        portfolio = Portfolio(config.INITIAL_BALANCE)
-
-        # Create bot
-        bot = TradingBot(
-            config=config,
-            strategy=strategy,
-            risk_manager=risk_manager,
-            data_feed=data_feed,
-            portfolio=portfolio,
-        )
-
-        # Add symbols
-        for symbol in config.STRATEGY_PARAMS.get("symbols", ["SPY"]):
-            bot.add_symbol(symbol)
-
+        alpaca_service = AlpacaService()
+        bot = TradingBot(alpaca_service)
         return bot
-
     except Exception as e:
-        logger.error(f"Error initializing bot: {str(e)}")
-        sys.exit(1)
+        logger.error(f"Error initializing bot: {e}")
+        raise
 
 
 def handle_shutdown(bot: TradingBot) -> None:
@@ -104,33 +91,16 @@ def main() -> None:
     """Main entry point for the trading bot."""
     try:
         # Load configuration
-        config = Config()
-
-        # Initialize components
-        risk_manager = RiskManager(
-            {
-                "max_position_size": config.RISK_MAX_POSITION_SIZE,
-                "stop_loss": config.RISK_STOP_LOSS_PCT,
-                "take_profit": config.RISK_STOP_LOSS_PCT * 2,
-                "max_drawdown": config.RISK_MAX_DRAWDOWN,
-                "max_leverage": config.RISK_MAX_LEVERAGE,
-                "risk_per_trade": config.RISK_PER_TRADE,
-            }
-        )
-
-        portfolio = Portfolio(config.INITIAL_BALANCE)
-        data_feed = DataFeed(config)
-        strategy = Strategy(config)
-
+        config = load_config()
+        
+        # Initialize Alpaca service
+        alpaca_service = AlpacaService()
+        
         # Initialize and start trading bot
-        bot = TradingBot(
-            config=config,
-            strategy=strategy,
-            risk_manager=risk_manager,
-            portfolio=portfolio,
-            data_feed=data_feed,
-        )
-
+        bot = TradingBot(alpaca_service)
+        handle_shutdown(bot)
+        
+        # Start the bot
         bot.start()
 
     except Exception as e:

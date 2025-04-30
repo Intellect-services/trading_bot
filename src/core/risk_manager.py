@@ -1,9 +1,9 @@
 """Risk management module."""
 
 from decimal import Decimal
-from typing import Any, Dict, Optional
+from typing import Any, Dict, Optional, Union
 
-from src.utils.config import get_config
+from src.utils.config import Config
 from src.utils.logger import setup_logger
 
 logger = setup_logger(__name__)
@@ -12,50 +12,50 @@ logger = setup_logger(__name__)
 class RiskManager:
     """Risk management class."""
 
-    def __init__(self, config: Optional[Dict[str, Any]] = None) -> None:
+    def __init__(self, config: Union[Config, Dict[str, Any], None] = None) -> None:
         """Initialize risk manager.
 
         Args:
-            config: Configuration dictionary (optional)
+            config: Configuration object or dictionary
         """
-        if config and "risk" in config:
-            risk_config = config["risk"]
-            self.max_position_size = float(risk_config.get("max_position_size", 0.1))
-            self.stop_loss = float(
-                risk_config.get("stop_loss_pct", 0.02)
-            )  # Renamed for test compatibility
-            self.take_profit = float(
-                risk_config.get("take_profit", 0.04)
-            )  # Added for test compatibility
-            self.max_drawdown = float(risk_config.get("max_drawdown", 0.1))
-            self.risk_per_trade = float(risk_config.get("risk_per_trade", 0.01))
-            self.max_leverage = float(risk_config.get("max_leverage", 2.0))
-            self.trailing_stop = float(
-                risk_config.get("trailing_stop", 0.01)
-            )  # New: trailing stop percentage
+        if isinstance(config, Config):
+            self.max_position_size = config.RISK_MAX_POSITION_SIZE
+            self.stop_loss = config.RISK_STOP_LOSS_PCT
+            self.take_profit = config.RISK_STOP_LOSS_PCT * 2
+            self.max_drawdown = config.RISK_MAX_DRAWDOWN
+            self.max_leverage = config.RISK_MAX_LEVERAGE
+            self.risk_per_trade = config.RISK_PER_TRADE
+            self.trailing_stop = 0.01  # Default trailing stop percentage
+            self.trailing_stop_activation = 0.02  # Default activation threshold
+        elif isinstance(config, dict):
+            self.max_position_size = float(config.get("max_position_size", 0.1))
+            self.stop_loss = float(config.get("stop_loss", 0.02))
+            self.take_profit = float(config.get("take_profit", 0.04))
+            self.max_drawdown = float(config.get("max_drawdown", 0.2))
+            self.max_leverage = float(config.get("max_leverage", 1.0))
+            self.risk_per_trade = float(config.get("risk_per_trade", 0.01))
+            self.trailing_stop = float(config.get("trailing_stop", 0.01))
             self.trailing_stop_activation = float(
-                risk_config.get("trailing_stop_activation", 0.02)
-            )  # New: activation threshold
+                config.get("trailing_stop_activation", 0.02)
+            )
         else:
-            self.max_position_size = float(get_config("RISK_MAX_POSITION_SIZE", 0.1))
-            self.stop_loss = float(
-                get_config("RISK_STOP_LOSS_PCT", 0.02)
-            )  # Renamed for test compatibility
-            self.take_profit = float(
-                get_config("RISK_TAKE_PROFIT", 0.04)
-            )  # Added for test compatibility
-            self.max_drawdown = float(get_config("RISK_MAX_DRAWDOWN", 0.1))
-            self.risk_per_trade = float(get_config("RISK_PER_TRADE", 0.01))
-            self.max_leverage = float(get_config("RISK_MAX_LEVERAGE", 2.0))
-            self.trailing_stop = float(
-                get_config("RISK_TRAILING_STOP", 0.01)
-            )  # New: trailing stop percentage
-            self.trailing_stop_activation = float(
-                get_config("RISK_TRAILING_STOP_ACTIVATION", 0.02)
-            )  # New: activation threshold
+            # Default values
+            self.max_position_size = 0.1
+            self.stop_loss = 0.02
+            self.take_profit = 0.04
+            self.max_drawdown = 0.2
+            self.max_leverage = 1.0
+            self.risk_per_trade = 0.01
+            self.trailing_stop = 0.01
+            self.trailing_stop_activation = 0.02
+
         self.logger = logger
-        self.highest_prices: Dict[str, float] = {}  # New: track highest prices for trailing stops
-        self.lowest_prices: Dict[str, float] = {}  # New: track lowest prices for trailing stops
+        self.highest_prices: Dict[
+            str, float
+        ] = {}  # New: track highest prices for trailing stops
+        self.lowest_prices: Dict[
+            str, float
+        ] = {}  # New: track lowest prices for trailing stops
 
     def apply_risk_management(
         self, price: float, position: Optional[Dict[str, float]], account_value: float
@@ -182,12 +182,16 @@ class RiskManager:
             # Check trade value against portfolio
             trade_value = quantity * price
             if trade_value / portfolio_value > self.max_position_size:
-                logger.warning("Trade size exceeds maximum: %s", trade_value / portfolio_value)
+                logger.warning(
+                    "Trade size exceeds maximum: %s", trade_value / portfolio_value
+                )
                 return False
 
             # Check risk per trade
             if trade_value / portfolio_value > self.risk_per_trade:
-                logger.warning("Trade risk exceeds maximum: %s", trade_value / portfolio_value)
+                logger.warning(
+                    "Trade risk exceeds maximum: %s", trade_value / portfolio_value
+                )
                 return False
 
             return True
@@ -218,13 +222,15 @@ class RiskManager:
                     self.highest_prices[symbol] = current_price
 
                 # Calculate profit percentage
-                profit_pct = (current_price - self.highest_prices[symbol]) / self.highest_prices[
-                    symbol
-                ]
+                profit_pct = (
+                    current_price - self.highest_prices[symbol]
+                ) / self.highest_prices[symbol]
 
                 # Check if trailing stop should be activated
                 if profit_pct >= self.trailing_stop_activation:
-                    trailing_stop_price = self.highest_prices[symbol] * (1 - self.trailing_stop)
+                    trailing_stop_price = self.highest_prices[symbol] * (
+                        1 - self.trailing_stop
+                    )
                     if current_price <= trailing_stop_price:
                         return trailing_stop_price
             else:
@@ -235,13 +241,15 @@ class RiskManager:
                     self.lowest_prices[symbol] = current_price
 
                 # Calculate profit percentage
-                profit_pct = (self.lowest_prices[symbol] - current_price) / self.lowest_prices[
-                    symbol
-                ]
+                profit_pct = (
+                    self.lowest_prices[symbol] - current_price
+                ) / self.lowest_prices[symbol]
 
                 # Check if trailing stop should be activated
                 if profit_pct >= self.trailing_stop_activation:
-                    trailing_stop_price = self.lowest_prices[symbol] * (1 + self.trailing_stop)
+                    trailing_stop_price = self.lowest_prices[symbol] * (
+                        1 + self.trailing_stop
+                    )
                     if current_price >= trailing_stop_price:
                         return trailing_stop_price
 

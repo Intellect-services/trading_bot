@@ -63,7 +63,9 @@ def load_config() -> Dict[str, Any]:
     config = {
         "api_key": os.environ["ALPACA_API_KEY"],
         "api_secret": os.environ["ALPACA_API_SECRET"],
-        "base_url": os.environ.get("ALPACA_API_BASE_URL", "https://paper-api.alpaca.markets"),
+        "base_url": os.environ.get(
+            "ALPACA_API_BASE_URL", "https://paper-api.alpaca.markets"
+        ),
         "data_feed": os.environ.get("DATA_FEED", "iex"),
     }
     return config
@@ -142,24 +144,26 @@ def update_bot_status() -> None:
         try:
             # Get market status
             market_status = alpaca_service.get_market_status()
-            bot_status["market_status"] = cast(str, market_status["status"])
+            bot_status["market_status"] = market_status["status"]
 
             # Get account info
             account = alpaca_service.get_account()
             if account:
-                metrics = cast(BotMetrics, bot_status["metrics"])
+                metrics = bot_status["metrics"]
                 metrics["current_capital"] = float(account.get("equity", 0))
                 if not metrics["initial_capital"]:
                     metrics["initial_capital"] = float(account.get("equity", 0))
 
             # Get positions
             positions = alpaca_service.get_positions()
-            bot_status["metrics"]["active_positions"] = len(positions) if positions else 0
+            bot_status["metrics"]["active_positions"] = (
+                len(positions) if positions else 0
+            )
 
             # Update runtime if bot is running
             if bot_status["is_running"]:
                 if bot_status["last_update"]:
-                    runtime = datetime.now() - cast(datetime, bot_status["last_update"])
+                    runtime = datetime.now() - bot_status["last_update"]
                     bot_status["runtime"] = str(runtime).split(".")[0]
                 else:
                     bot_status["last_update"] = datetime.now()
@@ -186,7 +190,7 @@ socketio.start_background_task(update_bot_status)
 
 
 @app.route("/")
-def index() -> WerkzeugResponse:
+def index() -> Union[WerkzeugResponse, str]:
     if "username" not in session:
         return redirect(url_for("login"))
     return render_template("index.html")
@@ -198,9 +202,9 @@ def login() -> Union[WerkzeugResponse, str]:
         username = request.form.get("username")
         password = request.form.get("password")
 
-        if username == os.getenv("ADMIN_USERNAME", "admin@admin.com") and password == os.getenv(
-            "ADMIN_PASSWORD", "admin"
-        ):
+        if username == os.getenv(
+            "ADMIN_USERNAME", "admin@admin.com"
+        ) and password == os.getenv("ADMIN_PASSWORD", "admin"):
             session["username"] = username
             return redirect(url_for("index"))
 

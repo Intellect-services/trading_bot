@@ -4,10 +4,17 @@ import time
 from datetime import datetime
 from enum import Enum, auto
 from threading import Event, Thread
-from typing import Any, Dict, Optional
+from typing import Any, Dict, List, Optional
+import logging
 
 from src.core.bot import TradingBot
 from src.core.strategy import Strategy
+from src.core.data_feed import DataFeed
+from src.core.portfolio import Portfolio
+from src.core.risk_manager import RiskManager
+from src.core.alpaca_client import AlpacaClient
+from src.strategies.moving_average import MovingAverageCrossover
+from src.utils.config import Config
 from src.utils.logger import setup_logger
 
 logger = setup_logger(__name__)
@@ -24,22 +31,30 @@ class BotStatus(Enum):
 
 
 class BotService:
-    """Service class for managing bot lifecycle and status."""
+    """Service class for managing trading bot operations."""
 
-    def __init__(
-        self, strategy: Strategy, symbols: list[str], initial_capital: float = 100000.0
-    ) -> None:
+    def __init__(self, config: Config, alpaca_client: AlpacaClient) -> None:
         """Initialize bot service.
 
         Args:
-            strategy: Trading strategy
-            symbols: List of trading symbols
-            initial_capital: Initial capital for trading
+            config: Configuration object
+            alpaca_client: AlpacaClient instance
         """
-        self.strategy = strategy
-        self.symbols = symbols
-        self.initial_capital = initial_capital
-        self.bot: Optional[TradingBot] = None
+        self.config = config
+        self.portfolio = Portfolio(config.INITIAL_CAPITAL)
+        self.strategy = MovingAverageCrossover()
+        self.alpaca_client = alpaca_client
+        self.data_feed = DataFeed(self.alpaca_client)
+        self.risk_manager = RiskManager(config)
+        self.bot = TradingBot(
+            config=config,
+            strategy=self.strategy,
+            portfolio=self.portfolio,
+            data_feed=self.data_feed,
+            risk_manager=self.risk_manager,
+        )
+        self._error_count = 0
+        self.current_balance: float = float(config.INITIAL_CAPITAL)
         self.status = BotStatus.STOPPED
         self.error_message: Optional[str] = None
         self._thread: Optional[Thread] = None
@@ -49,9 +64,16 @@ class BotService:
         self._start_time: Optional[datetime] = None
         self._runtime = 0
         self._last_error_time: Optional[datetime] = None
-        self._error_count = 0
         self._max_errors = 5
         self._error_reset_time = 300  # 5 minutes in seconds
+        self.logger = logging.getLogger(__name__)
+        self.initial_value: float = 0.0
+        self.last_value: float = 0.0
+        self.total_return: float = 0.0
+        self.daily_return: float = 0.0
+        self.total_trades: int = 0
+        self.active_positions: int = 0
+        logger.info("Bot service initialized")
 
     def start(self) -> bool:
         """Start the bot service.
@@ -60,7 +82,9 @@ class BotService:
             True if started successfully, False otherwise
         """
         if self.status != BotStatus.STOPPED:
-            logger.warning(f"Bot is not in STOPPED state (current state: {self.status.name})")
+            logger.warning(
+                f"Bot is not in STOPPED state (current state: {self.status.name})"
+            )
             return False
 
         try:
@@ -76,7 +100,11 @@ class BotService:
             # Initialize bot
             logger.info("Initializing bot...")
             self.bot = TradingBot(
-                strategy=self.strategy, symbols=self.symbols, initial_capital=self.initial_capital
+                config=self.config,
+                strategy=self.strategy,
+                portfolio=self.portfolio,
+                data_feed=self.data_feed,
+                risk_manager=self.risk_manager,
             )
 
             # Start bot in a separate thread
@@ -163,7 +191,9 @@ class BotService:
 
                     # Update runtime
                     if self._start_time:
-                        self._runtime = (datetime.now() - self._start_time).total_seconds()
+                        self._runtime = (
+                            datetime.now() - self._start_time
+                        ).total_seconds()
 
                     # Run one iteration
                     self.bot._run()
@@ -198,7 +228,7 @@ class BotService:
         """Get current bot status.
 
         Returns:
-            Dictionary with bot status information
+            Dictionary containing bot status information
         """
         runtime_str = "00:00:00"
         if self._start_time:
@@ -213,11 +243,48 @@ class BotService:
             "error_message": self.error_message,
             "last_update": self._last_update.isoformat(),
             "runtime": runtime_str,
-            "symbols": self.symbols,
-            "initial_capital": self.initial_capital,
-            "current_capital": self.bot.portfolio.current_balance if self.bot else None,
+            "symbols": self.bot.symbols if self.bot else [],
+            "initial_capital": self.config.INITIAL_CAPITAL,
+            "current_capital": self.current_balance,
             "active_positions": len(self.bot.positions) if self.bot else 0,
             "error_count": self._error_count,
-            "last_error_time": self._last_error_time.isoformat() if self._last_error_time else None,
+            "last_error_time": self._last_error_time.isoformat()
+            if self._last_error_time
+            else None,
             "start_time": self._start_time.isoformat() if self._start_time else None,
         }
+
+    def get_current_balance(self) -> float:
+        """Get current portfolio balance.
+
+        Returns:
+            Current balance
+        """
+        return self.current_balance
+
+    def update_metrics(self) -> None:
+        """Update bot metrics."""
+        try:
+            # Get current account value
+            account = self.alpaca_client.get_account()
+            current_value = float(account.get("equity", 0))
+
+            # Calculate returns
+            if self.initial_value > 0:
+                self.total_return = (current_value - self.initial_value) / self.initial_value
+                self.daily_return = (current_value - self.last_value) / self.last_value if self.last_value > 0 else 0.0
+
+            # Update values
+            self.last_value = current_value
+            self.total_trades = int(len(self.alpaca_client.get_orders()))
+            self.active_positions = int(len(self.alpaca_client.get_all_positions()))
+
+            # Log metrics
+            self.logger.info(
+                f"Bot metrics - Total Return: {self.total_return:.2%}, "
+                f"Daily Return: {self.daily_return:.2%}, "
+                f"Total Trades: {self.total_trades}, "
+                f"Active Positions: {self.active_positions}"
+            )
+        except Exception as e:
+            self.logger.error(f"Error updating metrics: {str(e)}")

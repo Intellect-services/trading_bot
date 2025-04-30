@@ -6,7 +6,9 @@ import numpy as np
 import pandas as pd
 
 
-def calculate_metrics(trades: List[Dict[str, Any]], initial_capital: float) -> Dict[str, float]:
+def calculate_metrics(
+    trades: List[Dict[str, Any]], initial_capital: float
+) -> Dict[str, float]:
     """Calculate performance metrics from trade history.
 
     Args:
@@ -17,7 +19,12 @@ def calculate_metrics(trades: List[Dict[str, Any]], initial_capital: float) -> D
         Dictionary containing performance metrics
     """
     if not trades:
-        return {"total_return": 0.0, "sharpe_ratio": 0.0, "max_drawdown": 0.0, "win_rate": 0.0}
+        return {
+            "total_return": 0.0,
+            "sharpe_ratio": 0.0,
+            "max_drawdown": 0.0,
+            "win_rate": 0.0,
+        }
 
     # Convert trades to DataFrame
     df = pd.DataFrame(trades)

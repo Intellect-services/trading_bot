@@ -120,7 +120,9 @@ class Strategy:
             logger.error(f"Error calculating indicators: {e}")
             return data
 
-    def update_position(self, symbol: str, quantity: float, price: float, side: str) -> None:
+    def update_position(
+        self, symbol: str, quantity: float, price: float, side: str
+    ) -> None:
         """Update the current position after a trade execution.
 
         Args:
@@ -143,8 +145,12 @@ class Strategy:
                 self.current_position[symbol] = {"quantity": 0, "avg_price": 0}
             current = self.current_position[symbol]
             total_quantity = current["quantity"] + quantity
-            total_cost = (current["quantity"] * current["avg_price"]) + (quantity * price)
-            current["avg_price"] = total_cost / total_quantity if total_quantity > 0 else 0
+            total_cost = (current["quantity"] * current["avg_price"]) + (
+                quantity * price
+            )
+            current["avg_price"] = (
+                total_cost / total_quantity if total_quantity > 0 else 0
+            )
             current["quantity"] = total_quantity
         else:  # sell
             if symbol in self.current_position:
@@ -159,7 +165,7 @@ class Strategy:
         )
 
     def calculate_position_size(self, price: float, account_value: float) -> float:
-        """Calculate the position size based on risk parameters.
+        """Calculate position size based on account value and risk parameters.
 
         Args:
             price (float): Current market price
@@ -168,7 +174,7 @@ class Strategy:
         Returns:
             float: Position size in base currency
         """
-        max_position_size = self.config.get("max_position_size", 0.1)
+        max_position_size = float(self.config.max_position_size if hasattr(self.config, "max_position_size") else 0.1)
         return (account_value * max_position_size) / price
 
     @staticmethod

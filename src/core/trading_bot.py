@@ -85,7 +85,9 @@ class TradingBot:
         """Get the average return per trade as a percentage."""
         if self.total_trades == 0:
             return 0.0
-        return ((self.current_capital - self.initial_capital) / self.initial_capital) * 100
+        return (
+            (self.current_capital - self.initial_capital) / self.initial_capital
+        ) * 100
 
     def update_metrics(self) -> Dict[str, Any]:
         """Update and return current metrics."""

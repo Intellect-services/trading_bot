@@ -22,7 +22,9 @@ class AlpacaService:
         self.secret_key = os.getenv("ALPACA_API_SECRET")
 
         if not self.api_key or not self.secret_key:
-            raise ValueError("Alpaca API credentials not found in environment variables")
+            raise ValueError(
+                "Alpaca API credentials not found in environment variables"
+            )
 
         self.client = TradingClient(self.api_key, self.secret_key, paper=True)
         self.data_client = StockHistoricalDataClient(self.api_key, self.secret_key)
@@ -32,11 +34,14 @@ class AlpacaService:
     def get_account(self) -> Dict[str, Any]:
         try:
             account = cast(TradeAccount, self.client.get_account())
+            buying_power = account.buying_power
+            equity = account.equity
+            cash = account.cash
             return {
                 "account_id": account.account_number,
-                "buying_power": float(account.buying_power or 0),
-                "equity": float(account.equity or 0),
-                "cash": float(account.cash or 0),
+                "buying_power": float(str(buying_power)) if buying_power is not None else 0.0,
+                "equity": float(str(equity)) if equity is not None else 0.0,
+                "cash": float(str(cash)) if cash is not None else 0.0,
                 "status": account.status,
                 "last_updated": datetime.now().isoformat(),
             }
@@ -68,7 +73,9 @@ class AlpacaService:
             return {
                 "is_open": clock.is_open,
                 "next_open": clock.next_open.isoformat() if clock.next_open else None,
-                "next_close": clock.next_close.isoformat() if clock.next_close else None,
+                "next_close": clock.next_close.isoformat()
+                if clock.next_close
+                else None,
             }
         except Exception as e:
             self.logger.error(f"Error getting market status: {str(e)}")
@@ -85,6 +92,14 @@ class AlpacaService:
                 time_in_force=TimeInForce.DAY,
             )
             order = cast(Order, self.client.submit_order(order_data))
+            # Check if we have enough buying power for the trade
+            if order.side == OrderSide.BUY and float(
+                self.get_account()["buying_power"]
+            ) < float(order.notional):
+                raise ValueError(
+                    "Insufficient buying power for the trade. "
+                    f"Required: {order.notional}, Available: {self.get_account()['buying_power']}"
+                )
             return {
                 "order_id": order.id,
                 "status": order.status,
@@ -100,7 +115,10 @@ class AlpacaService:
     def cancel_order(self, order_id: str) -> Dict[str, str]:
         try:
             self.client.cancel_order_by_id(order_id)
-            return {"status": "success", "message": f"Order {order_id} canceled successfully"}
+            return {
+                "status": "success",
+                "message": f"Order {order_id} canceled successfully",
+            }
         except Exception as e:
             self.logger.error(f"Error canceling order: {str(e)}")
             raise
@@ -118,7 +136,9 @@ class AlpacaService:
                     "side": order.side,
                     "status": order.status,
                     "created_at": order.created_at.isoformat(),
-                    "filled_at": order.filled_at.isoformat() if order.filled_at else None,
+                    "filled_at": order.filled_at.isoformat()
+                    if order.filled_at
+                    else None,
                     "filled_quantity": float(order.filled_qty or 0),
                     "filled_price": float(order.filled_avg_price or 0),
                 }
@@ -223,8 +243,12 @@ class AlpacaService:
             status=QueryOrderStatus.ALL,
             nested=True,
             limit=500,
-            after=date.replace(hour=0, minute=0, second=0, microsecond=0) if date else None,
-            until=date.replace(hour=23, minute=59, second=59, microsecond=999999) if date else None,
+            after=date.replace(hour=0, minute=0, second=0, microsecond=0)
+            if date
+            else None,
+            until=date.replace(hour=23, minute=59, second=59, microsecond=999999)
+            if date
+            else None,
         )
 
         orders = self.client.get_orders(filter=request_params)
@@ -232,18 +256,24 @@ class AlpacaService:
         logger.info(f"Retrieved {len(orders)} orders")
 
         # Sort orders by timestamp in descending order
-        orders.sort(key=lambda x: x.created_at if x.created_at else datetime.min, reverse=True)
+        orders.sort(
+            key=lambda x: x.created_at if x.created_at else datetime.min, reverse=True
+        )
 
         activities = []
         for order in orders:
-            filled_qty = float(order.filled_qty) if order.filled_qty is not None else 0.0
+            filled_qty = (
+                float(order.filled_qty) if order.filled_qty is not None else 0.0
+            )
             if filled_qty > 0:
                 activity = {
                     "timestamp": order.filled_at,
                     "symbol": order.symbol,
                     "side": order.side,
                     "qty": filled_qty,
-                    "price": order.filled_avg_price if order.filled_avg_price is not None else 0.0,
+                    "price": order.filled_avg_price
+                    if order.filled_avg_price is not None
+                    else 0.0,
                     "order_id": order.id,
                     "status": order.status,
                 }
@@ -276,7 +306,9 @@ class AlpacaService:
                 "profit_loss": [0, current_value - base_value],
                 "profit_loss_pct": [
                     0,
-                    ((current_value - base_value) / base_value * 100) if base_value > 0 else 0,
+                    ((current_value - base_value) / base_value * 100)
+                    if base_value > 0
+                    else 0,
                 ],
                 "base_value": base_value,
             }
