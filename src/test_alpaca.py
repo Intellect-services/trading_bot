@@ -1,9 +1,9 @@
 import logging
 import os
-from typing import cast, List
+from typing import List, cast
 
 from alpaca.trading.client import TradingClient
-from alpaca.trading.models import TradeAccount, Position
+from alpaca.trading.models import Position, TradeAccount
 
 # Configure logging
 logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s")

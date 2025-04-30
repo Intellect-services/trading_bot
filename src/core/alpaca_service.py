@@ -1,14 +1,14 @@
 import logging
 import os
 from datetime import datetime, timedelta
-from typing import Dict, List, Optional, Union, Any, cast
+from typing import Any, Dict, List, Optional, Union, cast
 from uuid import UUID
 
 from alpaca.data.historical import StockHistoricalDataClient
 from alpaca.trading.client import TradingClient
-from alpaca.trading.enums import OrderSide, TimeInForce, QueryOrderStatus
+from alpaca.trading.enums import OrderSide, QueryOrderStatus, TimeInForce
+from alpaca.trading.models import Asset, Calendar, Clock, Order, Position, TradeAccount
 from alpaca.trading.requests import GetOrdersRequest, MarketOrderRequest
-from alpaca.trading.models import TradeAccount, Position, Clock, Order, Asset, Calendar
 
 from ..utils.logger import setup_logger
 

@@ -3,17 +3,17 @@
 import logging
 import os
 from datetime import datetime
-from typing import Dict, Any, Optional, Tuple, Union
+from typing import Any, Dict, Optional, Tuple, Union
 
-from flask import Flask, jsonify, request, Response
+from flask import Flask, Response, jsonify, request
 from flask_cors import CORS
 from flask_socketio import SocketIO
 
-from src.core.bot_service import BotService, BotStatus
 from src.core.alpaca_service import AlpacaService
+from src.core.bot_service import BotService, BotStatus
 from src.core.trading_bot import TradingBot
-from src.utils.logger import setup_logger
 from src.utils.config import Config
+from src.utils.logger import setup_logger
 
 # Configure logging
 logger = logging.getLogger(__name__)

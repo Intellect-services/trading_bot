@@ -1,5 +1,5 @@
 import logging
-from typing import Dict, Any, NoReturn
+from typing import Any, Dict, NoReturn
 
 from core.alpaca_service import AlpacaService
 

@@ -1,14 +1,14 @@
 import logging
 import os
 from datetime import datetime
-from typing import Generator, Any, TYPE_CHECKING, cast
+from typing import TYPE_CHECKING, Any, Generator, cast
 from unittest.mock import MagicMock, patch
 
 import pytest
 from alpaca.trading.client import TradingClient
 from alpaca.trading.enums import OrderSide, TimeInForce
+from alpaca.trading.models import Clock, Order, Position, TradeAccount
 from alpaca.trading.requests import MarketOrderRequest
-from alpaca.trading.models import TradeAccount, Position, Clock, Order
 
 # Configure logging
 logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s")
