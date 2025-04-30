@@ -62,7 +62,7 @@ class Strategy:
 
     def generate_signals(self) -> Dict[str, float]:
         """Generate trading signals based on current state.
-        
+
         Returns:
             Dictionary of signals keyed by symbol, where:
             - 1.0 indicates a long position
@@ -72,16 +72,14 @@ class Strategy:
         raise NotImplementedError("Subclasses must implement generate_signals")
 
     def update_state(
-        self,
-        data: Union[pd.Series[Any], Dict[str, Any]],
-        timestamp: datetime
+        self, data: Union[pd.Series[Any], Dict[str, Any]], timestamp: datetime
     ) -> None:
         """Update the strategy state with new market data."""
         if isinstance(data, pd.Series):
             self.state = data.to_dict()
         else:
             self.state = data
-        self.state['timestamp'] = timestamp
+        self.state["timestamp"] = timestamp
 
     def get_state(self) -> Dict[str, Any]:
         """Get the current strategy state."""

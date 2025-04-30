@@ -49,7 +49,7 @@ class BacktestEngine:
         strategy: Strategy,
         initial_capital: float,
         commission: float = 0.0,
-        slippage: float = 0.0
+        slippage: float = 0.0,
     ) -> None:
         self.strategy = strategy
         self.initial_capital = initial_capital
@@ -64,7 +64,7 @@ class BacktestEngine:
         self,
         data: pd.DataFrame,
         start_date: Optional[datetime] = None,
-        end_date: Optional[datetime] = None
+        end_date: Optional[datetime] = None,
     ) -> Dict[str, Any]:
         """Run the backtest."""
         if start_date is not None:
@@ -98,14 +98,11 @@ class BacktestEngine:
             "final_value": self.portfolio_value,
             "total_return": (self.portfolio_value - self.initial_capital) / self.initial_capital,
             "trades": self.trades,
-            "metrics": self.metrics
+            "metrics": self.metrics,
         }
 
     def _execute_trades(
-        self,
-        signals: Dict[str, float],
-        current_bar: pd.Series,
-        current_time: datetime
+        self, signals: Dict[str, float], current_bar: pd.Series, current_time: datetime
     ) -> None:
         """Execute trades based on signals."""
         for symbol, signal in signals.items():
@@ -124,15 +121,17 @@ class BacktestEngine:
             commission = execution_price * shares * self.commission
 
             # Record trade
-            self.trades.append({
-                "timestamp": current_time.isoformat(),
-                "symbol": symbol,
-                "signal": signal,
-                "price": execution_price,
-                "shares": shares,
-                "commission": commission,
-                "value": position_value
-            })
+            self.trades.append(
+                {
+                    "timestamp": current_time.isoformat(),
+                    "symbol": symbol,
+                    "signal": signal,
+                    "price": execution_price,
+                    "shares": shares,
+                    "commission": commission,
+                    "value": position_value,
+                }
+            )
 
             # Update positions
             self.positions[symbol] = shares if signal > 0 else -shares
@@ -157,7 +156,7 @@ class BacktestEngine:
                 "win_rate": 0.0,
                 "avg_return": 0.0,
                 "sharpe_ratio": 0.0,
-                "max_drawdown": 0.0
+                "max_drawdown": 0.0,
             }
             return
 
@@ -187,7 +186,9 @@ class BacktestEngine:
         losing_trades = sum(1 for r in returns if r < 0)
         win_rate = winning_trades / total_trades if total_trades > 0 else 0.0
         avg_return = float(np.mean(returns_array)) if len(returns_array) > 0 else 0.0
-        sharpe_ratio = float(np.mean(returns_array) / np.std(returns_array)) if len(returns_array) > 1 else 0.0
+        sharpe_ratio = (
+            float(np.mean(returns_array) / np.std(returns_array)) if len(returns_array) > 1 else 0.0
+        )
 
         self.metrics = {
             "total_trades": total_trades,
@@ -196,7 +197,7 @@ class BacktestEngine:
             "win_rate": win_rate,
             "avg_return": avg_return,
             "sharpe_ratio": sharpe_ratio,
-            "max_drawdown": max_drawdown
+            "max_drawdown": max_drawdown,
         }
 
     def calculate_returns(self) -> float:

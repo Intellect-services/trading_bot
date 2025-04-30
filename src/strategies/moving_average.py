@@ -7,6 +7,7 @@ from src.utils.logger import setup_logger
 
 logger = setup_logger(__name__)
 
+
 class MovingAverageStrategy(Strategy):
     """Moving average crossover strategy."""
 
@@ -20,15 +21,13 @@ class MovingAverageStrategy(Strategy):
                 - symbols: List of symbols to trade
         """
         super().__init__(config)
-        self.short_window = self.config.get('short_window', 20)
-        self.long_window = self.config.get('long_window', 50)
-        self.symbols = self.config.get('symbols', [])
+        self.short_window = self.config.get("short_window", 20)
+        self.long_window = self.config.get("long_window", 50)
+        self.symbols = self.config.get("symbols", [])
         self.price_history: Dict[str, List[float]] = {}
 
     def update_state(
-        self,
-        data: Union[pd.Series[Any], Dict[str, Any]],
-        timestamp: datetime
+        self, data: Union[pd.Series[Any], Dict[str, Any]], timestamp: datetime
     ) -> None:
         """Update the strategy state with new market data."""
         if isinstance(data, pd.Series):
@@ -45,7 +44,7 @@ class MovingAverageStrategy(Strategy):
                 self.price_history[symbol].append(price)
                 # Keep only the necessary history
                 if len(self.price_history[symbol]) > self.long_window:
-                    self.price_history[symbol] = self.price_history[symbol][-self.long_window:]
+                    self.price_history[symbol] = self.price_history[symbol][-self.long_window :]
 
         # Update the base state
         super().update_state(data_dict, timestamp)
@@ -53,9 +52,12 @@ class MovingAverageStrategy(Strategy):
     def generate_signals(self) -> Dict[str, float]:
         """Generate trading signals based on moving average crossovers."""
         signals: Dict[str, float] = {}
-        
+
         for symbol in self.symbols:
-            if symbol not in self.price_history or len(self.price_history[symbol]) < self.long_window:
+            if (
+                symbol not in self.price_history
+                or len(self.price_history[symbol]) < self.long_window
+            ):
                 signals[symbol] = 0.0
                 continue
 

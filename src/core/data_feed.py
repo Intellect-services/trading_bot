@@ -62,7 +62,7 @@ class AlpacaDataFeed:
         symbol: str,
         start: Optional[datetime] = None,
         end: Optional[datetime] = None,
-        timeframe: str = "1Day"
+        timeframe: str = "1Day",
     ) -> DataFrame:
         """Fetch historical market data for a symbol.
 
@@ -83,22 +83,24 @@ class AlpacaDataFeed:
             bars = data[symbol]
             df_data = []
             for bar in bars:
-                df_data.append({
-                    'timestamp': bar.timestamp,
-                    'open': float(bar.open),
-                    'high': float(bar.high),
-                    'low': float(bar.low),
-                    'close': float(bar.close),
-                    'volume': int(bar.volume),
-                    'trade_count': int(bar.trade_count),
-                    'vwap': float(bar.vwap)
-                })
+                df_data.append(
+                    {
+                        "timestamp": bar.timestamp,
+                        "open": float(bar.open),
+                        "high": float(bar.high),
+                        "low": float(bar.low),
+                        "close": float(bar.close),
+                        "volume": int(bar.volume),
+                        "trade_count": int(bar.trade_count),
+                        "vwap": float(bar.vwap),
+                    }
+                )
 
             if not df_data:
                 return pd.DataFrame()
 
             df = pd.DataFrame(df_data)
-            df.set_index('timestamp', inplace=True)
+            df.set_index("timestamp", inplace=True)
             return df
 
         except Exception as e:
@@ -150,7 +152,7 @@ class AlpacaDataFeed:
         try:
             df = self.get_historical_data(symbol, timeframe="1Min", start=None, end=None)
             if not df.empty:
-                return float(df['close'].iloc[-1])
+                return float(df["close"].iloc[-1])
             return None
         except Exception as e:
             print(f"Error getting latest price for {symbol}: {str(e)}")
@@ -250,19 +252,19 @@ class AlpacaDataFeed:
             positions = self.client.get_positions()
             return {
                 position.symbol: {
-                    'symbol': position.symbol,
-                    'qty': float(position.qty),
-                    'market_value': float(position.market_value),
-                    'current_price': float(position.current_price),
-                    'lastday_price': float(position.lastday_price),
-                    'change_today': float(position.change_today),
-                    'unrealized_pl': float(position.unrealized_pl),
-                    'unrealized_plpc': float(position.unrealized_plpc),
-                    'unrealized_intraday_pl': float(position.unrealized_intraday_pl),
-                    'unrealized_intraday_plpc': float(position.unrealized_intraday_plpc),
-                    'avg_entry_price': float(position.avg_entry_price),
-                    'side': position.side,
-                    'exchange': position.exchange
+                    "symbol": position.symbol,
+                    "qty": float(position.qty),
+                    "market_value": float(position.market_value),
+                    "current_price": float(position.current_price),
+                    "lastday_price": float(position.lastday_price),
+                    "change_today": float(position.change_today),
+                    "unrealized_pl": float(position.unrealized_pl),
+                    "unrealized_plpc": float(position.unrealized_plpc),
+                    "unrealized_intraday_pl": float(position.unrealized_intraday_pl),
+                    "unrealized_intraday_plpc": float(position.unrealized_intraday_plpc),
+                    "avg_entry_price": float(position.avg_entry_price),
+                    "side": position.side,
+                    "exchange": position.exchange,
                 }
                 for position in positions
             }
@@ -289,10 +291,10 @@ class AlpacaDataFeed:
     def get_current_data(self, symbol: str) -> Dict[str, Any]:
         """
         Get current market data for a symbol.
-        
+
         Args:
             symbol: The stock symbol
-            
+
         Returns:
             Dictionary containing current market data
         """
@@ -300,14 +302,14 @@ class AlpacaDataFeed:
             latest_price = self.get_latest_price(symbol)
             if latest_price is None:
                 return {}
-                
+
             position = self.client.get_position(symbol)
-            
+
             return {
                 "symbol": symbol,
                 "price": latest_price,
                 "position": position if position else {},
-                "timestamp": datetime.now()
+                "timestamp": datetime.now(),
             }
         except Exception as e:
             print(f"Error getting current data for {symbol}: {e}")
@@ -320,7 +322,7 @@ class AlpacaDataFeed:
     def update_cache(self, symbol: str, data: pd.DataFrame) -> None:
         """
         Update the cache with new data for a symbol.
-        
+
         Args:
             symbol: The stock symbol
             data: DataFrame containing the new data
@@ -342,7 +344,7 @@ class MockDataFeed:
         symbol: str,
         start: Optional[datetime] = None,
         end: Optional[datetime] = None,
-        timeframe: str = "1Day"
+        timeframe: str = "1Day",
     ) -> DataFrame:
         """Get mock historical data.
 
@@ -357,24 +359,26 @@ class MockDataFeed:
         """
         if symbol not in self._data:
             # Generate mock data
-            dates = pd.date_range(start='2020-01-01', end='2023-12-31', freq='D')
+            dates = pd.date_range(start="2020-01-01", end="2023-12-31", freq="D")
             n = len(dates)
             price = 100.0
             data = []
             for i in range(n):
-                price *= (1 + np.random.normal(0, 0.02))
-                data.append({
-                    'timestamp': dates[i],
-                    'open': price * (1 + np.random.normal(0, 0.005)),
-                    'high': price * (1 + np.random.normal(0, 0.01)),
-                    'low': price * (1 - np.random.normal(0, 0.01)),
-                    'close': price,
-                    'volume': int(np.random.normal(1000000, 200000)),
-                    'trade_count': int(np.random.normal(5000, 1000)),
-                    'vwap': price * (1 + np.random.normal(0, 0.002))
-                })
+                price *= 1 + np.random.normal(0, 0.02)
+                data.append(
+                    {
+                        "timestamp": dates[i],
+                        "open": price * (1 + np.random.normal(0, 0.005)),
+                        "high": price * (1 + np.random.normal(0, 0.01)),
+                        "low": price * (1 - np.random.normal(0, 0.01)),
+                        "close": price,
+                        "volume": int(np.random.normal(1000000, 200000)),
+                        "trade_count": int(np.random.normal(5000, 1000)),
+                        "vwap": price * (1 + np.random.normal(0, 0.002)),
+                    }
+                )
             df = pd.DataFrame(data)
-            df.set_index('timestamp', inplace=True)
+            df.set_index("timestamp", inplace=True)
             self._data[symbol] = df
 
         df = self._data[symbol].copy()
@@ -395,7 +399,7 @@ class MockDataFeed:
         """
         df = self.get_historical_data(symbol)
         if not df.empty:
-            return float(df['close'].iloc[-1])
+            return float(df["close"].iloc[-1])
         return None
 
     def get_positions(self) -> Dict[str, Dict[str, Any]]:

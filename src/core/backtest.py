@@ -148,7 +148,9 @@ class Backtest:
                         }
                     )
 
-    def _update_portfolio_value(self, portfolio: Dict[str, Any], current_bar: Series[float]) -> None:
+    def _update_portfolio_value(
+        self, portfolio: Dict[str, Any], current_bar: Series[float]
+    ) -> None:
         """Update portfolio value based on current prices.
 
         Args:

@@ -30,8 +30,10 @@ StrategyState = Dict[str, Any]
 BacktestResult = Dict[str, Union[float, int, str, Dict[str, float]]]
 BacktestMetrics = Dict[str, float]
 
+
 class TradeAccount(TypedDict):
     """Type definition for trading account details."""
+
     id: str
     account_number: str
     status: str
@@ -61,8 +63,10 @@ class TradeAccount(TypedDict):
     pending_transfer_out: float
     sma: float
 
+
 class Position(TypedDict):
     """Type definition for position details."""
+
     asset_id: str
     symbol: str
     qty: float
@@ -76,8 +80,10 @@ class Position(TypedDict):
     change_today: float
     side: str
 
+
 class Order(TypedDict):
     """Type definition for order details."""
+
     id: str
     client_order_id: str
     created_at: datetime
