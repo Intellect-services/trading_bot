@@ -10,12 +10,12 @@ from authlib.integrations.flask_client import OAuth  # type: ignore
 from flask import Flask, jsonify, redirect, render_template, request, session, url_for
 from flask_socketio import SocketIO, emit  # type: ignore
 
-from .core.alpaca_service import AlpacaService
-from .core.trading_bot import TradingBot
-from .core.portfolio import Portfolio
-from .core.data_feed import DataFeed
-from .core.risk_manager import RiskManager
 from .core.alpaca_client import AlpacaClient
+from .core.alpaca_service import AlpacaService
+from .core.data_feed import DataFeed
+from .core.portfolio import Portfolio
+from .core.risk_manager import RiskManager
+from .core.trading_bot import TradingBot
 from .strategies.moving_average import MovingAverageCrossover
 from .utils.config import Config
 from .utils.logger import setup_logger

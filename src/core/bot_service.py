@@ -1,18 +1,18 @@
 """Bot service module for managing bot lifecycle and status."""
 
+import logging
 import time
 from datetime import datetime
 from enum import Enum, auto
 from threading import Event, Thread
 from typing import Any, Dict, List, Optional
-import logging
 
+from src.core.alpaca_client import AlpacaClient
 from src.core.bot import TradingBot
-from src.core.strategy import Strategy
 from src.core.data_feed import DataFeed
 from src.core.portfolio import Portfolio
 from src.core.risk_manager import RiskManager
-from src.core.alpaca_client import AlpacaClient
+from src.core.strategy import Strategy
 from src.strategies.moving_average import MovingAverageCrossover
 from src.utils.config import Config
 from src.utils.logger import setup_logger

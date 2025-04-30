@@ -6,15 +6,15 @@ import signal
 import sys
 from typing import Any, Dict, Optional
 
+from src.core.alpaca_client import AlpacaClient
+from src.core.alpaca_service import AlpacaService
 from src.core.bot import TradingBot
 from src.core.data_feed import DataFeed
 from src.core.portfolio import Portfolio
 from src.core.risk_manager import RiskManager
-from src.core.alpaca_client import AlpacaClient
 from src.strategies.moving_average import MovingAverageCrossover
 from src.utils.config import Config
 from src.utils.logger import setup_logger
-from src.core.alpaca_service import AlpacaService
 
 logger = setup_logger(__name__)
 

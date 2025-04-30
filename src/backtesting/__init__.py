@@ -2,8 +2,9 @@
 Backtesting module for strategy evaluation.
 """
 
-from .engine import BacktestEngine, BacktestResult, BacktestTrade
 from src.backtesting.metrics import calculate_metrics, format_metrics
+
+from .engine import BacktestEngine, BacktestResult, BacktestTrade
 
 __all__ = [
     "BacktestEngine",

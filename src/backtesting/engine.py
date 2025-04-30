@@ -7,7 +7,7 @@ from typing import Any, Dict, List, Optional, TypedDict, Union
 import numpy as np
 import pandas as pd
 
-from src.core.portfolio import Portfolio, PositionDict, OrderDict
+from src.core.portfolio import OrderDict, Portfolio, PositionDict
 from src.core.strategy import Strategy
 from src.utils.logger import setup_logger
 

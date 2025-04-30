@@ -1,10 +1,10 @@
 """Data feed module for fetching and processing market data."""
 
+import os
 import threading
 import time
 from datetime import datetime, timedelta
 from typing import Callable, Dict, List, Optional
-import os
 
 import numpy as np
 import pandas as pd
