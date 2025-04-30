@@ -13,7 +13,8 @@ from alpaca.data.timeframe import TimeFrame
 from alpaca.trading.models import Position
 from pandas import DataFrame
 
-from src.core.alpaca_client import AlpacaClient
+from src.core.alpaca_client import (AccountInfo, AlpacaClient, AssetInfo,
+                                    ClockInfo, HistoricalData, PositionInfo)
 from src.core.alpaca_types import Bar
 from src.utils.logger import setup_logger
 
@@ -77,7 +78,7 @@ class AlpacaDataFeed:
             DataFrame containing the historical market data.
         """
         try:
-            data = self.client.get_historical_data(symbol, start, end, timeframe)
+            data = self.client.get_historical_data([symbol], start, end, timeframe)
             if not data or symbol not in data:
                 return pd.DataFrame()
 
@@ -115,7 +116,7 @@ class AlpacaDataFeed:
             end = datetime.now()
             start = end - timedelta(days=100)
             data = self.client.get_historical_data(
-                symbol=symbol, timeframe="1D", start=start, end=end
+                symbols=[symbol], timeframe="1D", start=start, end=end
             )
             if not data or not data.get("bars"):
                 self.logger.warning("No data found for %s", symbol)
@@ -151,7 +152,9 @@ class AlpacaDataFeed:
             The latest price as a float, or None if the price cannot be retrieved.
         """
         try:
-            df = self.get_historical_data(symbol, timeframe="1Min", start=None, end=None)
+            df = self.get_historical_data(
+                symbol, timeframe="1Min", start=None, end=None
+            )
             if not df.empty:
                 return float(df["close"].iloc[-1])
             return None
@@ -210,110 +213,110 @@ class AlpacaDataFeed:
 
     def stop(self) -> None:
         """Stop the data feed."""
-        if self._running:
-            self._running = False
-            if self._thread:
-                self._thread.join()
-            self.logger.info("Stopped data feed")
+        self._running = False
+        if self._thread:
+            self._thread.join()
+            self._thread = None
+        self.logger.info("Stopped data feed")
 
     def _run(self) -> None:
-        """Run the data feed loop."""
+        """Main loop for the data feed."""
         while self._running:
             try:
                 for symbol in self.symbols:
                     self.get_latest_data(symbol)
-                time.sleep(60)  # Update every minute
+                time.sleep(1)  # Sleep for 1 second between updates
             except Exception as e:
                 self.logger.error(f"Error in data feed loop: {e}")
-                time.sleep(60)  # Wait before retrying
+                time.sleep(5)  # Sleep longer on error
 
-    def get_market_status(self) -> Dict[str, Any]:
-        """Get the current market status."""
+    def get_market_status(self) -> ClockInfo:
+        """Get market status."""
         try:
             return self.client.get_clock()
         except Exception as e:
-            print(f"Error getting market status: {e}")
-            return {"is_open": False, "next_open": None, "next_close": None, "timestamp": None}
+            self.logger.error(f"Error getting market status: {e}")
+            return ClockInfo(
+                is_open=False,
+                next_open=None,
+                next_close=None,
+                timestamp=None,
+            )
 
-    def get_assets(self, status: str = "active") -> List[Dict[str, Any]]:
-        """Get all available assets."""
+    def get_assets(self, status: str = "active") -> List[AssetInfo]:
+        """Get list of available assets."""
         try:
             return self.client.get_assets(status)
         except Exception as e:
-            print(f"Error getting assets: {e}")
+            self.logger.error(f"Error getting assets: {e}")
             return []
 
-    def get_positions(self) -> Dict[str, Dict[str, Any]]:
-        """Get current positions.
-
-        Returns:
-            A dictionary mapping symbols to position information.
-        """
+    def get_positions(self) -> Dict[str, PositionInfo]:
+        """Get current positions."""
         try:
             positions = self.client.get_positions()
-            return {
-                position.symbol: {
-                    "symbol": position.symbol,
-                    "qty": float(position.qty),
-                    "market_value": float(position.market_value),
-                    "current_price": float(position.current_price),
-                    "lastday_price": float(position.lastday_price),
-                    "change_today": float(position.change_today),
-                    "unrealized_pl": float(position.unrealized_pl),
-                    "unrealized_plpc": float(position.unrealized_plpc),
-                    "unrealized_intraday_pl": float(position.unrealized_intraday_pl),
-                    "unrealized_intraday_plpc": float(position.unrealized_intraday_plpc),
-                    "avg_entry_price": float(position.avg_entry_price),
-                    "side": position.side,
-                    "exchange": position.exchange,
-                }
-                for position in positions
-            }
+            return {pos["symbol"]: pos for pos in positions}
         except Exception as e:
-            print(f"Error getting positions: {str(e)}")
+            self.logger.error(f"Error getting positions: {e}")
             return {}
 
-    def get_account(self) -> Dict[str, Any]:
-        """Get the trading account information."""
+    def get_account(self) -> AccountInfo:
+        """Get account information."""
         try:
             return self.client.get_account()
         except Exception as e:
-            print(f"Error getting account: {e}")
-            return {}
+            self.logger.error(f"Error getting account: {e}")
+            return AccountInfo(
+                id="",
+                cash=0.0,
+                portfolio_value=0.0,
+                buying_power=0.0,
+                equity=0.0,
+                long_market_value=0.0,
+                short_market_value=0.0,
+                initial_margin=0.0,
+                maintenance_margin=0.0,
+                last_equity=0.0,
+                multiplier=1.0,
+                status="",
+                trading_blocked=False,
+                transfers_blocked=False,
+                account_blocked=False,
+                created_at=None,
+                trade_suspended_by_user=False,
+                currency="USD",
+            )
 
-    def get_asset(self, symbol: str) -> Optional[Dict[str, Any]]:
-        """Get information about a specific asset."""
+    def get_asset(self, symbol: str) -> Optional[AssetInfo]:
+        """Get asset information."""
         try:
             return self.client.get_asset(symbol)
         except Exception as e:
-            print(f"Error getting asset: {e}")
+            self.logger.error(f"Error getting asset: {e}")
             return None
 
     def get_current_data(self, symbol: str) -> Dict[str, Any]:
-        """
-        Get current market data for a symbol.
-
-        Args:
-            symbol: The stock symbol
-
-        Returns:
-            Dictionary containing current market data
-        """
+        """Get current data for a symbol."""
         try:
-            latest_price = self.get_latest_price(symbol)
-            if latest_price is None:
-                return {}
-
-            position = self.client.get_position(symbol)
-
-            return {
-                "symbol": symbol,
-                "price": latest_price,
-                "position": position if position else {},
-                "timestamp": datetime.now(),
-            }
+            if symbol in self._data_cache and not self._data_cache[symbol].empty:
+                latest = self._data_cache[symbol].iloc[-1]
+                return {
+                    "symbol": symbol,
+                    "timestamp": latest.name,
+                    "open": float(latest["open"]),
+                    "high": float(latest["high"]),
+                    "low": float(latest["low"]),
+                    "close": float(latest["close"]),
+                    "volume": int(latest["volume"]),
+                    "trade_count": int(latest["trade_count"]),
+                    "vwap": float(latest["vwap"]),
+                    "sma_20": float(latest["sma_20"]),
+                    "sma_50": float(latest["sma_50"]),
+                    "rsi": float(latest["rsi"]),
+                }
+            return {}
         except Exception as e:
-            print(f"Error getting current data for {symbol}: {e}")
+            self.logger.error(f"Error getting current data for {symbol}: {e}")
             return {}
 
     def clear_cache(self) -> None:
@@ -321,15 +324,12 @@ class AlpacaDataFeed:
         self._data_cache.clear()
 
     def update_cache(self, symbol: str, data: pd.DataFrame) -> None:
-        """
-        Update the cache with new data for a symbol.
-
-        Args:
-            symbol: The stock symbol
-            data: DataFrame containing the new data
-        """
-        if not data.empty:
+        """Update the data cache for a symbol."""
+        try:
             self._data_cache[symbol] = data
+            self._calculate_indicators(symbol)
+        except Exception as e:
+            self.logger.error(f"Error updating cache for {symbol}: {e}")
 
 
 class MockDataFeed:

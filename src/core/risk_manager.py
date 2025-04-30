@@ -35,7 +35,9 @@ class RiskManager:
             self.max_leverage = float(config.get("max_leverage", 1.0))
             self.risk_per_trade = float(config.get("risk_per_trade", 0.01))
             self.trailing_stop = float(config.get("trailing_stop", 0.01))
-            self.trailing_stop_activation = float(config.get("trailing_stop_activation", 0.02))
+            self.trailing_stop_activation = float(
+                config.get("trailing_stop_activation", 0.02)
+            )
         else:
             # Default values
             self.max_position_size = 0.1
@@ -48,8 +50,12 @@ class RiskManager:
             self.trailing_stop_activation = 0.02
 
         self.logger = logger
-        self.highest_prices: Dict[str, float] = {}  # New: track highest prices for trailing stops
-        self.lowest_prices: Dict[str, float] = {}  # New: track lowest prices for trailing stops
+        self.highest_prices: Dict[
+            str, float
+        ] = {}  # New: track highest prices for trailing stops
+        self.lowest_prices: Dict[
+            str, float
+        ] = {}  # New: track lowest prices for trailing stops
 
     def apply_risk_management(
         self, price: float, position: Optional[Dict[str, float]], account_value: float
@@ -176,12 +182,16 @@ class RiskManager:
             # Check trade value against portfolio
             trade_value = quantity * price
             if trade_value / portfolio_value > self.max_position_size:
-                logger.warning("Trade size exceeds maximum: %s", trade_value / portfolio_value)
+                logger.warning(
+                    "Trade size exceeds maximum: %s", trade_value / portfolio_value
+                )
                 return False
 
             # Check risk per trade
             if trade_value / portfolio_value > self.risk_per_trade:
-                logger.warning("Trade risk exceeds maximum: %s", trade_value / portfolio_value)
+                logger.warning(
+                    "Trade risk exceeds maximum: %s", trade_value / portfolio_value
+                )
                 return False
 
             return True
@@ -212,13 +222,15 @@ class RiskManager:
                     self.highest_prices[symbol] = current_price
 
                 # Calculate profit percentage
-                profit_pct = (current_price - self.highest_prices[symbol]) / self.highest_prices[
-                    symbol
-                ]
+                profit_pct = (
+                    current_price - self.highest_prices[symbol]
+                ) / self.highest_prices[symbol]
 
                 # Check if trailing stop should be activated
                 if profit_pct >= self.trailing_stop_activation:
-                    trailing_stop_price = self.highest_prices[symbol] * (1 - self.trailing_stop)
+                    trailing_stop_price = self.highest_prices[symbol] * (
+                        1 - self.trailing_stop
+                    )
                     if current_price <= trailing_stop_price:
                         return trailing_stop_price
             else:
@@ -229,13 +241,15 @@ class RiskManager:
                     self.lowest_prices[symbol] = current_price
 
                 # Calculate profit percentage
-                profit_pct = (self.lowest_prices[symbol] - current_price) / self.lowest_prices[
-                    symbol
-                ]
+                profit_pct = (
+                    self.lowest_prices[symbol] - current_price
+                ) / self.lowest_prices[symbol]
 
                 # Check if trailing stop should be activated
                 if profit_pct >= self.trailing_stop_activation:
-                    trailing_stop_price = self.lowest_prices[symbol] * (1 + self.trailing_stop)
+                    trailing_stop_price = self.lowest_prices[symbol] * (
+                        1 + self.trailing_stop
+                    )
                     if current_price >= trailing_stop_price:
                         return trailing_stop_price
 

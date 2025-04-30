@@ -45,7 +45,9 @@ class MovingAverageStrategy(Strategy):
                 self.price_history[symbol].append(price)
                 # Keep only the necessary history
                 if len(self.price_history[symbol]) > self.long_window:
-                    self.price_history[symbol] = self.price_history[symbol][-self.long_window :]
+                    self.price_history[symbol] = self.price_history[symbol][
+                        -self.long_window :
+                    ]
 
         # Update the base state
         super().update_state(data_dict, timestamp)
@@ -66,9 +68,15 @@ class MovingAverageStrategy(Strategy):
             short_ma = prices.rolling(window=self.short_window).mean()
             long_ma = prices.rolling(window=self.long_window).mean()
 
-            if short_ma.iloc[-1] > long_ma.iloc[-1] and short_ma.iloc[-2] <= long_ma.iloc[-2]:
+            if (
+                short_ma.iloc[-1] > long_ma.iloc[-1]
+                and short_ma.iloc[-2] <= long_ma.iloc[-2]
+            ):
                 signals[symbol] = 1.0  # Buy signal
-            elif short_ma.iloc[-1] < long_ma.iloc[-1] and short_ma.iloc[-2] >= long_ma.iloc[-2]:
+            elif (
+                short_ma.iloc[-1] < long_ma.iloc[-1]
+                and short_ma.iloc[-2] >= long_ma.iloc[-2]
+            ):
                 signals[symbol] = -1.0  # Sell signal
             else:
                 signals[symbol] = 0.0  # No signal

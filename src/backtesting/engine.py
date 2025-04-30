@@ -8,7 +8,7 @@ import numpy as np
 import pandas as pd
 
 from src.core.portfolio import OrderDict, Portfolio, PositionDict
-from src.core.strategy import Strategy
+from src.core.strategy import BaseStrategy
 from src.utils.logger import setup_logger
 
 logger = setup_logger(__name__)
@@ -46,7 +46,7 @@ class BacktestEngine:
 
     def __init__(
         self,
-        strategy: Strategy,
+        strategy: BaseStrategy,
         initial_capital: float,
         commission: float = 0.0,
         slippage: float = 0.0,
@@ -59,6 +59,7 @@ class BacktestEngine:
         self.positions: Dict[str, float] = {}
         self.trades: List[Dict[str, Any]] = []
         self.metrics: Dict[str, float] = {}
+        self.equity_curve: List[float] = [initial_capital]
 
     def run(
         self,
@@ -76,6 +77,7 @@ class BacktestEngine:
         self.positions = {}
         self.trades = []
         self.metrics = {}
+        self.equity_curve = [self.initial_capital]
 
         for timestamp, row in data.iterrows():
             # Update strategy state
@@ -96,7 +98,8 @@ class BacktestEngine:
         return {
             "initial_capital": self.initial_capital,
             "final_value": self.portfolio_value,
-            "total_return": (self.portfolio_value - self.initial_capital) / self.initial_capital,
+            "total_return": (self.portfolio_value - self.initial_capital)
+            / self.initial_capital,
             "trades": self.trades,
             "metrics": self.metrics,
         }
@@ -145,6 +148,7 @@ class BacktestEngine:
             portfolio_value += shares * price
 
         self.portfolio_value = portfolio_value
+        self.equity_curve.append(portfolio_value)
 
     def _calculate_metrics(self) -> None:
         """Calculate performance metrics."""
@@ -187,7 +191,9 @@ class BacktestEngine:
         win_rate = winning_trades / total_trades if total_trades > 0 else 0.0
         avg_return = float(np.mean(returns_array)) if len(returns_array) > 0 else 0.0
         sharpe_ratio = (
-            float(np.mean(returns_array) / np.std(returns_array)) if len(returns_array) > 1 else 0.0
+            float(np.mean(returns_array) / np.std(returns_array))
+            if len(returns_array) > 1
+            else 0.0
         )
 
         self.metrics = {
@@ -201,167 +207,99 @@ class BacktestEngine:
         }
 
     def calculate_returns(self) -> float:
-        """Calculate total returns.
-
-        Returns:
-            Total returns as percentage
-        """
-        try:
-            if not self.equity_curve:
-                return 0.0
-            return (self.equity_curve[-1] - self.initial_capital) / self.initial_capital
-        except Exception as e:
-            logger.error(f"Error calculating returns: {e}")
+        """Calculate total returns."""
+        if not self.equity_curve:
             return 0.0
+        return (self.equity_curve[-1] - self.equity_curve[0]) / self.equity_curve[0]
 
     def calculate_sharpe_ratio(self) -> float:
-        """Calculate Sharpe ratio.
-
-        Returns:
-            Sharpe ratio
-        """
-        try:
-            if not self.equity_curve:
-                return 0.0
-            returns = np.diff(self.equity_curve) / self.equity_curve[:-1]
-            if len(returns) < 2:
-                return 0.0
-            return np.sqrt(252) * np.mean(returns) / np.std(returns)
-        except Exception as e:
-            logger.error(f"Error calculating Sharpe ratio: {e}")
+        """Calculate Sharpe ratio."""
+        if len(self.equity_curve) < 2:
             return 0.0
+        returns = np.diff(self.equity_curve) / self.equity_curve[:-1]
+        if len(returns) < 2:
+            return 0.0
+        return float(np.mean(returns) / np.std(returns))
 
     def calculate_max_drawdown(self) -> float:
-        """Calculate maximum drawdown.
-
-        Returns:
-            Maximum drawdown as percentage
-        """
-        try:
-            if not self.equity_curve:
-                return 0.0
-            peak = self.equity_curve[0]
-            max_dd = 0.0
-            for value in self.equity_curve[1:]:
-                if value > peak:
-                    peak = value
-                dd = (peak - value) / peak
-                if dd > max_dd:
-                    max_dd = dd
-            return max_dd
-        except Exception as e:
-            logger.error(f"Error calculating max drawdown: {e}")
+        """Calculate maximum drawdown."""
+        if not self.equity_curve:
             return 0.0
+        peak = self.equity_curve[0]
+        max_drawdown = 0.0
+        for value in self.equity_curve:
+            if value > peak:
+                peak = value
+            drawdown = (peak - value) / peak
+            max_drawdown = max(max_drawdown, drawdown)
+        return max_drawdown
 
     def calculate_win_rate(self) -> float:
-        """Calculate win rate.
-
-        Returns:
-            Win rate as percentage
-        """
-        try:
-            if not self.trades:
-                return 0.0
-            wins = len([trade for trade in self.trades if trade["side"] == "sell"])
-            return float(wins) / len(self.trades) if len(self.trades) > 0 else 0.0
-        except Exception as e:
-            logger.error(f"Error calculating win rate: {e}")
+        """Calculate win rate."""
+        if not self.trades:
             return 0.0
+        winning_trades = sum(
+            1 for trade in self.trades if trade["shares"] * trade["price"] > 0
+        )
+        return winning_trades / len(self.trades)
 
     def calculate_profit_factor(self) -> float:
-        """Calculate profit factor.
-
-        Returns:
-            Profit factor
-        """
-        try:
-            if not self.trades:
-                return 0.0
-            total_profit = sum(
-                trade["price"] * trade["size"] for trade in self.trades if trade["side"] == "sell"
-            )
-            total_loss = sum(
-                trade["price"] * trade["size"] for trade in self.trades if trade["side"] == "buy"
-            )
-            return total_profit / total_loss if total_loss != 0 else 0.0
-        except Exception as e:
-            logger.error(f"Error calculating profit factor: {e}")
+        """Calculate profit factor."""
+        if not self.trades:
             return 0.0
+        gross_profit = sum(
+            trade["shares"] * trade["price"]
+            for trade in self.trades
+            if trade["shares"] * trade["price"] > 0
+        )
+        gross_loss = abs(
+            sum(
+                trade["shares"] * trade["price"]
+                for trade in self.trades
+                if trade["shares"] * trade["price"] < 0
+            )
+        )
+        return gross_profit / gross_loss if gross_loss != 0 else float("inf")
 
     def calculate_avg_trade(self) -> float:
-        """Calculate average trade profit/loss.
-
-        Returns:
-            Average trade profit/loss
-        """
-        try:
-            if not self.trades:
-                return 0.0
-            total_pnl = sum(
-                trade["price"] * trade["size"] * (1 if trade["side"] == "sell" else -1)
-                for trade in self.trades
-            )
-            return total_pnl / len(self.trades)
-        except Exception as e:
-            logger.error(f"Error calculating average trade: {e}")
+        """Calculate average trade profit/loss."""
+        if not self.trades:
             return 0.0
+        total_pnl = sum(trade["shares"] * trade["price"] for trade in self.trades)
+        return total_pnl / len(self.trades)
 
     def calculate_avg_win(self) -> float:
-        """Calculate average winning trade.
-
-        Returns:
-            Average winning trade amount
-        """
-        try:
-            winning_trades = [t["pnl"] for t in self.trades if t["pnl"] > 0]
-            if not winning_trades:
-                return 0.0
-            return float(np.mean(winning_trades))
-        except Exception as e:
-            logger.error(f"Error calculating average win: {e}")
-            return 0.0
+        """Calculate average winning trade."""
+        winning_trades = [
+            trade["shares"] * trade["price"]
+            for trade in self.trades
+            if trade["shares"] * trade["price"] > 0
+        ]
+        return float(np.mean(winning_trades)) if winning_trades else 0.0
 
     def calculate_avg_loss(self) -> float:
-        """Calculate average losing trade.
-
-        Returns:
-            Average losing trade amount
-        """
-        try:
-            losing_trades = [t["pnl"] for t in self.trades if t["pnl"] < 0]
-            if not losing_trades:
-                return 0.0
-            return float(np.mean(losing_trades))
-        except Exception as e:
-            logger.error(f"Error calculating average loss: {e}")
-            return 0.0
+        """Calculate average losing trade."""
+        losing_trades = [
+            trade["shares"] * trade["price"]
+            for trade in self.trades
+            if trade["shares"] * trade["price"] < 0
+        ]
+        return float(np.mean(losing_trades)) if losing_trades else 0.0
 
     def calculate_max_win(self) -> float:
-        """Calculate maximum winning trade.
-
-        Returns:
-            Maximum winning trade profit
-        """
-        try:
-            winning_trades = [
-                trade["price"] * trade["size"] for trade in self.trades if trade["side"] == "sell"
-            ]
-            return max(winning_trades) if winning_trades else 0.0
-        except Exception as e:
-            logger.error(f"Error calculating max win: {e}")
-            return 0.0
+        """Calculate maximum winning trade."""
+        winning_trades = [
+            trade["shares"] * trade["price"]
+            for trade in self.trades
+            if trade["shares"] * trade["price"] > 0
+        ]
+        return float(max(winning_trades)) if winning_trades else 0.0
 
     def calculate_max_loss(self) -> float:
-        """Calculate maximum losing trade.
-
-        Returns:
-            Maximum losing trade loss
-        """
-        try:
-            losing_trades = [
-                trade["price"] * trade["size"] for trade in self.trades if trade["side"] == "buy"
-            ]
-            return max(losing_trades) if losing_trades else 0.0
-        except Exception as e:
-            logger.error(f"Error calculating max loss: {e}")
-            return 0.0
+        """Calculate maximum losing trade."""
+        losing_trades = [
+            trade["shares"] * trade["price"]
+            for trade in self.trades
+            if trade["shares"] * trade["price"] < 0
+        ]
+        return float(min(losing_trades)) if losing_trades else 0.0

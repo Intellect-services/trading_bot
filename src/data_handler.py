@@ -11,7 +11,8 @@ from alpaca.data.timeframe import TimeFrame
 from alpaca.trading.enums import OrderSide, TimeInForce
 from alpaca.trading.models import Position
 
-from src.core.alpaca_client import AlpacaClient
+from src.core.alpaca_client import (AccountInfo, AlpacaClient, OrderInfo,
+                                    PositionInfo)
 from src.utils.config import Config
 from src.utils.logger import setup_logger
 
@@ -51,7 +52,9 @@ class DataHandler:
         """
         return os.path.join(self._cache_dir, f"{symbol}_{timeframe}.json")
 
-    def _load_cache(self, symbol: str, timeframe: str) -> Optional[List[Dict[str, Any]]]:
+    def _load_cache(
+        self, symbol: str, timeframe: str
+    ) -> Optional[List[Dict[str, Any]]]:
         """Load data from cache.
 
         Args:
@@ -66,7 +69,9 @@ class DataHandler:
             if os.path.exists(cache_path):
                 with open(cache_path, "r") as f:
                     data = json.load(f)
-                    return [dict(item) for item in data]  # Ensure we return a list of dicts
+                    return [
+                        dict(item) for item in data
+                    ]  # Ensure we return a list of dicts
             return None
         except Exception as e:
             logger.error(f"Error loading cache: {e}")
@@ -132,7 +137,9 @@ class DataHandler:
                 end_date = datetime.now()
 
             # Get data from Alpaca
-            data = self.client.get_historical_data(symbol, start_date, end_date, timeframe)
+            data = self.client.get_historical_data(
+                [symbol], start_date, end_date, timeframe
+            )
             if isinstance(data, pd.DataFrame):
                 return data
             return pd.DataFrame()
@@ -152,7 +159,7 @@ class DataHandler:
         try:
             end = datetime.now()
             start = end - timedelta(minutes=1)
-            data = self.client.get_historical_data(symbol, start, end)
+            data = self.client.get_historical_data([symbol], start, end)
             if isinstance(data, pd.DataFrame):
                 return data
             return pd.DataFrame()
@@ -160,7 +167,7 @@ class DataHandler:
             self.logger.error(f"Error getting latest data for {symbol}: {e}")
             return pd.DataFrame()
 
-    def get_account_info(self) -> Dict[str, Any]:
+    def get_account_info(self) -> AccountInfo:
         """Get account information.
 
         Returns:
@@ -170,17 +177,35 @@ class DataHandler:
             return self.client.get_account()
         except Exception as e:
             logger.error(f"Error getting account information: {str(e)}")
-            return {}
+            return AccountInfo(
+                id="",
+                cash=0.0,
+                portfolio_value=0.0,
+                buying_power=0.0,
+                equity=0.0,
+                long_market_value=0.0,
+                short_market_value=0.0,
+                initial_margin=0.0,
+                maintenance_margin=0.0,
+                last_equity=0.0,
+                multiplier=1.0,
+                status="",
+                trading_blocked=False,
+                transfers_blocked=False,
+                account_blocked=False,
+                created_at=None,
+                trade_suspended_by_user=False,
+                currency="USD",
+            )
 
-    def get_positions(self) -> List[Position]:
+    def get_positions(self) -> List[PositionInfo]:
         """Get current positions.
 
         Returns:
             List of positions
         """
         try:
-            positions = self.client.get_all_positions()
-            return positions if isinstance(positions, list) else []
+            return self.client.get_positions()
         except Exception as e:
             logger.error(f"Error getting positions: {e}")
             return []
@@ -191,23 +216,25 @@ class DataHandler:
         qty: float,
         side: OrderSide,
         time_in_force: TimeInForce = TimeInForce.DAY,
-    ) -> Optional[Dict[str, Any]]:
+    ) -> Optional[OrderInfo]:
         """Submit a trading order.
 
         Args:
             symbol: Trading symbol
             qty: Order quantity
             side: Order side (buy/sell)
-            time_in_force: Time in force for the order
+            time_in_force: Order time in force
 
         Returns:
             Order information if successful, None otherwise
         """
         try:
-            order = self.client.submit_order(
-                symbol=symbol, qty=qty, side=side, time_in_force=time_in_force
+            return self.client.submit_order(
+                symbol=symbol,
+                qty=qty,
+                side=side,
+                time_in_force=time_in_force,
             )
-            return order
         except Exception as e:
             logger.error(f"Error submitting order: {e}")
             return None

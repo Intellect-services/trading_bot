@@ -8,10 +8,10 @@ import pandas as pd
 
 from src.backtesting.engine import BacktestEngine
 from src.core.bot import TradingBot
-from src.core.data_feed import DataFeed
+from src.core.data_feed import MockDataFeed
 from src.core.portfolio import Portfolio
 from src.core.risk_manager import RiskManager
-from src.core.strategy import Strategy
+from src.core.strategy import BaseStrategy
 from src.utils.config import Config
 from src.utils.logger import setup_logger
 
@@ -48,13 +48,12 @@ def run_backtest() -> Dict[str, Any]:
             }
         )
 
-        portfolio = Portfolio(config_data["INITIAL_BALANCE"])
-        data_feed = DataFeed(config)
-        strategy = Strategy(config)
+        portfolio = Portfolio(float(config_data["INITIAL_BALANCE"]))
+        data_feed = MockDataFeed()
+        strategy = BaseStrategy(config_data)
 
         # Initialize and run backtest
         bot = TradingBot(
-            config=config,
             strategy=strategy,
             risk_manager=risk_manager,
             portfolio=portfolio,
@@ -62,7 +61,7 @@ def run_backtest() -> Dict[str, Any]:
         )
 
         # Run backtest
-        results = bot.backtest()
+        results = bot.run_backtest()
 
         # Save results
         save_results(results)

@@ -93,7 +93,10 @@ def get_portfolio_history() -> Response:
             return jsonify(
                 {
                     "equity": [10000.0, 10000.0],
-                    "timestamp": [datetime.now().isoformat(), datetime.now().isoformat()],
+                    "timestamp": [
+                        datetime.now().isoformat(),
+                        datetime.now().isoformat(),
+                    ],
                     "profit_loss": [0, 0],
                     "profit_loss_pct": [0, 0],
                     "base_value": 10000.0,

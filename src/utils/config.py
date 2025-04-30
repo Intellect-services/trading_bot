@@ -128,7 +128,9 @@ class Config:
         self.ALPACA_SECRET_KEY = config_data.get("ALPACA_SECRET_KEY", "")
         self.ALPACA_PAPER = config_data.get("ALPACA_PAPER", True)
         self.INITIAL_CAPITAL = float(config_data.get("INITIAL_CAPITAL", 100000.0))
-        self.RISK_MAX_POSITION_SIZE = float(config_data.get("RISK_MAX_POSITION_SIZE", 0.1))
+        self.RISK_MAX_POSITION_SIZE = float(
+            config_data.get("RISK_MAX_POSITION_SIZE", 0.1)
+        )
         self.RISK_STOP_LOSS_PCT = float(config_data.get("RISK_STOP_LOSS_PCT", 0.02))
         self.RISK_MAX_DRAWDOWN = float(config_data.get("RISK_MAX_DRAWDOWN", 0.1))
         self.RISK_MAX_LEVERAGE = float(config_data.get("RISK_MAX_LEVERAGE", 1.0))

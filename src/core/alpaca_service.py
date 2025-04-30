@@ -13,37 +13,19 @@ from alpaca.data.models import BarSet
 from alpaca.data.requests import StockBarsRequest
 from alpaca.data.timeframe import TimeFrame
 from alpaca.trading.client import TradingClient
-from alpaca.trading.enums import (
-    AssetClass,
-    AssetStatus,
-    OrderSide,
-    OrderStatus,
-    OrderType,
-    QueryOrderStatus,
-    Sort,
-    TimeInForce,
-)
-from alpaca.trading.models import (
-    Asset,
-    Calendar,
-    Clock,
-    Order,
-    PortfolioHistory,
-    Position,
-    TradeAccount,
-)
-from alpaca.trading.requests import (
-    GetAssetsRequest,
-    GetCalendarRequest,
-    GetOrdersRequest,
-    LimitOrderRequest,
-    MarketOrderRequest,
-    StopOrderRequest,
-)
+from alpaca.trading.enums import (AssetClass, AssetStatus, OrderSide,
+                                  OrderStatus, OrderType, QueryOrderStatus,
+                                  Sort, TimeInForce)
+from alpaca.trading.models import (Asset, Calendar, Clock, Order,
+                                   PortfolioHistory, Position, TradeAccount)
+from alpaca.trading.requests import (GetAssetsRequest, GetCalendarRequest,
+                                     GetOrdersRequest, LimitOrderRequest,
+                                     MarketOrderRequest, StopOrderRequest)
 
 from ..utils.config import get_config
 from ..utils.logger import setup_logger
-from .alpaca_client import AlpacaClient
+from .alpaca_client import (AccountInfo, AlpacaClient, AssetInfo, ClockInfo,
+                            HistoricalData, OrderInfo, PositionInfo)
 from .config import Config
 
 logger = setup_logger(__name__)
@@ -52,17 +34,22 @@ logger = setup_logger(__name__)
 class AlpacaService:
     def __init__(self, config: Config) -> None:
         self.client = AlpacaClient(config.alpaca_api_key, config.alpaca_api_secret)
+        self.logger = logger
 
-    def get_account(self) -> Dict[str, Any]:
+    def get_account(self) -> AccountInfo:
         return self.client.get_account()
 
-    def get_positions(self) -> List[Dict[str, Any]]:
+    def get_positions(self) -> List[PositionInfo]:
         return self.client.get_positions()
 
     def get_historical_data(
-        self, symbol: str, start: datetime, end: datetime, timeframe: TimeFrame = TimeFrame.Day
-    ) -> Dict[str, Any]:
-        return self.client.get_historical_data(symbol, start, end, timeframe)
+        self,
+        symbols: List[str],
+        start: datetime,
+        end: datetime,
+        timeframe: TimeFrame = TimeFrame.Day,
+    ) -> HistoricalData:
+        return self.client.get_historical_data(symbols, start, end, timeframe)
 
     def submit_order(
         self,
@@ -73,7 +60,7 @@ class AlpacaService:
         time_in_force: TimeInForce = TimeInForce.DAY,
         limit_price: Optional[float] = None,
         stop_price: Optional[float] = None,
-    ) -> Dict[str, Any]:
+    ) -> OrderInfo:
         return self.client.submit_order(
             symbol=symbol,
             qty=qty,
@@ -84,19 +71,19 @@ class AlpacaService:
             stop_price=stop_price,
         )
 
-    def get_orders(self, status: Optional[str] = None) -> List[Dict[str, Any]]:
+    def get_orders(self, status: Optional[str] = None) -> List[OrderInfo]:
         return self.client.get_orders(status)
 
-    def get_market_clock(self) -> Dict[str, Any]:
-        return self.client.get_market_clock()
+    def get_market_clock(self) -> ClockInfo:
+        return self.client.get_clock()
 
-    def get_position(self, symbol: str) -> Dict[str, Any]:
+    def get_position(self, symbol: str) -> Optional[PositionInfo]:
         return self.client.get_position(symbol)
 
-    def get_asset(self, symbol: str) -> Dict[str, Any]:
+    def get_asset(self, symbol: str) -> AssetInfo:
         return self.client.get_asset(symbol)
 
-    def cancel_order(self, order_id: str) -> Dict[str, Any]:
+    def cancel_order(self, order_id: str) -> bool:
         return self.client.cancel_order(order_id)
 
     def submit_bracket_order(
@@ -121,10 +108,10 @@ class AlpacaService:
             limit_price=limit_price,
         )
 
-    def get_order(self, order_id: str) -> Dict[str, Any]:
+    def get_order(self, order_id: str) -> Optional[OrderInfo]:
         return self.client.get_order(order_id)
 
-    def get_assets(self) -> List[Dict[str, Any]]:
+    def get_assets(self) -> List[AssetInfo]:
         return self.client.get_assets()
 
     def get_portfolio_history(
@@ -153,7 +140,12 @@ class AlpacaService:
         symbols = [pos["symbol"] for pos in positions]
 
         # Initialize result dictionary
-        result = {"timestamp": [], "equity": [], "profit_loss": [], "profit_loss_pct": []}
+        result = {
+            "timestamp": [],
+            "equity": [],
+            "profit_loss": [],
+            "profit_loss_pct": [],
+        }
 
         # If no positions, return empty result with current value
         if not symbols:
@@ -170,7 +162,7 @@ class AlpacaService:
             position = next((pos for pos in positions if pos["symbol"] == symbol), None)
             if position:
                 qty = float(position["qty"])
-                df = self.get_historical_data(symbol, start_date, end_date)
+                df = self.get_historical_data([symbol], start_date, end_date)
                 if not df.empty:
                     df["value"] = df["close"] * qty
                     portfolio_values.append(df["value"])
@@ -204,7 +196,12 @@ class AlpacaService:
             }
         except Exception as e:
             self.logger.error(f"Error getting market status: {e}")
-            return {}
+            return {
+                "is_open": False,
+                "next_open": None,
+                "next_close": None,
+                "timestamp": None,
+            }
 
     def get_calendar(
         self, start: Optional[datetime] = None, end: Optional[datetime] = None
@@ -213,11 +210,17 @@ class AlpacaService:
         try:
             request = GetCalendarRequest(start=start, end=end)
             calendar = self.client.get_calendar(request)
-            self.logger.info(f"Retrieved market calendar with {len(calendar)} entries")
-            return [{"date": day.date, "open": day.open, "close": day.close} for day in calendar]
+            return [
+                {
+                    "date": day.date,
+                    "open": day.open,
+                    "close": day.close,
+                }
+                for day in calendar
+            ]
         except Exception as e:
-            self.logger.error(f"Failed to get market calendar: {str(e)}")
-            raise
+            self.logger.error(f"Error getting calendar: {e}")
+            return []
 
     def get_account_activities(
         self, date: Optional[datetime] = None
@@ -234,8 +237,12 @@ class AlpacaService:
             status=QueryOrderStatus.ALL,
             nested=True,
             limit=500,
-            after=date.replace(hour=0, minute=0, second=0, microsecond=0) if date else None,
-            until=date.replace(hour=23, minute=59, second=59, microsecond=999999) if date else None,
+            after=date.replace(hour=0, minute=0, second=0, microsecond=0)
+            if date
+            else None,
+            until=date.replace(hour=23, minute=59, second=59, microsecond=999999)
+            if date
+            else None,
         )
 
         orders = self.client.get_orders(filter=request_params)
@@ -243,18 +250,24 @@ class AlpacaService:
         logger.info(f"Retrieved {len(orders)} orders")
 
         # Sort orders by timestamp in descending order
-        orders.sort(key=lambda x: x.created_at if x.created_at else datetime.min, reverse=True)
+        orders.sort(
+            key=lambda x: x.created_at if x.created_at else datetime.min, reverse=True
+        )
 
         activities = []
         for order in orders:
-            filled_qty = float(order.filled_qty) if order.filled_qty is not None else 0.0
+            filled_qty = (
+                float(order.filled_qty) if order.filled_qty is not None else 0.0
+            )
             if filled_qty > 0:
                 activity = {
                     "timestamp": order.filled_at,
                     "symbol": order.symbol,
                     "side": order.side,
                     "qty": filled_qty,
-                    "price": order.filled_avg_price if order.filled_avg_price is not None else 0.0,
+                    "price": order.filled_avg_price
+                    if order.filled_avg_price is not None
+                    else 0.0,
                     "order_id": order.id,
                     "status": order.status,
                 }
@@ -268,7 +281,9 @@ class AlpacaService:
     ) -> Dict[str, Any]:
         """Get portfolio history."""
         try:
-            timeframe_obj = TimeFrame(1, timeframe.lower().replace("d", "Day").replace("m", "Min"))
+            timeframe_obj = TimeFrame(
+                1, timeframe.lower().replace("d", "Day").replace("m", "Min")
+            )
             history = self.client.get_portfolio_history(
                 timeframe=timeframe_obj, period=period, extended_hours=extended_hours
             )
@@ -284,7 +299,11 @@ class AlpacaService:
             return {}
 
     def get_historical_data(
-        self, symbol: str, start: datetime, end: datetime, timeframe: TimeFrame = TimeFrame.Day
+        self,
+        symbol: str,
+        start: datetime,
+        end: datetime,
+        timeframe: TimeFrame = TimeFrame.Day,
     ) -> Dict[str, Any]:
         """Get historical data for a specific symbol."""
         try:
