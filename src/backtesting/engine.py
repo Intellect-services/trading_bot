@@ -8,7 +8,7 @@ import numpy as np
 import pandas as pd
 
 from src.core.portfolio import OrderDict, Portfolio, PositionDict
-from src.core.strategy import BaseStrategy
+from src.core.strategy import Strategy
 from src.utils.logger import setup_logger
 
 logger = setup_logger(__name__)
@@ -46,7 +46,7 @@ class BacktestEngine:
 
     def __init__(
         self,
-        strategy: BaseStrategy,
+        strategy: Strategy,
         initial_capital: float,
         commission: float = 0.0,
         slippage: float = 0.0,
@@ -207,7 +207,7 @@ class BacktestEngine:
         """Calculate total returns."""
         if not self.equity_curve:
             return 0.0
-        return (self.equity_curve[-1] - self.equity_curve[0]) / self.equity_curve[0]
+        return float((self.equity_curve[-1] - self.equity_curve[0]) / self.equity_curve[0])
 
     def calculate_sharpe_ratio(self) -> float:
         """Calculate Sharpe ratio."""
@@ -229,14 +229,14 @@ class BacktestEngine:
                 peak = value
             drawdown = (peak - value) / peak
             max_drawdown = max(max_drawdown, drawdown)
-        return max_drawdown
+        return float(max_drawdown)
 
     def calculate_win_rate(self) -> float:
         """Calculate win rate."""
         if not self.trades:
             return 0.0
         winning_trades = sum(1 for trade in self.trades if trade["shares"] * trade["price"] > 0)
-        return winning_trades / len(self.trades)
+        return float(winning_trades / len(self.trades))
 
     def calculate_profit_factor(self) -> float:
         """Calculate profit factor."""
@@ -254,7 +254,7 @@ class BacktestEngine:
                 if trade["shares"] * trade["price"] < 0
             )
         )
-        return gross_profit / gross_loss if gross_loss != 0 else float("inf")
+        return float(gross_profit / gross_loss) if gross_loss > 0 else 0.0
 
     def calculate_avg_trade(self) -> float:
         """Calculate average trade profit/loss."""

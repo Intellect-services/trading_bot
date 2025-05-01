@@ -41,8 +41,8 @@ class BotService:
             alpaca_client: Alpaca client instance
         """
         self.config = config
-        self.portfolio = Portfolio(config.INITIAL_CAPITAL)
-        self.strategy = MovingAverageCrossover()
+        self.portfolio = Portfolio(float(config["INITIAL_CAPITAL"]))
+        self.strategy = MovingAverageCrossover(config)
         self.alpaca_client = alpaca_client
         self.data_feed = DataFeed(self.alpaca_client)
         self.risk_manager = RiskManager(config)
@@ -54,7 +54,7 @@ class BotService:
             risk_manager=self.risk_manager,
         )
         self._error_count = 0
-        self.current_value: float = float(config.INITIAL_CAPITAL)
+        self.current_value: float = float(config["INITIAL_CAPITAL"])
         self.status = BotStatus.STOPPED
         self.error_message: Optional[str] = None
         self._thread: Optional[Thread] = None
@@ -234,15 +234,16 @@ class BotService:
             seconds = total_seconds % 60
             runtime_str = f"{hours:02d}:{minutes:02d}:{seconds:02d}"
 
+        positions = self.alpaca_client.get_positions()
         return {
             "status": self.status.name,
             "error_message": self.error_message,
             "last_update": self._last_update.isoformat() if self._last_update else None,
             "runtime": runtime_str,
-            "symbols": self.alpaca_client.get_all_positions().keys(),
-            "initial_capital": self.config.get("INITIAL_CAPITAL", 0.0),
+            "symbols": [position.symbol for position in positions],
+            "initial_capital": float(self.config["INITIAL_CAPITAL"]),
             "current_capital": self.current_value,
-            "active_positions": len(self.alpaca_client.get_all_positions()),
+            "active_positions": len(positions),
             "error_count": self._error_count,
             "last_error_time": self._last_error_time.isoformat() if self._last_error_time else None,
             "start_time": self._start_time.isoformat() if self._start_time else None,

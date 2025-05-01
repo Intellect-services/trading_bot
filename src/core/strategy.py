@@ -69,10 +69,10 @@ class Strategy:
         """
         if isinstance(config, Config):
             self.config = StrategyConfig(
-                max_position_size=config.STRATEGY_MAX_POSITION_SIZE,
-                risk_per_trade=config.STRATEGY_RISK_PER_TRADE,
-                stop_loss=config.STRATEGY_STOP_LOSS,
-                take_profit=config.STRATEGY_TAKE_PROFIT,
+                max_position_size=config.RISK_MAX_POSITION_SIZE,
+                risk_per_trade=config.RISK_PER_TRADE,
+                stop_loss=config.RISK_STOP_LOSS,
+                take_profit=config.RISK_TAKE_PROFIT,
             )
         elif isinstance(config, dict):
             self.config = StrategyConfig(

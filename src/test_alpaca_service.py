@@ -16,48 +16,53 @@ def test_alpaca_service() -> None:
     try:
         # Initialize service
         logger.info("Initializing AlpacaService...")
-        service = AlpacaService()
+        config = {
+            "ALPACA_API_KEY": "test_key",
+            "ALPACA_SECRET_KEY": "test_secret",
+            "ALPACA_PAPER": True,
+        }
+        service = AlpacaService(config)
 
         # Test account info
         logger.info("\nTesting account info...")
         account = service.get_account()
-        logger.info(f"Account ID: {account['account_id']}")
-        logger.info(f"Buying Power: ${account['buying_power']}")
-        logger.info(f"Equity: ${account['equity']}")
-        logger.info(f"Cash: ${account['cash']}")
-        logger.info(f"Status: {account['status']}")
+        logger.info(f"Account ID: {account.id}")
+        logger.info(f"Buying Power: ${account.buying_power}")
+        logger.info(f"Equity: ${account.equity}")
+        logger.info(f"Cash: ${account.cash}")
+        logger.info(f"Status: {account.status}")
 
         # Test positions
         logger.info("\nTesting positions...")
         positions = service.get_positions()
         if positions:
             for position in positions:
-                logger.info(f"Symbol: {position['symbol']}")
-                logger.info(f"Quantity: {position['quantity']}")
-                logger.info(f"Market Value: ${position['market_value']}")
-                logger.info(f"Unrealized P/L: ${position['unrealized_pl']}")
+                logger.info(f"Symbol: {position.symbol}")
+                logger.info(f"Quantity: {position.quantity}")
+                logger.info(f"Market Value: ${position.market_value}")
+                logger.info(f"Unrealized P/L: ${position.unrealized_pl}")
                 logger.info("---")
         else:
             logger.info("No positions found")
 
         # Test market status
         logger.info("\nTesting market status...")
-        market_status = service.get_market_status()
-        logger.info(f"Market is {'open' if market_status['is_open'] else 'closed'}")
-        logger.info(f"Next market open: {market_status['next_open']}")
-        logger.info(f"Next market close: {market_status['next_close']}")
+        market_status = service.get_market_clock()
+        logger.info(f"Market is {'open' if market_status.is_open else 'closed'}")
+        logger.info(f"Next market open: {market_status.next_open}")
+        logger.info(f"Next market close: {market_status.next_close}")
 
         # Test order creation (paper trading)
         logger.info("\nTesting order creation...")
         try:
-            order = service.create_order("AAPL", 1, "buy")
-            logger.info(f"Order submitted successfully: {order['order_id']}")
-            logger.info(f"Order status: {order['status']}")
+            order = service.submit_order("AAPL", 1, "buy")
+            logger.info(f"Order submitted successfully: {order.id}")
+            logger.info(f"Order status: {order.status}")
 
             # Cancel the test order
             logger.info("\nCanceling test order...")
-            cancel_result = service.cancel_order(order["order_id"])
-            logger.info(cancel_result["message"])
+            cancel_result = service.cancel_order(order.id)
+            logger.info("Order cancelled successfully" if cancel_result else "Failed to cancel order")
         except Exception as e:
             logger.error(f"Error creating test order: {str(e)}")
 

@@ -6,11 +6,7 @@ from typing import Any, Callable, Dict, List, Optional, TypedDict, Union
 
 from flask import Response
 
-from .core.alpaca_types import (  # Import Position, Order, and Bar from alpaca_types instead of defining them here
-    Bar,
-    Order,
-    Position,
-)
+from .core.alpaca_types import Bar, Order, Position
 
 # Type aliases for route decorators
 RouteDecorator = Callable[..., Response]
@@ -50,34 +46,6 @@ class TradeAccount(TypedDict):
     last_equity: float
     created_at: datetime
     updated_at: datetime
-
-
-class Order(TypedDict):
-    """Type definition for order details."""
-
-    id: str
-    client_order_id: str
-    created_at: datetime
-    updated_at: datetime
-    submitted_at: datetime
-    filled_at: Optional[datetime]
-    expired_at: Optional[datetime]
-    canceled_at: Optional[datetime]
-    failed_at: Optional[datetime]
-    asset_id: str
-    symbol: str
-    asset_class: str
-    qty: float
-    filled_qty: float
-    type: str
-    side: str
-    time_in_force: str
-    limit_price: Optional[float]
-    stop_price: Optional[float]
-    filled_avg_price: Optional[float]
-    status: str
-    extended_hours: bool
-    legs: Optional[List[Dict[str, Any]]]
 
 
 class PortfolioHistory(TypedDict):

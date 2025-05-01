@@ -25,7 +25,8 @@ def mock_env_vars() -> Generator[None, None, None]:
     """Fixture to set up test environment variables."""
     original_env = dict(os.environ)
     os.environ["ALPACA_API_KEY"] = "test_api_key"
-    os.environ["ALPACA_API_SECRET"] = "test_secret_key"
+    os.environ["ALPACA_SECRET_KEY"] = "test_secret_key"
+    os.environ["ALPACA_PAPER"] = "True"
     yield
     os.environ.clear()
     os.environ.update(original_env)
@@ -36,7 +37,12 @@ def alpaca_service(mock_env_vars: None) -> "AlpacaService":
     """Fixture to create a test instance of AlpacaService."""
     from src.core.alpaca_service import AlpacaService
 
-    return AlpacaService()
+    config = {
+        "ALPACA_API_KEY": os.environ["ALPACA_API_KEY"],
+        "ALPACA_SECRET_KEY": os.environ["ALPACA_SECRET_KEY"],
+        "ALPACA_PAPER": os.environ["ALPACA_PAPER"].lower() == "true",
+    }
+    return AlpacaService(config)
 
 
 def test_alpaca_connection(alpaca_service: "AlpacaService") -> None:
@@ -44,7 +50,7 @@ def test_alpaca_connection(alpaca_service: "AlpacaService") -> None:
         # Initialize trading client
         logger.info("Initializing Alpaca trading client...")
         trading_client = TradingClient(
-            os.environ["ALPACA_API_KEY"], os.environ["ALPACA_API_SECRET"], paper=True
+            os.environ["ALPACA_API_KEY"], os.environ["ALPACA_SECRET_KEY"], paper=True
         )
 
         # Test account information
@@ -104,12 +110,18 @@ def test_alpaca_connection(alpaca_service: "AlpacaService") -> None:
 if __name__ == "__main__":
     # Set up test environment variables
     os.environ["ALPACA_API_KEY"] = "test_api_key"
-    os.environ["ALPACA_API_SECRET"] = "test_secret_key"
+    os.environ["ALPACA_SECRET_KEY"] = "test_secret_key"
+    os.environ["ALPACA_PAPER"] = "True"
 
     # Create AlpacaService instance
     from src.core.alpaca_service import AlpacaService
 
-    service = AlpacaService()
+    config = {
+        "ALPACA_API_KEY": os.environ["ALPACA_API_KEY"],
+        "ALPACA_SECRET_KEY": os.environ["ALPACA_SECRET_KEY"],
+        "ALPACA_PAPER": os.environ["ALPACA_PAPER"].lower() == "true",
+    }
+    service = AlpacaService(config)
 
     # Run the test
     test_alpaca_connection(service)

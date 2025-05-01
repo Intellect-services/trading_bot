@@ -30,8 +30,10 @@ class DataHandler:
         self.config = config
         self.client = AlpacaClient(
             api_key=config.ALPACA_API_KEY,
-            secret_key=config.ALPACA_SECRET_KEY,
-            paper=config.ALPACA_PAPER,
+            api_secret=config.ALPACA_SECRET_KEY,
+            base_url="https://paper-api.alpaca.markets"
+            if config.ALPACA_PAPER
+            else "https://api.alpaca.markets",
         )
         self._data: Dict[str, Dict[str, List[Dict[str, Any]]]] = {}
         self._cache_dir = "data/cache"

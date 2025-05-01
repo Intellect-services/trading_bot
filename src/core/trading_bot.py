@@ -26,12 +26,12 @@ class TradingBot:
 
             # Get initial account information
             account = self.alpaca_service.get_account()
-            self.initial_capital = float(account.get("equity", 0))
+            self.initial_capital = float(account.equity)
             self.current_capital = self.initial_capital
 
             # Check market status
-            market_status = self.alpaca_service.get_market_status()
-            if not market_status.get("is_open", False):
+            market_status = self.alpaca_service.get_market_clock()
+            if not market_status.is_open:
                 self.logger.error("Cannot start bot: Market is closed")
                 return False
 
@@ -91,7 +91,7 @@ class TradingBot:
         """Update and return current metrics."""
         try:
             account = self.alpaca_service.get_account()
-            self.current_capital = float(account.get("equity", 0))
+            self.current_capital = float(account.equity)
 
             return {
                 "initial_capital": self.initial_capital,

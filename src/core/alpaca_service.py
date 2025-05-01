@@ -31,10 +31,10 @@ class AlpacaService:
             config: Configuration dictionary containing API credentials
         """
         self.client = AlpacaClient(
-            api_key=config.ALPACA_API_KEY,
-            api_secret=config.ALPACA_SECRET_KEY,
+            api_key=config["ALPACA_API_KEY"],
+            api_secret=config["ALPACA_SECRET_KEY"],
             base_url="https://paper-api.alpaca.markets"
-            if config.ALPACA_PAPER
+            if config["ALPACA_PAPER"]
             else "https://api.alpaca.markets",
         )
         self.logger = setup_logger(__name__)

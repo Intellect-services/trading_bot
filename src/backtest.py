@@ -11,7 +11,7 @@ from src.core.bot import TradingBot
 from src.core.data_feed import MockDataFeed
 from src.core.portfolio import Portfolio
 from src.core.risk_manager import RiskManager
-from src.core.strategy import BaseStrategy
+from src.core.strategy import Strategy
 from src.utils.config import Config
 from src.utils.logger import setup_logger
 
@@ -50,7 +50,7 @@ def run_backtest() -> Dict[str, Any]:
 
         portfolio = Portfolio(float(config_data["INITIAL_BALANCE"]))
         data_feed = MockDataFeed()
-        strategy = BaseStrategy(config_data)
+        strategy = Strategy(config_data)
 
         # Initialize and run backtest
         bot = TradingBot(

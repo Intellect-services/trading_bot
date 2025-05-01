@@ -29,11 +29,20 @@ app.secret_key = os.getenv("FLASK_SECRET_KEY", "your-secret-key")
 socketio = SocketIO(app, cors_allowed_origins="*")
 
 # Initialize configuration
-config = Config()
+config_data = {
+    "ALPACA_API_KEY": os.getenv("ALPACA_API_KEY", ""),
+    "ALPACA_SECRET_KEY": os.getenv("ALPACA_SECRET_KEY", ""),
+    "ALPACA_PAPER": os.getenv("ALPACA_PAPER", "True").lower() == "true",
+    "RISK_MAX_POSITION_SIZE": float(os.getenv("RISK_MAX_POSITION_SIZE", "0.1")),
+    "RISK_PER_TRADE": float(os.getenv("RISK_PER_TRADE", "0.01")),
+    "RISK_STOP_LOSS": float(os.getenv("RISK_STOP_LOSS", "0.02")),
+    "RISK_TAKE_PROFIT": float(os.getenv("RISK_TAKE_PROFIT", "0.04")),
+}
+config = Config(config_data)
 
 # Initialize services
 try:
-    alpaca_service = AlpacaService(config)
+    alpaca_service = AlpacaService(config_data)
     bot_service = BotService(config)
     logger.info("Successfully initialized AlpacaService and BotService")
 except Exception as e:
