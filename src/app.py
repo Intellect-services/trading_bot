@@ -1,4 +1,8 @@
 # … earlier imports unchanged …
+import os
+
+import oauth
+from src import Config
 
 # Initialize configuration
 config = Config(
