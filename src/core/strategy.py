@@ -2,7 +2,7 @@
 
 from dataclasses import dataclass
 from datetime import datetime
-from typing import Any, Dict, List, Optional, Union, cast, TypeVar
+from typing import Any, Dict, List, Optional, TypeVar, Union, cast
 
 import pandas as pd
 from pandas import Series

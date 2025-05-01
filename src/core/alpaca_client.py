@@ -2,20 +2,26 @@
 
 import logging
 from datetime import datetime
-from typing import Any, Dict, List, Optional, Union, cast, Iterator, TypeVar
+from typing import Any, Dict, Iterator, List, Optional, TypeVar, Union, cast
 
 from alpaca.data.historical import StockHistoricalDataClient
-from alpaca.data.models import BarSet, Bar
+from alpaca.data.models import Bar, BarSet
 from alpaca.data.requests import StockBarsRequest
 from alpaca.data.timeframe import TimeFrame
 from alpaca.trading.client import TradingClient
-from alpaca.trading.enums import OrderSide, OrderType, QueryOrderStatus, TimeInForce, OrderStatus
+from alpaca.trading.enums import (
+    OrderSide,
+    OrderStatus,
+    OrderType,
+    QueryOrderStatus,
+    TimeInForce,
+)
 from alpaca.trading.models import Asset, Clock, Order, Position, TradeAccount
 from alpaca.trading.requests import (
-    MarketOrderRequest,
     LimitOrderRequest,
-    StopOrderRequest,
+    MarketOrderRequest,
     StopLimitOrderRequest,
+    StopOrderRequest,
 )
 
 from ..utils.logger import setup_logger

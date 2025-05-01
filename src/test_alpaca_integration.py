@@ -7,8 +7,9 @@ from typing import TYPE_CHECKING, Generator
 
 # Third-party imports
 import pytest
-from alpaca.trading.enums import OrderSide, TimeInForce, OrderType
-from alpaca.trading.models import Order as AlpacaOrder, Position as AlpacaPosition
+from alpaca.trading.enums import OrderSide, OrderType, TimeInForce
+from alpaca.trading.models import Order as AlpacaOrder
+from alpaca.trading.models import Position as AlpacaPosition
 
 # Local imports
 from core.types import Order, Position
