@@ -1,7 +1,11 @@
-from datetime import datetime
-from typing import Any, Dict, List, Optional, Union
+"""Moving average crossover strategy."""
 
+from datetime import datetime
+from typing import Any
+
+import numpy as np
 import pandas as pd
+from pandas import DataFrame, Series
 
 from src.core.strategy import Strategy
 from src.utils.logger import setup_logger
@@ -9,81 +13,97 @@ from src.utils.logger import setup_logger
 logger = setup_logger(__name__)
 
 
-class MovingAverageStrategy(Strategy):
+class MovingAverageCrossover(Strategy):
     """Moving average crossover strategy."""
 
-    def __init__(self, config: Optional[Dict[str, Any]] = None) -> None:
-        """Initialize moving average strategy.
+    def __init__(
+        self,
+        config: dict[str, Any],
+        short_window: int = 20,
+        long_window: int = 50,
+        rsi_period: int = 14,
+        rsi_overbought: float = 70.0,
+        rsi_oversold: float = 30.0,
+    ):
+        """Initialize the strategy.
 
         Args:
-            config: Strategy configuration with parameters:
-                - short_window: Short moving average window (default: 20)
-                - long_window: Long moving average window (default: 50)
-                - symbols: List of symbols to trade
+            config: Strategy configuration
+            short_window: Short-term moving average window
+            long_window: Long-term moving average window
+            rsi_period: RSI calculation period
+            rsi_overbought: RSI overbought threshold
+            rsi_oversold: RSI oversold threshold
         """
         super().__init__(config)
-        self.short_window = self.config.get("short_window", 20)
-        self.long_window = self.config.get("long_window", 50)
-        self.symbols = self.config.get("symbols", [])
-        self.price_history: Dict[str, List[float]] = {}
+        self.short_window = short_window
+        self.long_window = long_window
+        self.lookback = max(short_window, long_window) * 2  # Ensure enough data for calculations
+        self.signal_threshold = float(config.get("signal_threshold", 0.0))
+        self.rsi_period = rsi_period
+        self.rsi_overbought = rsi_overbought
+        self.rsi_oversold = rsi_oversold
+        self.price_history: list[float] = []
+        self.current_position = 0
 
-    def update_state(
-        self, data: Union[pd.Series[Any], Dict[str, Any]], timestamp: datetime
-    ) -> None:
-        """Update the strategy state with new market data."""
-        if isinstance(data, pd.Series):
-            data_dict = data.to_dict()
+    def calculate_signals(self, data: DataFrame) -> DataFrame:
+        """Calculate trading signals.
+
+        Args:
+            data: Market data
+
+        Returns:
+            DataFrame: Signals
+        """
+        signals = pd.DataFrame(index=data.index)
+        signals["signal"] = 0.0
+
+        # Calculate moving averages
+        signals["short_mavg"] = data["close"].rolling(window=self.short_window).mean()
+        signals["long_mavg"] = data["close"].rolling(window=self.long_window).mean()
+
+        # Generate signals
+        signals["signal"][self.long_window :] = np.where(
+            signals["short_mavg"][self.long_window :] > signals["long_mavg"][self.long_window :],
+            1.0,
+            0.0,
+        )
+
+        # Generate trading orders
+        signals["positions"] = signals["signal"].diff()
+
+        return signals
+
+    def update_state(self, data: Series[Any] | dict[str, float | str], timestamp: datetime) -> None:
+        """Update strategy state with new market data."""
+        if isinstance(data, dict):
+            self.price_history.append(float(data["close"]))
+            if len(self.price_history) > self.lookback:
+                self.price_history = self.price_history[-self.lookback :]
         else:
-            data_dict = data
+            self.price_history.append(float(data["close"]))
+            if len(self.price_history) > self.lookback:
+                self.price_history = self.price_history[-self.lookback :]
 
-        # Update price history for each symbol
-        for symbol in self.symbols:
-            if symbol in data_dict:
-                price = float(data_dict[symbol])
-                if symbol not in self.price_history:
-                    self.price_history[symbol] = []
-                self.price_history[symbol].append(price)
-                # Keep only the necessary history
-                if len(self.price_history[symbol]) > self.long_window:
-                    self.price_history[symbol] = self.price_history[symbol][
-                        -self.long_window :
-                    ]
+    def generate_signals(self) -> dict[str, Any]:
+        """Generate trading signals based on moving average crossover."""
+        if len(self.price_history) < self.lookback:
+            return {"signal": "HOLD", "price": self.price_history[-1]}
 
-        # Update the base state
-        super().update_state(data_dict, timestamp)
+        short_ma = sum(self.price_history[-self.short_window :]) / self.short_window
+        long_ma = sum(self.price_history[-self.long_window :]) / self.long_window
 
-    def generate_signals(self) -> Dict[str, float]:
-        """Generate trading signals based on moving average crossovers."""
-        signals: Dict[str, float] = {}
+        signals = {"signal": "HOLD", "price": self.price_history[-1]}
 
-        for symbol in self.symbols:
-            if (
-                symbol not in self.price_history
-                or len(self.price_history[symbol]) < self.long_window
-            ):
-                signals[symbol] = 0.0
-                continue
-
-            prices = pd.Series(self.price_history[symbol])
-            short_ma = prices.rolling(window=self.short_window).mean()
-            long_ma = prices.rolling(window=self.long_window).mean()
-
-            if (
-                short_ma.iloc[-1] > long_ma.iloc[-1]
-                and short_ma.iloc[-2] <= long_ma.iloc[-2]
-            ):
-                signals[symbol] = 1.0  # Buy signal
-            elif (
-                short_ma.iloc[-1] < long_ma.iloc[-1]
-                and short_ma.iloc[-2] >= long_ma.iloc[-2]
-            ):
-                signals[symbol] = -1.0  # Sell signal
-            else:
-                signals[symbol] = 0.0  # No signal
+        if short_ma > long_ma and self.current_position <= 0:
+            signals["signal"] = "BUY"
+        elif short_ma < long_ma and self.current_position >= 0:
+            signals["signal"] = "SELL"
 
         return signals
 
     def reset(self) -> None:
         """Reset the strategy state and price history."""
         super().reset()
-        self.price_history = {}
+        self.price_history = []
+        self.current_position = 0

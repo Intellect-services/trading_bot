@@ -98,8 +98,7 @@ class BacktestEngine:
         return {
             "initial_capital": self.initial_capital,
             "final_value": self.portfolio_value,
-            "total_return": (self.portfolio_value - self.initial_capital)
-            / self.initial_capital,
+            "total_return": (self.portfolio_value - self.initial_capital) / self.initial_capital,
             "trades": self.trades,
             "metrics": self.metrics,
         }
@@ -191,9 +190,7 @@ class BacktestEngine:
         win_rate = winning_trades / total_trades if total_trades > 0 else 0.0
         avg_return = float(np.mean(returns_array)) if len(returns_array) > 0 else 0.0
         sharpe_ratio = (
-            float(np.mean(returns_array) / np.std(returns_array))
-            if len(returns_array) > 1
-            else 0.0
+            float(np.mean(returns_array) / np.std(returns_array)) if len(returns_array) > 1 else 0.0
         )
 
         self.metrics = {
@@ -238,9 +235,7 @@ class BacktestEngine:
         """Calculate win rate."""
         if not self.trades:
             return 0.0
-        winning_trades = sum(
-            1 for trade in self.trades if trade["shares"] * trade["price"] > 0
-        )
+        winning_trades = sum(1 for trade in self.trades if trade["shares"] * trade["price"] > 0)
         return winning_trades / len(self.trades)
 
     def calculate_profit_factor(self) -> float:

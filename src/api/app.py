@@ -3,10 +3,10 @@
 import logging
 import os
 from datetime import datetime
-from typing import Any, Dict, List, Optional, Union
+from typing import Optional
 
-from flask import Flask, Response, jsonify, request
-from flask_cors import CORS  # type: ignore
+from flask import Flask, Response, jsonify
+from flask_cors import CORS
 
 from ..core.alpaca_service import AlpacaService
 from ..core.trading_bot import TradingBot
@@ -15,7 +15,7 @@ from ..utils.logger import setup_logger
 
 # Configure logging
 logging.basicConfig(level=logging.DEBUG)
-logger = logging.getLogger(__name__)
+logger = setup_logger(__name__)
 
 app = Flask(__name__)
 CORS(app)

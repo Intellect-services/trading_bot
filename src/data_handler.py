@@ -11,8 +11,7 @@ from alpaca.data.timeframe import TimeFrame
 from alpaca.trading.enums import OrderSide, TimeInForce
 from alpaca.trading.models import Position
 
-from src.core.alpaca_client import (AccountInfo, AlpacaClient, OrderInfo,
-                                    PositionInfo)
+from src.core.alpaca_client import AccountInfo, AlpacaClient, OrderInfo, PositionInfo
 from src.utils.config import Config
 from src.utils.logger import setup_logger
 
@@ -52,9 +51,7 @@ class DataHandler:
         """
         return os.path.join(self._cache_dir, f"{symbol}_{timeframe}.json")
 
-    def _load_cache(
-        self, symbol: str, timeframe: str
-    ) -> Optional[List[Dict[str, Any]]]:
+    def _load_cache(self, symbol: str, timeframe: str) -> Optional[List[Dict[str, Any]]]:
         """Load data from cache.
 
         Args:
@@ -69,9 +66,7 @@ class DataHandler:
             if os.path.exists(cache_path):
                 with open(cache_path, "r") as f:
                     data = json.load(f)
-                    return [
-                        dict(item) for item in data
-                    ]  # Ensure we return a list of dicts
+                    return [dict(item) for item in data]  # Ensure we return a list of dicts
             return None
         except Exception as e:
             logger.error(f"Error loading cache: {e}")
@@ -137,9 +132,7 @@ class DataHandler:
                 end_date = datetime.now()
 
             # Get data from Alpaca
-            data = self.client.get_historical_data(
-                [symbol], start_date, end_date, timeframe
-            )
+            data = self.client.get_historical_data([symbol], start_date, end_date, timeframe)
             if isinstance(data, pd.DataFrame):
                 return data
             return pd.DataFrame()

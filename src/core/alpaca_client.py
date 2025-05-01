@@ -1,134 +1,212 @@
 """Alpaca API client for trading operations."""
 
 import logging
-from datetime import datetime, timedelta
-from typing import Any, Dict, List, Optional, TypedDict, TypeVar, Union, cast
+from datetime import datetime
+from typing import Any, Dict, List, Optional, Union
 
-import alpaca_trade_api as tradeapi
-import pandas as pd
 from alpaca.data.historical import StockHistoricalDataClient
 from alpaca.data.models import BarSet
-from alpaca.data.requests import GetAssetsRequest, StockBarsRequest
-from alpaca.data.timeframe import TimeFrame, TimeFrameUnit
+from alpaca.data.requests import StockBarsRequest
+from alpaca.data.timeframe import TimeFrame
 from alpaca.trading.client import TradingClient
-from alpaca.trading.enums import (AssetClass, OrderSide, OrderType,
-                                  QueryOrderStatus, TimeInForce)
+from alpaca.trading.enums import OrderSide, OrderType, QueryOrderStatus, TimeInForce
 from alpaca.trading.models import Asset, Clock, Order, Position
-from alpaca.trading.models import TradeAccount as AlpacaTradeAccount
-from alpaca.trading.requests import (GetOrdersRequest, LimitOrderRequest,
-                                     MarketOrderRequest, OrderRequest,
-                                     StopOrderRequest)
-from alpaca_trade_api.rest import APIError
+from alpaca.trading.requests import OrderRequest
 
-from src.core.alpaca_types import Bar
-from src.types import Order, TradeAccount
-from src.utils.config import get_config
-from src.utils.logger import setup_logger
+from ..utils.logger import setup_logger
 
 logger = setup_logger(__name__)
 
-T = TypeVar("T")
+
+class AccountInfo:
+    """Account information."""
+
+    def __init__(
+        self,
+        id: str,
+        cash: float,
+        portfolio_value: float,
+        buying_power: float,
+        equity: float,
+        long_market_value: float,
+        short_market_value: float,
+        initial_margin: float,
+        maintenance_margin: float,
+        last_equity: float,
+        multiplier: float,
+        status: str,
+        trading_blocked: bool,
+        transfers_blocked: bool,
+        account_blocked: bool,
+        created_at: Optional[datetime],
+        trade_suspended_by_user: bool,
+        currency: str,
+    ):
+        """Initialize account info."""
+        self.id = id
+        self.cash = cash
+        self.portfolio_value = portfolio_value
+        self.buying_power = buying_power
+        self.equity = equity
+        self.long_market_value = long_market_value
+        self.short_market_value = short_market_value
+        self.initial_margin = initial_margin
+        self.maintenance_margin = maintenance_margin
+        self.last_equity = last_equity
+        self.multiplier = multiplier
+        self.status = status
+        self.trading_blocked = trading_blocked
+        self.transfers_blocked = transfers_blocked
+        self.account_blocked = account_blocked
+        self.created_at = created_at
+        self.trade_suspended_by_user = trade_suspended_by_user
+        self.currency = currency
 
 
-class AccountInfo(TypedDict):
-    """Type definition for account information."""
+class PositionInfo:
+    """Position information."""
 
-    id: str
-    cash: float
-    portfolio_value: float
-    buying_power: float
-    equity: float
-    long_market_value: float
-    short_market_value: float
-    initial_margin: float
-    maintenance_margin: float
-    last_equity: float
-    multiplier: float
-    status: str
-    trading_blocked: bool
-    transfers_blocked: bool
-    account_blocked: bool
-    created_at: Optional[datetime]
-    trade_suspended_by_user: bool
-    currency: str
-
-
-class PositionInfo(TypedDict):
-    """Type definition for position information."""
-
-    symbol: str
-    qty: float
-    side: str
-    avg_entry_price: float
-    current_price: float
-    market_value: float
-    cost_basis: float
-    unrealized_pl: float
-    unrealized_plpc: float
-    unrealized_intraday_pl: float
-    unrealized_intraday_plpc: float
-    lastday_price: float
-    change_today: float
+    def __init__(
+        self,
+        symbol: str,
+        qty: float,
+        side: str,
+        avg_entry_price: float,
+        current_price: float,
+        market_value: float,
+        cost_basis: float,
+        unrealized_pl: float,
+        unrealized_plpc: float,
+        lastday_price: float,
+        change_today: float,
+    ):
+        """Initialize position info."""
+        self.symbol = symbol
+        self.qty = qty
+        self.side = side
+        self.avg_entry_price = avg_entry_price
+        self.current_price = current_price
+        self.market_value = market_value
+        self.cost_basis = cost_basis
+        self.unrealized_pl = unrealized_pl
+        self.unrealized_plpc = unrealized_plpc
+        self.lastday_price = lastday_price
+        self.change_today = change_today
 
 
-class OrderInfo(TypedDict):
-    """Type definition for order information."""
+class OrderInfo:
+    """Order information."""
 
-    id: str
-    symbol: str
-    qty: float
-    side: str
-    type: str
-    time_in_force: str
-    status: str
-    filled_qty: float
-    filled_avg_price: float
-    created_at: datetime
-    updated_at: datetime
-
-
-class AssetInfo(TypedDict):
-    """Type definition for asset information."""
-
-    id: str
-    symbol: str
-    name: str
-    status: str
-    tradable: bool
-    marginable: bool
-    shortable: bool
-    easy_to_borrow: bool
-    fractionable: bool
-
-
-class ClockInfo(TypedDict):
-    """Type definition for clock information."""
-
-    is_open: bool
-    next_open: Optional[datetime]
-    next_close: Optional[datetime]
-    timestamp: Optional[datetime]
+    def __init__(
+        self,
+        id: str,
+        symbol: str,
+        qty: float,
+        side: str,
+        type: str,
+        time_in_force: str,
+        status: str,
+        filled_qty: float,
+        filled_avg_price: float,
+        created_at: datetime,
+        updated_at: datetime,
+    ):
+        """Initialize order info."""
+        self.id = id
+        self.symbol = symbol
+        self.qty = qty
+        self.side = side
+        self.type = type
+        self.time_in_force = time_in_force
+        self.status = status
+        self.filled_qty = filled_qty
+        self.filled_avg_price = filled_avg_price
+        self.created_at = created_at
+        self.updated_at = updated_at
 
 
-class HistoricalData(TypedDict):
-    """Type definition for historical data."""
+class AssetInfo:
+    """Asset information."""
 
-    timestamp: List[datetime]
-    open: List[float]
-    high: List[float]
-    low: List[float]
-    close: List[float]
-    volume: List[int]
-    trade_count: List[int]
-    vwap: List[float]
+    def __init__(
+        self,
+        id: str,
+        symbol: str,
+        name: str,
+        status: str,
+        tradable: bool,
+        marginable: bool,
+        shortable: bool,
+        easy_to_borrow: bool,
+        fractionable: bool,
+    ):
+        """Initialize asset info."""
+        self.id = id
+        self.symbol = symbol
+        self.name = name
+        self.status = status
+        self.tradable = tradable
+        self.marginable = marginable
+        self.shortable = shortable
+        self.easy_to_borrow = easy_to_borrow
+        self.fractionable = fractionable
+
+
+class ClockInfo:
+    """Market clock information."""
+
+    def __init__(
+        self,
+        is_open: bool,
+        next_open: Optional[datetime],
+        next_close: Optional[datetime],
+        timestamp: Optional[datetime],
+    ):
+        """Initialize market clock info."""
+        self.is_open = is_open
+        self.next_open = next_open
+        self.next_close = next_close
+        self.timestamp = timestamp
+
+
+class HistoricalData:
+    """Historical market data."""
+
+    def __init__(
+        self,
+        timestamp: List[datetime],
+        open: List[float],
+        high: List[float],
+        low: List[float],
+        close: List[float],
+        volume: List[float],
+        trade_count: List[float],
+        vwap: List[float],
+    ):
+        """Initialize historical data."""
+        self.timestamp = timestamp
+        self.open = open
+        self.high = high
+        self.low = low
+        self.close = close
+        self.volume = volume
+        self.trade_count = trade_count
+        self.vwap = vwap
 
 
 def safe_float(value: Union[str, float, Any, None]) -> float:
-    """Safely convert a value to float, returning 0.0 if conversion fails."""
-    if value is None:
-        return 0.0
+    """Convert value to float safely.
+
+    Args:
+        value: Value to convert
+
+    Returns:
+        float: Converted value or 0.0 if conversion fails
+    """
     try:
-        return float(str(value))
+        if value is None:
+            return 0.0
+        return float(value)
     except (ValueError, TypeError):
         return 0.0
 
@@ -136,15 +214,20 @@ def safe_float(value: Union[str, float, Any, None]) -> float:
 class AlpacaClient:
     """Client for interacting with Alpaca API."""
 
-    def __init__(self, api_key: str, api_secret: str, base_url: str = "https://paper-api.alpaca.markets"):
-        """Initialize the Alpaca client.
+    def __init__(
+        self,
+        api_key: str,
+        api_secret: str,
+        base_url: str = "https://paper-api.alpaca.markets",
+    ):
+        """Initialize Alpaca client.
 
         Args:
             api_key: Alpaca API key
             api_secret: Alpaca API secret
-            base_url: Base URL for the API (defaults to paper trading)
+            base_url: Alpaca API base URL (default: paper trading)
         """
-        self.trading_client = TradingClient(api_key, api_secret, paper=True)
+        self.trading_client = TradingClient(api_key, api_secret, base_url)
         self.data_client = StockHistoricalDataClient(api_key, api_secret)
         self.logger = setup_logger(__name__)
 
@@ -157,47 +240,28 @@ class AlpacaClient:
         try:
             account = self.trading_client.get_account()
             return AccountInfo(
-                id=getattr(account, "id", ""),
-                cash=float(getattr(account, "cash", 0.0)),
-                portfolio_value=float(getattr(account, "portfolio_value", 0.0)),
-                buying_power=float(getattr(account, "buying_power", 0.0)),
-                equity=float(getattr(account, "equity", 0.0)),
-                long_market_value=float(getattr(account, "long_market_value", 0.0)),
-                short_market_value=float(getattr(account, "short_market_value", 0.0)),
-                initial_margin=float(getattr(account, "initial_margin", 0.0)),
-                maintenance_margin=float(getattr(account, "maintenance_margin", 0.0)),
-                last_equity=float(getattr(account, "last_equity", 0.0)),
-                multiplier=float(getattr(account, "multiplier", 0.0)),
-                status=str(getattr(account, "status", "")),
-                trading_blocked=bool(getattr(account, "trading_blocked", False)),
-                transfers_blocked=bool(getattr(account, "transfers_blocked", False)),
-                account_blocked=bool(getattr(account, "account_blocked", False)),
-                created_at=getattr(account, "created_at", None),
-                trade_suspended_by_user=bool(getattr(account, "trade_suspended_by_user", False)),
-                currency=str(getattr(account, "currency", "")),
+                id=account.id,
+                cash=safe_float(account.cash),
+                portfolio_value=safe_float(account.portfolio_value),
+                buying_power=safe_float(account.buying_power),
+                equity=safe_float(account.equity),
+                long_market_value=safe_float(account.long_market_value),
+                short_market_value=safe_float(account.short_market_value),
+                initial_margin=safe_float(account.initial_margin),
+                maintenance_margin=safe_float(account.maintenance_margin),
+                last_equity=safe_float(account.last_equity),
+                multiplier=safe_float(account.multiplier),
+                status=account.status,
+                trading_blocked=account.trading_blocked,
+                transfers_blocked=account.transfers_blocked,
+                account_blocked=account.account_blocked,
+                created_at=account.created_at,
+                trade_suspended_by_user=account.trade_suspended_by_user,
+                currency=account.currency,
             )
         except Exception as e:
-            self.logger.error(f"Error getting account info: {e}")
-            return AccountInfo(
-                id="",
-                cash=0.0,
-                portfolio_value=0.0,
-                buying_power=0.0,
-                equity=0.0,
-                long_market_value=0.0,
-                short_market_value=0.0,
-                initial_margin=0.0,
-                maintenance_margin=0.0,
-                last_equity=0.0,
-                multiplier=0.0,
-                status="",
-                trading_blocked=False,
-                transfers_blocked=False,
-                account_blocked=False,
-                created_at=None,
-                trade_suspended_by_user=False,
-                currency="",
-            )
+            self.logger.error(f"Error getting account: {e}")
+            raise
 
     def get_positions(self) -> List[PositionInfo]:
         """Get all positions.
@@ -207,63 +271,79 @@ class AlpacaClient:
         """
         try:
             positions = self.trading_client.get_all_positions()
-            return [self._format_position(position) for position in positions]
+            return [self._format_position(p) for p in positions]
         except Exception as e:
             self.logger.error(f"Error getting positions: {e}")
-            return []
+            raise
 
     def get_historical_data(
-        self, symbols: List[str], timeframe: str = "1D", start: Optional[datetime] = None, end: Optional[datetime] = None
+        self,
+        symbols: List[str],
+        timeframe: TimeFrame,
+        start: datetime,
+        end: datetime,
     ) -> HistoricalData:
         """Get historical data for symbols.
 
         Args:
             symbols: List of symbols to get data for
-            timeframe: Timeframe for the data (default: "1D")
-            start: Start date (optional)
-            end: End date (optional)
+            timeframe: Timeframe for the data
+            start: Start date
+            end: End date
 
         Returns:
             HistoricalData: Historical data
         """
         try:
-            bars = self.data_client.get_bars(
-                symbols,
-                TimeFrame.from_str(timeframe),
+            request = StockBarsRequest(
+                symbol_or_symbols=symbols,
+                timeframe=timeframe,
                 start=start,
                 end=end,
-                adjustment="raw",
             )
-            return HistoricalData(
-                timestamp=bars.data.dict()["timestamp"],
-                open=bars.data.dict()["open"],
-                high=bars.data.dict()["high"],
-                low=bars.data.dict()["low"],
-                close=bars.data.dict()["close"],
-                volume=bars.data.dict()["volume"],
-                trade_count=bars.data.dict()["trade_count"],
-                vwap=bars.data.dict()["vwap"],
-            )
+            bars = self.data_client.get_stock_bars(request)
+            return self._format_bars(bars)
         except Exception as e:
             self.logger.error(f"Error getting historical data: {e}")
-            return HistoricalData(
-                timestamp=[],
-                open=[],
-                high=[],
-                low=[],
-                close=[],
-                volume=[],
-                trade_count=[],
-                vwap=[],
-            )
+            raise
+
+    def _format_bars(self, bars: BarSet) -> HistoricalData:
+        """Format bar data.
+
+        Args:
+            bars: Bar data from Alpaca
+
+        Returns:
+            HistoricalData: Formatted historical data
+        """
+        data = HistoricalData(
+            timestamp=[],
+            open=[],
+            high=[],
+            low=[],
+            close=[],
+            volume=[],
+            trade_count=[],
+            vwap=[],
+        )
+        for bar in bars:
+            data.timestamp.append(bar.timestamp)
+            data.open.append(safe_float(bar.open))
+            data.high.append(safe_float(bar.high))
+            data.low.append(safe_float(bar.low))
+            data.close.append(safe_float(bar.close))
+            data.volume.append(safe_float(bar.volume))
+            data.trade_count.append(safe_float(bar.trade_count))
+            data.vwap.append(safe_float(bar.vwap))
+        return data
 
     def place_order(
         self,
         symbol: str,
         qty: float,
-        side: str,
-        type: str = "market",
-        time_in_force: str = "day",
+        side: OrderSide,
+        type: OrderType = OrderType.MARKET,
+        time_in_force: TimeInForce = TimeInForce.DAY,
         limit_price: Optional[float] = None,
         stop_price: Optional[float] = None,
     ) -> OrderInfo:
@@ -282,33 +362,27 @@ class AlpacaClient:
             OrderInfo: Order information
         """
         try:
-            order = self.trading_client.submit_order(
-                symbol=symbol,
-                qty=qty,
-                side=OrderSide.BUY if side.lower() == "buy" else OrderSide.SELL,
-                type=OrderType.MARKET if type.lower() == "market" else OrderType.LIMIT,
-                time_in_force=TimeInForce.DAY if time_in_force.lower() == "day" else TimeInForce.GTC,
-                limit_price=limit_price,
-                stop_price=stop_price,
-            )
+            order_data = {
+                "symbol": symbol,
+                "qty": qty,
+                "side": side,
+                "type": type,
+                "time_in_force": time_in_force,
+            }
+            if limit_price is not None:
+                order_data["limit_price"] = limit_price
+            if stop_price is not None:
+                order_data["stop_price"] = stop_price
+
+            order = self.trading_client.submit_order(OrderRequest(**order_data))
             return self._format_order(order)
         except Exception as e:
             self.logger.error(f"Error placing order: {e}")
-            return OrderInfo(
-                id="",
-                symbol=symbol,
-                qty=qty,
-                side=side,
-                type=type,
-                time_in_force=time_in_force,
-                status="failed",
-                filled_qty=0.0,
-                filled_avg_price=0.0,
-                created_at=datetime.now(),
-                updated_at=datetime.now(),
-            )
+            raise
 
-    def get_orders(self, status: Optional[str] = None, limit: int = 100) -> List[OrderInfo]:
+    def get_orders(
+        self, status: Optional[QueryOrderStatus] = None, limit: int = 100
+    ) -> List[OrderInfo]:
         """Get orders.
 
         Args:
@@ -320,10 +394,10 @@ class AlpacaClient:
         """
         try:
             orders = self.trading_client.get_orders(status=status, limit=limit)
-            return [self._format_order(order) for order in orders]
+            return [self._format_order(o) for o in orders]
         except Exception as e:
             self.logger.error(f"Error getting orders: {e}")
-            return []
+            raise
 
     def get_market_clock(self) -> ClockInfo:
         """Get market clock information.
@@ -334,19 +408,14 @@ class AlpacaClient:
         try:
             clock = self.trading_client.get_clock()
             return ClockInfo(
-                is_open=bool(getattr(clock, "is_open", False)),
-                next_open=getattr(clock, "next_open", None),
-                next_close=getattr(clock, "next_close", None),
-                timestamp=getattr(clock, "timestamp", None),
+                is_open=clock.is_open,
+                next_open=clock.next_open,
+                next_close=clock.next_close,
+                timestamp=clock.timestamp,
             )
         except Exception as e:
             self.logger.error(f"Error getting market clock: {e}")
-            return ClockInfo(
-                is_open=False,
-                next_open=None,
-                next_close=None,
-                timestamp=None,
-            )
+            raise
 
     def get_position(self, symbol: str) -> Optional[PositionInfo]:
         """Get position for a symbol.
@@ -358,45 +427,8 @@ class AlpacaClient:
             Optional[PositionInfo]: Position information if found
         """
         try:
-            position = cast(
-                Union[Position, Dict[str, Any]],
-                self.trading_client.get_open_position(symbol),
-            )
-            return PositionInfo(
-                symbol=str(position.symbol) if hasattr(position, "symbol") else "",
-                qty=float(position.qty) if hasattr(position, "qty") else 0.0,
-                side=str(position.side) if hasattr(position, "side") else "",
-                avg_entry_price=float(position.avg_entry_price)
-                if hasattr(position, "avg_entry_price")
-                else 0.0,
-                current_price=float(position.current_price)
-                if hasattr(position, "current_price")
-                else 0.0,
-                market_value=float(position.market_value)
-                if hasattr(position, "market_value")
-                else 0.0,
-                cost_basis=float(position.cost_basis)
-                if hasattr(position, "cost_basis")
-                else 0.0,
-                unrealized_pl=float(position.unrealized_pl)
-                if hasattr(position, "unrealized_pl")
-                else 0.0,
-                unrealized_plpc=float(position.unrealized_plpc)
-                if hasattr(position, "unrealized_plpc")
-                else 0.0,
-                unrealized_intraday_pl=float(position.unrealized_intraday_pl)
-                if hasattr(position, "unrealized_intraday_pl")
-                else 0.0,
-                unrealized_intraday_plpc=float(position.unrealized_intraday_plpc)
-                if hasattr(position, "unrealized_intraday_plpc")
-                else 0.0,
-                lastday_price=float(position.lastday_price)
-                if hasattr(position, "lastday_price")
-                else 0.0,
-                change_today=float(position.change_today)
-                if hasattr(position, "change_today")
-                else 0.0,
-            )
+            position = self.trading_client.get_position(symbol)
+            return self._format_position(position)
         except Exception as e:
             self.logger.error(f"Error getting position: {e}")
             return None
@@ -413,15 +445,15 @@ class AlpacaClient:
         try:
             asset = self.trading_client.get_asset(symbol)
             return AssetInfo(
-                id=getattr(asset, "id", ""),
-                symbol=getattr(asset, "symbol", ""),
-                name=getattr(asset, "name", ""),
-                status=getattr(asset, "status", ""),
-                tradable=bool(getattr(asset, "tradable", False)),
-                marginable=bool(getattr(asset, "marginable", False)),
-                shortable=bool(getattr(asset, "shortable", False)),
-                easy_to_borrow=bool(getattr(asset, "easy_to_borrow", False)),
-                fractionable=bool(getattr(asset, "fractionable", False)),
+                id=asset.id,
+                symbol=asset.symbol,
+                name=asset.name,
+                status=asset.status,
+                tradable=asset.tradable,
+                marginable=asset.marginable,
+                shortable=asset.shortable,
+                easy_to_borrow=asset.easy_to_borrow,
+                fractionable=asset.fractionable,
             )
         except Exception as e:
             self.logger.error(f"Error getting asset: {e}")
@@ -431,7 +463,7 @@ class AlpacaClient:
         """Cancel an order.
 
         Args:
-            order_id: ID of the order to cancel
+            order_id: Order ID to cancel
 
         Returns:
             bool: True if order was cancelled successfully
@@ -447,7 +479,7 @@ class AlpacaClient:
         """Get order by ID.
 
         Args:
-            order_id: ID of the order to get
+            order_id: Order ID to get
 
         Returns:
             Optional[OrderInfo]: Order information if found
@@ -460,103 +492,47 @@ class AlpacaClient:
             return None
 
     def _format_position(self, position: Position) -> PositionInfo:
-        """Format position information.
+        """Format position data.
 
         Args:
-            position: Position to format
+            position: Position data from Alpaca
 
         Returns:
             PositionInfo: Formatted position information
         """
-        try:
-            return PositionInfo(
-                symbol=str(position.symbol) if hasattr(position, "symbol") else "",
-                qty=float(position.qty) if hasattr(position, "qty") else 0.0,
-                side=str(position.side) if hasattr(position, "side") else "",
-                avg_entry_price=float(position.avg_entry_price)
-                if hasattr(position, "avg_entry_price")
-                else 0.0,
-                current_price=float(position.current_price)
-                if hasattr(position, "current_price")
-                else 0.0,
-                market_value=float(position.market_value)
-                if hasattr(position, "market_value")
-                else 0.0,
-                cost_basis=float(position.cost_basis)
-                if hasattr(position, "cost_basis")
-                else 0.0,
-                unrealized_pl=float(position.unrealized_pl)
-                if hasattr(position, "unrealized_pl")
-                else 0.0,
-                unrealized_plpc=float(position.unrealized_plpc)
-                if hasattr(position, "unrealized_plpc")
-                else 0.0,
-                unrealized_intraday_pl=float(position.unrealized_intraday_pl)
-                if hasattr(position, "unrealized_intraday_pl")
-                else 0.0,
-                unrealized_intraday_plpc=float(position.unrealized_intraday_plpc)
-                if hasattr(position, "unrealized_intraday_plpc")
-                else 0.0,
-                lastday_price=float(position.lastday_price)
-                if hasattr(position, "lastday_price")
-                else 0.0,
-                change_today=float(position.change_today)
-                if hasattr(position, "change_today")
-                else 0.0,
-            )
-        except Exception as e:
-            self.logger.error(f"Error formatting position: {e}")
-            return PositionInfo(
-                symbol="",
-                qty=0.0,
-                side="",
-                avg_entry_price=0.0,
-                current_price=0.0,
-                market_value=0.0,
-                cost_basis=0.0,
-                unrealized_pl=0.0,
-                unrealized_plpc=0.0,
-                unrealized_intraday_pl=0.0,
-                unrealized_intraday_plpc=0.0,
-                lastday_price=0.0,
-                change_today=0.0,
-            )
+        return PositionInfo(
+            symbol=position.symbol,
+            qty=safe_float(position.qty),
+            side=position.side,
+            avg_entry_price=safe_float(position.avg_entry_price),
+            current_price=safe_float(position.current_price),
+            market_value=safe_float(position.market_value),
+            cost_basis=safe_float(position.cost_basis),
+            unrealized_pl=safe_float(position.unrealized_pl),
+            unrealized_plpc=safe_float(position.unrealized_plpc),
+            lastday_price=safe_float(position.lastday_price),
+            change_today=safe_float(position.change_today),
+        )
 
     def _format_order(self, order: Order) -> OrderInfo:
-        """Format order information.
+        """Format order data.
 
         Args:
-            order: Order to format
+            order: Order data from Alpaca
 
         Returns:
             OrderInfo: Formatted order information
         """
-        try:
-            return OrderInfo(
-                id=getattr(order, "id", ""),
-                symbol=getattr(order, "symbol", ""),
-                qty=float(getattr(order, "qty", 0.0)),
-                side=getattr(order, "side", ""),
-                type=getattr(order, "type", ""),
-                time_in_force=getattr(order, "time_in_force", ""),
-                status=getattr(order, "status", ""),
-                filled_qty=float(getattr(order, "filled_qty", 0.0)),
-                filled_avg_price=float(getattr(order, "filled_avg_price", 0.0)),
-                created_at=getattr(order, "created_at", datetime.now()),
-                updated_at=getattr(order, "updated_at", datetime.now()),
-            )
-        except Exception as e:
-            self.logger.error(f"Error formatting order: {e}")
-            return OrderInfo(
-                id="",
-                symbol="",
-                qty=0.0,
-                side="",
-                type="",
-                time_in_force="",
-                status="",
-                filled_qty=0.0,
-                filled_avg_price=0.0,
-                created_at=datetime.now(),
-                updated_at=datetime.now(),
-            )
+        return OrderInfo(
+            id=order.id,
+            symbol=order.symbol,
+            qty=safe_float(order.qty),
+            side=str(order.side),
+            type=str(order.type),
+            time_in_force=str(order.time_in_force),
+            status=order.status,
+            filled_qty=safe_float(order.filled_qty),
+            filled_avg_price=safe_float(order.filled_avg_price),
+            created_at=order.created_at,
+            updated_at=order.updated_at,
+        )

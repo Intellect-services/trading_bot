@@ -1,93 +1,121 @@
 """Risk management module."""
 
+from dataclasses import dataclass
 from decimal import Decimal
-from typing import Any, Dict, Optional, Union
+from typing import Dict, Optional, Union
 
-from src.utils.config import Config
-from src.utils.logger import setup_logger
+from ..utils.config import Config
+from ..utils.logger import setup_logger
 
 logger = setup_logger(__name__)
+
+
+@dataclass
+class Position:
+    """Position details."""
+
+    size: float
+    avg_price: float
+
+
+@dataclass
+class RiskConfig:
+    """Risk management configuration."""
+
+    max_position_size: float = 0.1
+    stop_loss: float = 0.02
+    take_profit: float = 0.04
+    max_drawdown: float = 0.2
+    max_leverage: float = 1.0
+    risk_per_trade: float = 0.01
+    trailing_stop: float = 0.01
+    trailing_stop_activation: float = 0.02
 
 
 class RiskManager:
     """Risk management class."""
 
-    def __init__(self, config: Union[Config, Dict[str, Any], None] = None) -> None:
+    def __init__(
+        self, config: Optional[Union[Config, Dict[str, Union[int, float, str]]]] = None
+    ) -> None:
         """Initialize risk manager.
 
         Args:
             config: Configuration object or dictionary
         """
         if isinstance(config, Config):
-            self.max_position_size = config.RISK_MAX_POSITION_SIZE
-            self.stop_loss = config.RISK_STOP_LOSS_PCT
-            self.take_profit = config.RISK_STOP_LOSS_PCT * 2
-            self.max_drawdown = config.RISK_MAX_DRAWDOWN
-            self.max_leverage = config.RISK_MAX_LEVERAGE
-            self.risk_per_trade = config.RISK_PER_TRADE
-            self.trailing_stop = 0.01  # Default trailing stop percentage
-            self.trailing_stop_activation = 0.02  # Default activation threshold
+            self.config = RiskConfig(
+                max_position_size=config.RISK_MAX_POSITION_SIZE,
+                stop_loss=config.RISK_STOP_LOSS_PCT,
+                take_profit=config.RISK_STOP_LOSS_PCT * 2,
+                max_drawdown=config.RISK_MAX_DRAWDOWN,
+                max_leverage=config.RISK_MAX_LEVERAGE,
+                risk_per_trade=config.RISK_PER_TRADE,
+            )
         elif isinstance(config, dict):
-            self.max_position_size = float(config.get("max_position_size", 0.1))
-            self.stop_loss = float(config.get("stop_loss", 0.02))
-            self.take_profit = float(config.get("take_profit", 0.04))
-            self.max_drawdown = float(config.get("max_drawdown", 0.2))
-            self.max_leverage = float(config.get("max_leverage", 1.0))
-            self.risk_per_trade = float(config.get("risk_per_trade", 0.01))
-            self.trailing_stop = float(config.get("trailing_stop", 0.01))
-            self.trailing_stop_activation = float(
-                config.get("trailing_stop_activation", 0.02)
+            self.config = RiskConfig(
+                max_position_size=float(config.get("max_position_size", 0.1)),
+                stop_loss=float(config.get("stop_loss", 0.02)),
+                take_profit=float(config.get("take_profit", 0.04)),
+                max_drawdown=float(config.get("max_drawdown", 0.2)),
+                max_leverage=float(config.get("max_leverage", 1.0)),
+                risk_per_trade=float(config.get("risk_per_trade", 0.01)),
+                trailing_stop=float(config.get("trailing_stop", 0.01)),
+                trailing_stop_activation=float(config.get("trailing_stop_activation", 0.02)),
             )
         else:
-            # Default values
-            self.max_position_size = 0.1
-            self.stop_loss = 0.02
-            self.take_profit = 0.04
-            self.max_drawdown = 0.2
-            self.max_leverage = 1.0
-            self.risk_per_trade = 0.01
-            self.trailing_stop = 0.01
-            self.trailing_stop_activation = 0.02
+            self.config = RiskConfig()
 
         self.logger = logger
-        self.highest_prices: Dict[
-            str, float
-        ] = {}  # New: track highest prices for trailing stops
-        self.lowest_prices: Dict[
-            str, float
-        ] = {}  # New: track lowest prices for trailing stops
+        self.highest_prices: Dict[str, float] = {}
+        self.lowest_prices: Dict[str, float] = {}
 
     def apply_risk_management(
-        self, price: float, position: Optional[Dict[str, float]], account_value: float
+        self, price: float, position: Optional[Position], account_value: float
     ) -> bool:
         """Apply risk management rules to a position.
 
         Args:
             price: Current price
-            position: Position details (optional)
+            position: Position details
             account_value: Account value
 
         Returns:
-            True if position meets risk criteria, False otherwise
+            bool: True if position meets risk criteria
+
+        Raises:
+            ValueError: If price or account_value is not positive
         """
-        # If no position, return True as there's no risk
+        if price <= 0:
+            raise ValueError("Price must be positive")
+        if account_value <= 0:
+            raise ValueError("Account value must be positive")
+
         if position is None:
             return True
 
-        # Check position size
-        position_value = position["size"] * price
-        if position_value / account_value > self.max_position_size:
+        position_value = position.size * price
+        if position_value / account_value > self.config.max_position_size:
+            self.logger.warning(
+                "Position size exceeds maximum: %.2f%%",
+                (position_value / account_value) * 100,
+            )
             return False
 
-        # Check leverage
         if not self.check_leverage(account_value, position_value):
+            self.logger.warning(
+                "Position leverage exceeds maximum: %.2f",
+                position_value / account_value,
+            )
             return False
 
-        # Check stop loss
-        if "avg_price" in position:
-            loss_pct = (price - position["avg_price"]) / position["avg_price"]
-            if loss_pct < -self.stop_loss:
-                return False
+        loss_pct = (price - position.avg_price) / position.avg_price
+        if loss_pct < -self.config.stop_loss:
+            self.logger.warning(
+                "Position loss exceeds stop loss: %.2f%%",
+                loss_pct * 100,
+            )
+            return False
 
         return True
 
@@ -102,19 +130,24 @@ class RiskManager:
             risk_factor: Risk factor multiplier (default: 1.0)
 
         Returns:
-            Position size in units (as integer)
+            int: Position size in units
+
+        Raises:
+            ValueError: If portfolio_value, price, or risk_factor is not positive
         """
+        if portfolio_value <= 0:
+            raise ValueError("Portfolio value must be positive")
+        if price <= 0:
+            raise ValueError("Price must be positive")
+        if risk_factor <= 0:
+            raise ValueError("Risk factor must be positive")
+
         try:
-            # Calculate maximum position value
-            max_position_value = portfolio_value * self.max_position_size * risk_factor
-
-            # Calculate position size in units and round down to nearest integer
+            max_position_value = portfolio_value * self.config.max_position_size * risk_factor
             position_size = int(max_position_value / price)
-
-            return position_size
-
+            return max(0, position_size)
         except Exception as e:
-            logger.error("Error calculating position size: %s", e)
+            self.logger.error("Error calculating position size: %s", str(e))
             return 0
 
     def calculate_stop_loss(self, price: float, quantity: float) -> float:
@@ -125,14 +158,18 @@ class RiskManager:
             quantity: Position quantity
 
         Returns:
-            Stop loss price
+            float: Stop loss price
+
+        Raises:
+            ValueError: If price is not positive
         """
-        # For long positions, stop loss is below entry price
-        # For short positions, stop loss is above entry price
+        if price <= 0:
+            raise ValueError("Price must be positive")
+
         if quantity > 0:
-            return price * (1 - self.stop_loss)
+            return price * (1 - self.config.stop_loss)
         else:
-            return price * (1 + self.stop_loss)
+            return price * (1 + self.config.stop_loss)
 
     def calculate_take_profit(self, price: float, quantity: float) -> float:
         """Calculate take profit price.
@@ -142,14 +179,18 @@ class RiskManager:
             quantity: Position quantity
 
         Returns:
-            Take profit price
+            float: Take profit price
+
+        Raises:
+            ValueError: If price is not positive
         """
-        # For long positions, take profit is above entry price
-        # For short positions, take profit is below entry price
+        if price <= 0:
+            raise ValueError("Price must be positive")
+
         if quantity > 0:
-            return price * (1 + self.take_profit)
+            return price * (1 + self.config.take_profit)
         else:
-            return price * (1 - self.take_profit)
+            return price * (1 - self.config.take_profit)
 
     def check_leverage(self, portfolio_value: float, position_value: float) -> bool:
         """Check if leverage is within limits.
@@ -159,10 +200,18 @@ class RiskManager:
             position_value: Position value
 
         Returns:
-            True if leverage is within limits, False otherwise
+            bool: True if leverage is within limits
+
+        Raises:
+            ValueError: If portfolio_value or position_value is not positive
         """
+        if portfolio_value <= 0:
+            raise ValueError("Portfolio value must be positive")
+        if position_value < 0:
+            raise ValueError("Position value cannot be negative")
+
         leverage = position_value / portfolio_value
-        return leverage <= self.max_leverage
+        return leverage <= self.config.max_leverage
 
     def validate_trade(
         self, symbol: str, quantity: float, price: float, portfolio_value: float
@@ -176,28 +225,36 @@ class RiskManager:
             portfolio_value: Current portfolio value
 
         Returns:
-            True if trade is valid, False otherwise
+            bool: True if trade is valid
+
+        Raises:
+            ValueError: If price or portfolio_value is not positive
         """
+        if price <= 0:
+            raise ValueError("Price must be positive")
+        if portfolio_value <= 0:
+            raise ValueError("Portfolio value must be positive")
+
         try:
-            # Check trade value against portfolio
-            trade_value = quantity * price
-            if trade_value / portfolio_value > self.max_position_size:
-                logger.warning(
-                    "Trade size exceeds maximum: %s", trade_value / portfolio_value
+            trade_value = abs(quantity) * price
+            if trade_value / portfolio_value > self.config.max_position_size:
+                self.logger.warning(
+                    "Trade size exceeds maximum: %.2f%%",
+                    (trade_value / portfolio_value) * 100,
                 )
                 return False
 
-            # Check risk per trade
-            if trade_value / portfolio_value > self.risk_per_trade:
-                logger.warning(
-                    "Trade risk exceeds maximum: %s", trade_value / portfolio_value
+            if trade_value / portfolio_value > self.config.risk_per_trade:
+                self.logger.warning(
+                    "Trade risk exceeds maximum: %.2f%%",
+                    (trade_value / portfolio_value) * 100,
                 )
                 return False
 
             return True
 
         except Exception as e:
-            logger.error("Error validating trade: %s", e)
+            self.logger.error("Error validating trade: %s", str(e))
             return False
 
     def update_trailing_stops(
@@ -208,64 +265,58 @@ class RiskManager:
         Args:
             symbol: Trading symbol
             current_price: Current price
-            position_type: Position type ('long' or 'short')
+            position_type: Position type (long/short)
 
         Returns:
-            Trailing stop price if triggered, None otherwise
+            Optional[float]: New stop price if triggered, None otherwise
+
+        Raises:
+            ValueError: If current_price is not positive or position_type is invalid
         """
+        if current_price <= 0:
+            raise ValueError("Current price must be positive")
+        if position_type not in ["long", "short"]:
+            raise ValueError("Position type must be 'long' or 'short'")
+
         try:
             if position_type == "long":
-                # For long positions
                 if symbol not in self.highest_prices:
                     self.highest_prices[symbol] = current_price
                 elif current_price > self.highest_prices[symbol]:
                     self.highest_prices[symbol] = current_price
 
-                # Calculate profit percentage
-                profit_pct = (
-                    current_price - self.highest_prices[symbol]
-                ) / self.highest_prices[symbol]
-
-                # Check if trailing stop should be activated
-                if profit_pct >= self.trailing_stop_activation:
-                    trailing_stop_price = self.highest_prices[symbol] * (
-                        1 - self.trailing_stop
-                    )
-                    if current_price <= trailing_stop_price:
-                        return trailing_stop_price
+                profit_pct = (current_price - self.highest_prices[symbol]) / self.highest_prices[
+                    symbol
+                ]
+                if profit_pct >= self.config.trailing_stop_activation:
+                    stop_price = self.highest_prices[symbol] * (1 - self.config.trailing_stop)
+                    if current_price <= stop_price:
+                        return stop_price
             else:
-                # For short positions
                 if symbol not in self.lowest_prices:
                     self.lowest_prices[symbol] = current_price
                 elif current_price < self.lowest_prices[symbol]:
                     self.lowest_prices[symbol] = current_price
 
-                # Calculate profit percentage
-                profit_pct = (
-                    self.lowest_prices[symbol] - current_price
-                ) / self.lowest_prices[symbol]
-
-                # Check if trailing stop should be activated
-                if profit_pct >= self.trailing_stop_activation:
-                    trailing_stop_price = self.lowest_prices[symbol] * (
-                        1 + self.trailing_stop
-                    )
-                    if current_price >= trailing_stop_price:
-                        return trailing_stop_price
+                profit_pct = (self.lowest_prices[symbol] - current_price) / self.lowest_prices[
+                    symbol
+                ]
+                if profit_pct >= self.config.trailing_stop_activation:
+                    stop_price = self.lowest_prices[symbol] * (1 + self.config.trailing_stop)
+                    if current_price >= stop_price:
+                        return stop_price
 
             return None
 
         except Exception as e:
-            self.logger.error("Error updating trailing stops: %s", e)
+            self.logger.error("Error updating trailing stops: %s", str(e))
             return None
 
     def reset_trailing_stop(self, symbol: str) -> None:
-        """Reset trailing stop tracking for a symbol.
+        """Reset trailing stop for a symbol.
 
         Args:
             symbol: Trading symbol
         """
-        if symbol in self.highest_prices:
-            del self.highest_prices[symbol]
-        if symbol in self.lowest_prices:
-            del self.lowest_prices[symbol]
+        self.highest_prices.pop(symbol, None)
+        self.lowest_prices.pop(symbol, None)

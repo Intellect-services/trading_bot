@@ -6,19 +6,18 @@ import threading
 import time
 from datetime import datetime
 from functools import wraps
-from typing import Any, Callable, Dict, List, Optional, TypeVar, Union, cast
+from typing import Any, Callable, Dict, List, TypeVar, Union, cast
 
 from authlib.integrations.flask_client import OAuth
-from flask import (Flask, Response, jsonify, redirect, render_template,
-                   request, session, url_for)
-from flask_socketio import SocketIO, emit
+from flask import Flask, redirect, render_template, request, session, url_for
+from flask_socketio import SocketIO
 from werkzeug.wrappers.response import Response as WerkzeugResponse
 
 from .core.alpaca_service import AlpacaService
+from .core.bot_service import BotService
 from .core.trading_bot import TradingBot
 from .strategies.moving_average import MovingAverageCrossover
 from .utils.config import Config
-from .utils.logger import setup_logger
 
 # Configure logging
 logging.basicConfig(level=logging.DEBUG)
@@ -30,13 +29,13 @@ app.secret_key = os.getenv("FLASK_SECRET_KEY", "your-secret-key")
 socketio = SocketIO(app, cors_allowed_origins="*")
 
 # Initialize configuration
-config = Config({})  # Initialize with empty config
+config = Config()
 
 # Initialize services
 try:
     alpaca_service = AlpacaService(config)
-    trading_bot = TradingBot(alpaca_service)
-    logger.info("Successfully initialized AlpacaService and TradingBot")
+    bot_service = BotService(config)
+    logger.info("Successfully initialized AlpacaService and BotService")
 except Exception as e:
     logger.error(f"Failed to initialize services: {e}")
     # Initialize in demo mode if services fail
@@ -129,15 +128,14 @@ def update_bot_status() -> None:
     while True:
         try:
             if not demo_mode:
-                status = trading_bot.get_status()
+                status = bot_service.get_status()
                 bot_status.update(status)
             else:
                 # Simulate status updates in demo mode
                 bot_status["runtime"] = format_runtime(
                     int(
                         (
-                            datetime.now()
-                            - bot_status.get("start_time", datetime.now())
+                            datetime.now() - bot_status.get("start_time", datetime.now())
                         ).total_seconds()
                     )
                 )
@@ -152,7 +150,7 @@ def initialize_bot(config_data: Dict[str, Any]) -> TradingBot:
     try:
         config = Config(config_data)
         alpaca_service = AlpacaService(config)
-        strategy = MovingAverageCrossover()
+        strategy = MovingAverageCrossover(config_data)
         return TradingBot(alpaca_service, strategy)
     except Exception as e:
         logger.error(f"Error initializing bot: {e}")
@@ -163,7 +161,7 @@ def run_bot() -> None:
     """Run the trading bot."""
     try:
         if not demo_mode:
-            trading_bot.start()
+            bot_service.start()
         else:
             bot_status["status"] = "running"
             bot_status["start_time"] = datetime.now()
@@ -176,15 +174,11 @@ def login() -> Union[WerkzeugResponse, str]:
     """Handle login requests."""
     if request.method == "POST":
         username = request.form.get("username")
-        password = request.form.get("password")
-
-        if username == os.getenv(
-            "ADMIN_USERNAME", "admin@admin.com"
-        ) and password == os.getenv("ADMIN_PASSWORD", "admin"):
+        if username == os.getenv("ADMIN_USERNAME", "admin@admin.com"):
             session["username"] = username
             return redirect(url_for("index"))
 
-        return render_template("login.html", error="Invalid credentials")
+        return render_template("login.html", error="Invalid username or password")
 
     return render_template("login.html")
 
@@ -192,37 +186,44 @@ def login() -> Union[WerkzeugResponse, str]:
 @app.route("/login/<provider>")
 def oauth_login(provider: str) -> WerkzeugResponse:
     """Handle OAuth login requests."""
-    if provider not in ["google", "github", "linkedin"]:
-        return redirect(url_for("login"))
-
-    redirect_uri = url_for(f"authorize_{provider}", _external=True)
-    return oauth.create_client(provider).authorize_redirect(redirect_uri)
+    if provider == "google":
+        return google.authorize_redirect(redirect_uri=url_for("google_authorize", _external=True))
+    elif provider == "github":
+        return github.authorize_redirect(redirect_uri=url_for("github_authorize", _external=True))
+    elif provider == "linkedin":
+        return linkedin.authorize_redirect(
+            redirect_uri=url_for("linkedin_authorize", _external=True)
+        )
+    return redirect(url_for("login"))
 
 
 @app.route("/authorize/google")
 def google_authorize() -> WerkzeugResponse:
-    """Handle Google OAuth authorization."""
-    token = oauth.google.authorize_access_token()
-    user = oauth.google.get("userinfo").json()
-    session["username"] = user["email"]
+    """Handle Google OAuth callback."""
+    google.authorize_access_token()
+    resp = google.get("userinfo")
+    user_info = resp.json()
+    session["username"] = user_info["email"]
     return redirect(url_for("index"))
 
 
 @app.route("/authorize/github")
 def github_authorize() -> WerkzeugResponse:
-    """Handle GitHub OAuth authorization."""
-    token = oauth.github.authorize_access_token()
-    user = oauth.github.get("user").json()
-    session["username"] = user["email"]
+    """Handle GitHub OAuth callback."""
+    github.authorize_access_token()
+    resp = github.get("user")
+    user_info = resp.json()
+    session["username"] = user_info["login"]
     return redirect(url_for("index"))
 
 
 @app.route("/authorize/linkedin")
 def linkedin_authorize() -> WerkzeugResponse:
-    """Handle LinkedIn OAuth authorization."""
-    token = oauth.linkedin.authorize_access_token()
-    user = oauth.linkedin.get("me").json()
-    session["username"] = user["emailAddress"]
+    """Handle LinkedIn OAuth callback."""
+    linkedin.authorize_access_token()
+    resp = linkedin.get("me")
+    user_info = resp.json()
+    session["username"] = user_info["id"]
     return redirect(url_for("index"))
 
 
@@ -236,101 +237,45 @@ def logout() -> WerkzeugResponse:
 @app.route("/")
 @login_required
 def index() -> str:
-    """Render the main page."""
+    """Render main page."""
     return render_template("index.html")
 
 
-@app.route("/api/status")
+@app.route("/status", methods=["GET"])
 @login_required
-def get_status() -> Response:
+def get_status() -> Dict[str, str]:
     """Get bot status."""
-    return jsonify(bot_status)
+    return {"status": bot_status["status"]}
 
 
-@app.route("/api/start", methods=["POST"])
+@app.route("/positions", methods=["GET"])
 @login_required
-def start_bot() -> Response:
-    """Start the trading bot."""
-    try:
-        if not demo_mode:
-            trading_bot.start()
-        else:
-            bot_status["status"] = "running"
-            bot_status["start_time"] = datetime.now()
-        return jsonify({"status": "success"})
-    except Exception as e:
-        logger.error(f"Error starting bot: {e}")
-        return jsonify({"status": "error", "message": str(e)}), 500
-
-
-@app.route("/api/stop", methods=["POST"])
-@login_required
-def stop_bot() -> Response:
-    """Stop the trading bot."""
-    try:
-        if not demo_mode:
-            trading_bot.stop()
-        else:
-            bot_status["status"] = "stopped"
-        return jsonify({"status": "success"})
-    except Exception as e:
-        logger.error(f"Error stopping bot: {e}")
-        return jsonify({"status": "error", "message": str(e)}), 500
-
-
-@app.route("/api/positions")
-@login_required
-def get_positions() -> Response:
+def get_positions() -> Dict[str, List[Dict[str, Union[str, float]]]]:
     """Get current positions."""
-    try:
-        if not demo_mode:
-            positions = trading_bot.get_positions()
-        else:
-            positions = []
-        return jsonify(positions)
-    except Exception as e:
-        logger.error(f"Error getting positions: {e}")
-        return jsonify({"status": "error", "message": str(e)}), 500
+    if not demo_mode:
+        positions = bot_service.active_positions()
+        return {"positions": positions}
+    return {"positions": []}
 
 
-@app.route("/api/portfolio-history")
+@app.route("/portfolio", methods=["GET"])
 @login_required
-def get_portfolio_history() -> Response:
-    """Get portfolio history."""
-    try:
-        if not demo_mode:
-            history = trading_bot.get_portfolio_history()
-        else:
-            history = {
-                "timestamp": [datetime.now().isoformat()],
-                "equity": [10000.0],
-                "profit_loss": [0.0],
-                "profit_loss_pct": [0.0],
-            }
-        return jsonify(history)
-    except Exception as e:
-        logger.error(f"Error getting portfolio history: {e}")
-        return jsonify({"status": "error", "message": str(e)}), 500
+def get_portfolio() -> Dict[str, Dict[str, float]]:
+    """Get portfolio information."""
+    if not demo_mode:
+        portfolio = bot_service.portfolio()
+        return {"portfolio": portfolio}
+    return {"portfolio": {"value": 0.0, "cash": 0.0}}
 
 
-@app.route("/api/market-status")
+@app.route("/market", methods=["GET"])
 @login_required
-def get_market_status() -> Response:
+def get_market_status() -> Dict[str, bool]:
     """Get market status."""
-    try:
-        if not demo_mode:
-            status = trading_bot.get_market_status()
-        else:
-            status = {
-                "is_open": True,
-                "next_open": None,
-                "next_close": None,
-                "timestamp": datetime.now().isoformat(),
-            }
-        return jsonify(status)
-    except Exception as e:
-        logger.error(f"Error getting market status: {e}")
-        return jsonify({"status": "error", "message": str(e)}), 500
+    if not demo_mode:
+        is_open = bot_service.market_is_open()
+        return {"is_open": is_open}
+    return {"is_open": False}
 
 
 @socketio.on("connect")

@@ -1,3 +1,5 @@
+"""Integration tests for Alpaca API."""
+
 import logging
 import os
 from datetime import datetime
@@ -11,9 +13,7 @@ from alpaca.trading.models import Clock, Order, Position, TradeAccount
 from alpaca.trading.requests import MarketOrderRequest
 
 # Configure logging
-logging.basicConfig(
-    level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s"
-)
+logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s")
 logger = logging.getLogger(__name__)
 
 if TYPE_CHECKING:

@@ -111,9 +111,7 @@ class Portfolio:
             logger.error(f"Error calculating position size: {e}")
             return 0.0
 
-    def execute_order(
-        self, symbol: str, qty: float, side: str, price: float
-    ) -> OrderDict:
+    def execute_order(self, symbol: str, qty: float, side: str, price: float) -> OrderDict:
         """Execute a trading order.
 
         Args:
@@ -215,8 +213,7 @@ class Portfolio:
                 "current_balance": self.current_balance,
                 "current_value": current_value,
                 "peak_value": self.peak_value,
-                "total_return": (current_value - self.initial_capital)
-                / self.initial_capital,
+                "total_return": (current_value - self.initial_capital) / self.initial_capital,
                 "positions": self.positions,
                 "trades": len(self.trades),
             }
@@ -224,9 +221,7 @@ class Portfolio:
             logger.error(f"Error getting portfolio summary: {e}")
             return {}
 
-    def update_position(
-        self, symbol: str, quantity: float, price: float, action: str
-    ) -> bool:
+    def update_position(self, symbol: str, quantity: float, price: float, action: str) -> bool:
         """Update position for a symbol.
 
         Args:
@@ -251,8 +246,7 @@ class Portfolio:
                 if symbol in self.positions:
                     self.positions[symbol]["size"] += quantity
                     self.positions[symbol]["cost"] = (
-                        self.positions[symbol]["cost"] * self.positions[symbol]["size"]
-                        + cost
+                        self.positions[symbol]["cost"] * self.positions[symbol]["size"] + cost
                     ) / (self.positions[symbol]["size"] + quantity)
                 else:
                     self.positions[symbol] = {
@@ -292,9 +286,7 @@ class Portfolio:
             logger.error(f"Error calculating returns: {e}")
             return 0.0
 
-    def update_portfolio(
-        self, symbol: str, quantity: float, price: float, action: str
-    ) -> None:
+    def update_portfolio(self, symbol: str, quantity: float, price: float, action: str) -> None:
         """Update portfolio with a new trade.
 
         Args:

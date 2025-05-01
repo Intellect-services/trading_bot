@@ -1,10 +1,16 @@
 """Type definitions for the trading bot."""
 
+from dataclasses import dataclass
 from datetime import datetime
 from typing import Any, Callable, Dict, List, Optional, TypedDict, Union
 
 from flask import Response
-from flask_socketio import SocketIO
+
+from .core.alpaca_types import (  # Import Position, Order, and Bar from alpaca_types instead of defining them here
+    Bar,
+    Order,
+    Position,
+)
 
 # Type aliases for route decorators
 RouteDecorator = Callable[..., Response]
@@ -40,45 +46,10 @@ class TradeAccount(TypedDict):
     currency: str
     buying_power: float
     cash: float
-    portfolio_value: float
-    pattern_day_trader: bool
-    trading_blocked: bool
-    transfers_blocked: bool
-    account_blocked: bool
-    created_at: datetime
-    trade_suspended_by_user: bool
-    multiplier: str
-    shorting_enabled: bool
     equity: float
     last_equity: float
-    long_market_value: float
-    short_market_value: float
-    initial_margin: float
-    maintenance_margin: float
-    last_maintenance_margin: float
-    daytrading_buying_power: float
-    balance: float
-    cleared_balance: float
-    pending_transfer_in: float
-    pending_transfer_out: float
-    sma: float
-
-
-class Position(TypedDict):
-    """Type definition for position details."""
-
-    asset_id: str
-    symbol: str
-    qty: float
-    avg_entry_price: float
-    market_value: float
-    cost_basis: float
-    unrealized_pl: float
-    unrealized_plpc: float
-    current_price: float
-    lastday_price: float
-    change_today: float
-    side: str
+    created_at: datetime
+    updated_at: datetime
 
 
 class Order(TypedDict):
@@ -107,3 +78,74 @@ class Order(TypedDict):
     status: str
     extended_hours: bool
     legs: Optional[List[Dict[str, Any]]]
+
+
+class PortfolioHistory(TypedDict):
+    timestamp: List[datetime]
+    equity: List[float]
+    profit_loss: List[float]
+    profit_loss_pct: List[float]
+    base_value: float
+    timeframe: str
+
+
+class MarketStatus(TypedDict):
+    is_open: bool
+    next_open: datetime
+    next_close: datetime
+    current_time: datetime
+    previous_open: datetime
+    previous_close: datetime
+    extended_hours_open: datetime
+    extended_hours_close: datetime
+    timezone: str
+
+
+@dataclass
+class Bar:
+    """Represents a price bar."""
+
+    timestamp: datetime
+    open: float
+    high: float
+    low: float
+    close: float
+    volume: float
+    trade_count: Optional[int] = None
+    vwap: Optional[float] = None
+
+
+@dataclass
+class Position:
+    """Represents a trading position."""
+
+    symbol: str
+    quantity: float
+    avg_price: float
+    current_price: float
+    market_value: float
+    unrealized_pl: float
+    unrealized_plpc: float
+    side: str
+
+
+@dataclass
+class Order:
+    """Represents a trading order."""
+
+    id: str
+    symbol: str
+    quantity: float
+    side: str
+    type: str
+    status: str
+    created_at: datetime
+    filled_at: Optional[datetime] = None
+    filled_quantity: Optional[float] = None
+    filled_price: Optional[float] = None
+    filled_avg_price: Optional[float] = None
+    limit_price: Optional[float] = None
+    stop_price: Optional[float] = None
+    trail_price: Optional[float] = None
+    trail_percent: Optional[float] = None
+    hwm: Optional[float] = None

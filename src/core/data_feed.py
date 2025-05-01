@@ -1,29 +1,87 @@
-"""Data feed module for fetching and processing market data."""
+"""Data feed for market data."""
 
-import os
+import logging
 import threading
 import time
+from abc import ABC, abstractmethod
 from datetime import datetime, timedelta
 from typing import Any, Callable, Dict, List, Optional, Union
 
 import numpy as np
 import pandas as pd
-from alpaca.data.models import Bar
-from alpaca.data.timeframe import TimeFrame
-from alpaca.trading.models import Position
-from pandas import DataFrame
+from alpaca.data import TimeFrame
+from alpaca.data.historical import StockHistoricalDataClient
+from alpaca.data.requests import StockBarsRequest
 
-from src.core.alpaca_client import (AccountInfo, AlpacaClient, AssetInfo,
-                                    ClockInfo, HistoricalData, PositionInfo)
-from src.core.alpaca_types import Bar
-from src.utils.logger import setup_logger
-
-from .alpaca_service import AlpacaService
+from ..utils.logger import setup_logger
+from .alpaca_client import (
+    AccountInfo,
+    AlpacaClient,
+    AssetInfo,
+    ClockInfo,
+    HistoricalData,
+    PositionInfo,
+)
 
 logger = setup_logger(__name__)
 
 
-class AlpacaDataFeed:
+class DataFeed(ABC):
+    """Abstract base class for data feeds."""
+
+    @abstractmethod
+    def get_historical_data(
+        self,
+        symbol: str,
+        start: Optional[datetime] = None,
+        end: Optional[datetime] = None,
+        timeframe: str = "1Day",
+    ) -> pd.DataFrame:
+        """Fetch historical market data for a symbol.
+
+        Args:
+            symbol: The stock symbol to fetch data for
+            start: Start datetime for the data range
+            end: End datetime for the data range
+            timeframe: The timeframe for the data (e.g., "1Day", "1Hour", "1Min")
+
+        Returns:
+            pd.DataFrame: DataFrame containing the historical market data
+        """
+        pass
+
+    @abstractmethod
+    def get_latest_price(self, symbol: str) -> Optional[float]:
+        """Get the latest price for a symbol.
+
+        Args:
+            symbol: The stock symbol to get the price for
+
+        Returns:
+            Optional[float]: The latest price, or None if unavailable
+        """
+        pass
+
+    @abstractmethod
+    def get_positions(self) -> Dict[str, Any]:
+        """Get current positions.
+
+        Returns:
+            Dict[str, Any]: Dictionary of positions by symbol
+        """
+        pass
+
+    @abstractmethod
+    def get_market_status(self) -> ClockInfo:
+        """Get market clock information.
+
+        Returns:
+            ClockInfo: Market clock information
+        """
+        pass
+
+
+class AlpacaDataFeed(DataFeed):
     """Class for fetching and managing market data from Alpaca."""
 
     def __init__(self, client: AlpacaClient) -> None:
@@ -47,7 +105,7 @@ class AlpacaDataFeed:
             symbol: Trading symbol to add
 
         Returns:
-            True if symbol was added successfully, False otherwise
+            bool: True if symbol was added successfully
         """
         try:
             if symbol not in self.symbols:
@@ -65,101 +123,122 @@ class AlpacaDataFeed:
         start: Optional[datetime] = None,
         end: Optional[datetime] = None,
         timeframe: str = "1Day",
-    ) -> DataFrame:
+    ) -> pd.DataFrame:
         """Fetch historical market data for a symbol.
 
         Args:
-            symbol: The stock symbol to fetch data for.
-            start: Start datetime for the data range.
-            end: End datetime for the data range.
-            timeframe: The timeframe for the data (e.g., "1Day", "1Hour", "1Min").
+            symbol: The stock symbol to fetch data for
+            start: Start datetime for the data range
+            end: End datetime for the data range
+            timeframe: The timeframe for the data (e.g., "1Day", "1Hour", "1Min")
 
         Returns:
-            DataFrame containing the historical market data.
+            pd.DataFrame: DataFrame containing the historical market data
         """
         try:
-            data = self.client.get_historical_data([symbol], start, end, timeframe)
-            if not data or symbol not in data:
-                return pd.DataFrame()
+            if start is None:
+                start = datetime.now() - timedelta(days=30)
+            if end is None:
+                end = datetime.now()
 
-            bars = data[symbol]
-            df_data = []
-            for bar in bars:
-                df_data.append(
-                    {
-                        "timestamp": bar.timestamp,
-                        "open": float(bar.open),
-                        "high": float(bar.high),
-                        "low": float(bar.low),
-                        "close": float(bar.close),
-                        "volume": int(bar.volume),
-                        "trade_count": int(bar.trade_count),
-                        "vwap": float(bar.vwap),
-                    }
-                )
+            data = self.client.get_historical_data(
+                symbols=[symbol],
+                timeframe=TimeFrame(timeframe),
+                start=start,
+                end=end,
+            )
 
-            if not df_data:
-                return pd.DataFrame()
+            df = pd.DataFrame(
+                {
+                    "timestamp": data.timestamp,
+                    "open": data.open,
+                    "high": data.high,
+                    "low": data.low,
+                    "close": data.close,
+                    "volume": data.volume,
+                    "trade_count": data.trade_count,
+                    "vwap": data.vwap,
+                }
+            )
 
-            df = pd.DataFrame(df_data)
-            df.set_index("timestamp", inplace=True)
+            if not df.empty:
+                df.set_index("timestamp", inplace=True)
+                self._data_cache[symbol] = df
+                self._calculate_indicators(symbol)
+
             return df
 
         except Exception as e:
-            print(f"Error fetching historical data for {symbol}: {str(e)}")
+            self.logger.error("Error fetching historical data for %s: %s", symbol, str(e))
             return pd.DataFrame()
 
     def get_latest_data(self, symbol: str) -> pd.DataFrame:
-        """Get latest data for a symbol."""
+        """Get latest data for a symbol.
+
+        Args:
+            symbol: The stock symbol to get data for
+
+        Returns:
+            pd.DataFrame: DataFrame containing the latest market data
+        """
         try:
-            # Get last 100 bars
             end = datetime.now()
             start = end - timedelta(days=100)
             data = self.client.get_historical_data(
-                symbols=[symbol], timeframe="1D", start=start, end=end
+                symbols=[symbol],
+                timeframe=TimeFrame.Day,
+                start=start,
+                end=end,
             )
-            if not data or not data.get("bars"):
-                self.logger.warning("No data found for %s", symbol)
-                return pd.DataFrame()
 
-            # Convert to DataFrame
-            df = pd.DataFrame(data["bars"])
-            df["timestamp"] = pd.to_datetime(df["timestamp"])
-            df.set_index("timestamp", inplace=True)
+            df = pd.DataFrame(
+                {
+                    "timestamp": data.timestamp,
+                    "open": data.open,
+                    "high": data.high,
+                    "low": data.low,
+                    "close": data.close,
+                    "volume": data.volume,
+                    "trade_count": data.trade_count,
+                    "vwap": data.vwap,
+                }
+            )
 
-            # Update stored data
-            self._data_cache[symbol] = df
+            if not df.empty:
+                df.set_index("timestamp", inplace=True)
+                self._data_cache[symbol] = df
+                self._calculate_indicators(symbol)
 
-            # Calculate indicators
-            self._calculate_indicators(symbol)
-
-            # Notify callbacks
-            for callback in self.callbacks:
-                callback(symbol, df)
+                for callback in self.callbacks:
+                    callback(symbol, df)
 
             return df
+
         except Exception as e:
-            self.logger.error("Error getting latest data for %s: %s", symbol, e)
+            self.logger.error("Error getting latest data for %s: %s", symbol, str(e))
             return pd.DataFrame()
 
     def get_latest_price(self, symbol: str) -> Optional[float]:
         """Get the latest price for a symbol.
 
         Args:
-            symbol: The stock symbol to get the price for.
+            symbol: The stock symbol to get the price for
 
         Returns:
-            The latest price as a float, or None if the price cannot be retrieved.
+            Optional[float]: The latest price, or None if unavailable
         """
         try:
             df = self.get_historical_data(
-                symbol, timeframe="1Min", start=None, end=None
+                symbol,
+                timeframe="1Min",
+                start=datetime.now() - timedelta(minutes=5),
+                end=datetime.now(),
             )
             if not df.empty:
                 return float(df["close"].iloc[-1])
             return None
         except Exception as e:
-            print(f"Error getting latest price for {symbol}: {str(e)}")
+            self.logger.error("Error getting latest price for %s: %s", symbol, str(e))
             return None
 
     def add_callback(self, callback: Callable[[str, pd.DataFrame], None]) -> None:
@@ -173,34 +252,7 @@ class AlpacaDataFeed:
                 self.callbacks.append(callback)
                 self.logger.info("Added callback to data feed")
         except Exception as e:
-            self.logger.error(f"Error adding callback: {str(e)}")
-
-    def _calculate_indicators(self, symbol: str) -> None:
-        """Calculate technical indicators for a symbol."""
-        try:
-            if symbol not in self._data_cache or self._data_cache[symbol].empty:
-                return
-
-            df = self._data_cache[symbol]
-
-            # Calculate SMA
-            df["sma_20"] = df["close"].rolling(window=20).mean()
-            df["sma_50"] = df["close"].rolling(window=50).mean()
-
-            # Calculate RSI using pandas clip
-            delta = df["close"].diff()
-            gain = delta.clip(lower=0).rolling(window=14).mean()
-            loss = (-delta.clip(upper=0)).rolling(window=14).mean()
-            rs = gain / loss
-            df["rsi"] = 100 - (100 / (1 + rs))
-
-            # Ensure RSI values are numeric and handle NaN values
-            df["rsi"] = pd.to_numeric(df["rsi"], errors="coerce").fillna(50)
-
-            # Update stored data
-            self._data_cache[symbol] = df
-        except Exception as e:
-            self.logger.error(f"Error calculating indicators for {symbol}: {e}")
+            self.logger.error("Error adding callback: %s", str(e))
 
     def start(self) -> None:
         """Start the data feed."""
@@ -213,131 +265,163 @@ class AlpacaDataFeed:
 
     def stop(self) -> None:
         """Stop the data feed."""
-        self._running = False
-        if self._thread:
-            self._thread.join()
-            self._thread = None
-        self.logger.info("Stopped data feed")
+        if self._running:
+            self._running = False
+            if self._thread:
+                self._thread.join()
+            self.logger.info("Stopped data feed")
 
     def _run(self) -> None:
-        """Main loop for the data feed."""
+        """Run the data feed update loop."""
         while self._running:
             try:
                 for symbol in self.symbols:
                     self.get_latest_data(symbol)
-                time.sleep(1)  # Sleep for 1 second between updates
+                time.sleep(60)  # Update every minute
             except Exception as e:
-                self.logger.error(f"Error in data feed loop: {e}")
-                time.sleep(5)  # Sleep longer on error
+                self.logger.error("Error in data feed loop: %s", str(e))
+                time.sleep(5)  # Wait before retrying
 
     def get_market_status(self) -> ClockInfo:
-        """Get market status."""
+        """Get market clock information.
+
+        Returns:
+            ClockInfo: Market clock information
+        """
         try:
-            return self.client.get_clock()
+            return self.client.get_market_clock()
         except Exception as e:
-            self.logger.error(f"Error getting market status: {e}")
-            return ClockInfo(
-                is_open=False,
-                next_open=None,
-                next_close=None,
-                timestamp=None,
-            )
+            self.logger.error("Error getting market status: %s", str(e))
+            raise
 
     def get_assets(self, status: str = "active") -> List[AssetInfo]:
-        """Get list of available assets."""
+        """Get list of assets.
+
+        Args:
+            status: Asset status to filter by (default: active)
+
+        Returns:
+            List[AssetInfo]: List of assets
+        """
         try:
-            return self.client.get_assets(status)
+            assets = []
+            for symbol in self.symbols:
+                asset = self.client.get_asset(symbol)
+                if asset and asset.status == status:
+                    assets.append(asset)
+            return assets
         except Exception as e:
-            self.logger.error(f"Error getting assets: {e}")
-            return []
+            self.logger.error("Error getting assets: %s", str(e))
+            raise
 
     def get_positions(self) -> Dict[str, PositionInfo]:
-        """Get current positions."""
+        """Get current positions.
+
+        Returns:
+            Dict[str, PositionInfo]: Dictionary of positions by symbol
+        """
         try:
             positions = self.client.get_positions()
-            return {pos["symbol"]: pos for pos in positions}
+            return {p.symbol: p for p in positions}
         except Exception as e:
-            self.logger.error(f"Error getting positions: {e}")
-            return {}
+            self.logger.error("Error getting positions: %s", str(e))
+            raise
 
     def get_account(self) -> AccountInfo:
-        """Get account information."""
+        """Get account information.
+
+        Returns:
+            AccountInfo: Account information
+        """
         try:
             return self.client.get_account()
         except Exception as e:
-            self.logger.error(f"Error getting account: {e}")
-            return AccountInfo(
-                id="",
-                cash=0.0,
-                portfolio_value=0.0,
-                buying_power=0.0,
-                equity=0.0,
-                long_market_value=0.0,
-                short_market_value=0.0,
-                initial_margin=0.0,
-                maintenance_margin=0.0,
-                last_equity=0.0,
-                multiplier=1.0,
-                status="",
-                trading_blocked=False,
-                transfers_blocked=False,
-                account_blocked=False,
-                created_at=None,
-                trade_suspended_by_user=False,
-                currency="USD",
-            )
+            self.logger.error("Error getting account: %s", str(e))
+            raise
 
     def get_asset(self, symbol: str) -> Optional[AssetInfo]:
-        """Get asset information."""
+        """Get asset information.
+
+        Args:
+            symbol: Symbol to get asset info for
+
+        Returns:
+            Optional[AssetInfo]: Asset information if found
+        """
         try:
             return self.client.get_asset(symbol)
         except Exception as e:
-            self.logger.error(f"Error getting asset: {e}")
+            self.logger.error("Error getting asset %s: %s", symbol, str(e))
             return None
 
     def get_current_data(self, symbol: str) -> Dict[str, Any]:
-        """Get current data for a symbol."""
+        """Get current market data for a symbol.
+
+        Args:
+            symbol: Symbol to get data for
+
+        Returns:
+            Dict[str, Any]: Current market data
+        """
         try:
-            if symbol in self._data_cache and not self._data_cache[symbol].empty:
-                latest = self._data_cache[symbol].iloc[-1]
-                return {
-                    "symbol": symbol,
-                    "timestamp": latest.name,
-                    "open": float(latest["open"]),
-                    "high": float(latest["high"]),
-                    "low": float(latest["low"]),
-                    "close": float(latest["close"]),
-                    "volume": int(latest["volume"]),
-                    "trade_count": int(latest["trade_count"]),
-                    "vwap": float(latest["vwap"]),
-                    "sma_20": float(latest["sma_20"]),
-                    "sma_50": float(latest["sma_50"]),
-                    "rsi": float(latest["rsi"]),
-                }
-            return {}
+            df = self._data_cache.get(symbol)
+            if df is None or df.empty:
+                return {}
+
+            latest = df.iloc[-1]
+            return {
+                "timestamp": latest.name,
+                "open": float(latest["open"]),
+                "high": float(latest["high"]),
+                "low": float(latest["low"]),
+                "close": float(latest["close"]),
+                "volume": int(latest["volume"]),
+                "sma_20": float(latest.get("sma_20", 0)),
+                "sma_50": float(latest.get("sma_50", 0)),
+            }
         except Exception as e:
-            self.logger.error(f"Error getting current data for {symbol}: {e}")
+            self.logger.error("Error getting current data for %s: %s", symbol, str(e))
             return {}
+
+    def _calculate_indicators(self, symbol: str) -> None:
+        """Calculate technical indicators for a symbol.
+
+        Args:
+            symbol: Symbol to calculate indicators for
+        """
+        try:
+            if symbol not in self._data_cache or self._data_cache[symbol].empty:
+                return
+
+            df = self._data_cache[symbol]
+            df["sma_20"] = df["close"].rolling(window=20).mean()
+            df["sma_50"] = df["close"].rolling(window=50).mean()
+            self._data_cache[symbol] = df
+
+        except Exception as e:
+            self.logger.error("Error calculating indicators for %s: %s", symbol, str(e))
 
     def clear_cache(self) -> None:
         """Clear the data cache."""
         self._data_cache.clear()
 
     def update_cache(self, symbol: str, data: pd.DataFrame) -> None:
-        """Update the data cache for a symbol."""
-        try:
-            self._data_cache[symbol] = data
-            self._calculate_indicators(symbol)
-        except Exception as e:
-            self.logger.error(f"Error updating cache for {symbol}: {e}")
+        """Update the data cache for a symbol.
+
+        Args:
+            symbol: Symbol to update cache for
+            data: New data to cache
+        """
+        self._data_cache[symbol] = data
+        self._calculate_indicators(symbol)
 
 
-class MockDataFeed:
+class MockDataFeed(DataFeed):
     """Mock data feed for testing purposes."""
 
     def __init__(self) -> None:
         """Initialize the mock data feed."""
-        self._data: Dict[str, DataFrame] = {}
+        self._data: Dict[str, pd.DataFrame] = {}
         self._positions: Dict[str, Dict[str, Any]] = {}
 
     def get_historical_data(
@@ -346,7 +430,7 @@ class MockDataFeed:
         start: Optional[datetime] = None,
         end: Optional[datetime] = None,
         timeframe: str = "1Day",
-    ) -> DataFrame:
+    ) -> pd.DataFrame:
         """Get mock historical data.
 
         Args:
@@ -419,7 +503,7 @@ class MockDataFeed:
         """
         self._positions = positions.copy()
 
-    def set_historical_data(self, symbol: str, data: DataFrame) -> None:
+    def set_historical_data(self, symbol: str, data: pd.DataFrame) -> None:
         """Set mock historical data for testing.
 
         Args:

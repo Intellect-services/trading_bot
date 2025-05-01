@@ -1,12 +1,14 @@
-import logging
-from typing import Any, Dict, NoReturn
+"""Tests for Alpaca service."""
 
-from core.alpaca_service import AlpacaService
+import logging
+import unittest
+from typing import Any, Dict, NoReturn
+from unittest.mock import MagicMock, patch
+
+from src.core.alpaca_service import AlpacaService
 
 # Configure logging
-logging.basicConfig(
-    level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s"
-)
+logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s")
 logger = logging.getLogger(__name__)
 
 

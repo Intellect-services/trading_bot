@@ -162,9 +162,7 @@ class Backtest:
             if symbol in current_bar.index:
                 portfolio["value"] += position["shares"] * current_bar["close"]
 
-    def _calculate_metrics(
-        self, portfolio: Dict[str, Any], data: pd.DataFrame
-    ) -> BacktestMetrics:
+    def _calculate_metrics(self, portfolio: Dict[str, Any], data: pd.DataFrame) -> BacktestMetrics:
         """Calculate backtest performance metrics.
 
         Args:
@@ -184,9 +182,7 @@ class Backtest:
         returns_array = np.array(returns)
 
         # Calculate metrics
-        total_return = (
-            portfolio["value"] - self.initial_capital
-        ) / self.initial_capital
+        total_return = (portfolio["value"] - self.initial_capital) / self.initial_capital
         annual_return = (1 + total_return) ** (252 / len(data)) - 1
         sharpe_ratio = np.mean(returns_array) / np.std(returns_array) * np.sqrt(252)
         max_drawdown = np.min(returns_array)

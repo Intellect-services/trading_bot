@@ -1,55 +1,100 @@
 """Alpaca service for trading operations."""
 
 import logging
-import os
-from datetime import datetime, timedelta
-from typing import Any, Dict, List, Optional, Union, cast
-from uuid import UUID
+from datetime import datetime
+from typing import Any, Dict, List, Optional
 
-import pandas as pd
-from alpaca.data.enums import Adjustment
-from alpaca.data.historical import StockHistoricalDataClient
-from alpaca.data.models import BarSet
-from alpaca.data.requests import StockBarsRequest
 from alpaca.data.timeframe import TimeFrame
-from alpaca.trading.client import TradingClient
-from alpaca.trading.enums import (AssetClass, AssetStatus, OrderSide,
-                                  OrderStatus, OrderType, QueryOrderStatus,
-                                  Sort, TimeInForce)
-from alpaca.trading.models import (Asset, Calendar, Clock, Order,
-                                   PortfolioHistory, Position, TradeAccount)
-from alpaca.trading.requests import (GetAssetsRequest, GetCalendarRequest,
-                                     GetOrdersRequest, LimitOrderRequest,
-                                     MarketOrderRequest, StopOrderRequest)
+from alpaca.trading.enums import OrderSide, OrderType, QueryOrderStatus, TimeInForce
 
-from ..utils.config import get_config
 from ..utils.logger import setup_logger
-from .alpaca_client import (AccountInfo, AlpacaClient, AssetInfo, ClockInfo,
-                            HistoricalData, OrderInfo, PositionInfo)
-from .config import Config
+from .alpaca_client import (
+    AccountInfo,
+    AlpacaClient,
+    AssetInfo,
+    ClockInfo,
+    HistoricalData,
+    OrderInfo,
+    PositionInfo,
+)
 
 logger = setup_logger(__name__)
 
 
 class AlpacaService:
-    def __init__(self, config: Config) -> None:
-        self.client = AlpacaClient(config.alpaca_api_key, config.alpaca_api_secret)
-        self.logger = logger
+    """Service for interacting with Alpaca API."""
+
+    def __init__(self, config: Dict[str, Any]):
+        """Initialize the Alpaca service.
+
+        Args:
+            config: Configuration dictionary containing API credentials
+        """
+        self.client = AlpacaClient(
+            api_key=config.ALPACA_API_KEY,
+            api_secret=config.ALPACA_SECRET_KEY,
+            base_url="https://paper-api.alpaca.markets"
+            if config.ALPACA_PAPER
+            else "https://api.alpaca.markets",
+        )
+        self.logger = setup_logger(__name__)
 
     def get_account(self) -> AccountInfo:
-        return self.client.get_account()
+        """Get account information.
+
+        Returns:
+            AccountInfo: Account information
+
+        Raises:
+            Exception: If there is an error getting account information
+        """
+        try:
+            return self.client.get_account()
+        except Exception as e:
+            self.logger.error("Error getting account: %s", str(e))
+            raise
 
     def get_positions(self) -> List[PositionInfo]:
-        return self.client.get_positions()
+        """Get all positions.
+
+        Returns:
+            List[PositionInfo]: List of positions
+
+        Raises:
+            Exception: If there is an error getting positions
+        """
+        try:
+            return self.client.get_positions()
+        except Exception as e:
+            self.logger.error("Error getting positions: %s", str(e))
+            raise
 
     def get_historical_data(
         self,
         symbols: List[str],
+        timeframe: TimeFrame,
         start: datetime,
         end: datetime,
-        timeframe: TimeFrame = TimeFrame.Day,
     ) -> HistoricalData:
-        return self.client.get_historical_data(symbols, start, end, timeframe)
+        """Get historical data for symbols.
+
+        Args:
+            symbols: List of symbols to get data for
+            timeframe: Timeframe for the data
+            start: Start date
+            end: End date
+
+        Returns:
+            HistoricalData: Historical data
+
+        Raises:
+            Exception: If there is an error getting historical data
+        """
+        try:
+            return self.client.get_historical_data(symbols, timeframe, start, end)
+        except Exception as e:
+            self.logger.error("Error getting historical data: %s", str(e))
+            raise
 
     def submit_order(
         self,
@@ -61,257 +106,141 @@ class AlpacaService:
         limit_price: Optional[float] = None,
         stop_price: Optional[float] = None,
     ) -> OrderInfo:
-        return self.client.submit_order(
-            symbol=symbol,
-            qty=qty,
-            side=side,
-            type=type,
-            time_in_force=time_in_force,
-            limit_price=limit_price,
-            stop_price=stop_price,
-        )
-
-    def get_orders(self, status: Optional[str] = None) -> List[OrderInfo]:
-        return self.client.get_orders(status)
-
-    def get_market_clock(self) -> ClockInfo:
-        return self.client.get_clock()
-
-    def get_position(self, symbol: str) -> Optional[PositionInfo]:
-        return self.client.get_position(symbol)
-
-    def get_asset(self, symbol: str) -> AssetInfo:
-        return self.client.get_asset(symbol)
-
-    def cancel_order(self, order_id: str) -> bool:
-        return self.client.cancel_order(order_id)
-
-    def submit_bracket_order(
-        self,
-        symbol: str,
-        qty: float,
-        side: OrderSide,
-        take_profit_price: float,
-        stop_loss_price: float,
-        type: OrderType = OrderType.MARKET,
-        time_in_force: TimeInForce = TimeInForce.DAY,
-        limit_price: Optional[float] = None,
-    ) -> Dict[str, Any]:
-        return self.client.submit_bracket_order(
-            symbol=symbol,
-            qty=qty,
-            side=side,
-            take_profit_price=take_profit_price,
-            stop_loss_price=stop_loss_price,
-            type=type,
-            time_in_force=time_in_force,
-            limit_price=limit_price,
-        )
-
-    def get_order(self, order_id: str) -> Optional[OrderInfo]:
-        return self.client.get_order(order_id)
-
-    def get_assets(self) -> List[AssetInfo]:
-        return self.client.get_assets()
-
-    def get_portfolio_history(
-        self, period: str = "1M", timeframe: str = "1D", extended_hours: bool = False
-    ) -> Dict[str, Any]:
-        account = self.get_account()
-        current_value = float(account.get("portfolio_value", 0))
-
-        # Calculate start date based on period
-        end_date = datetime.now()
-        if period == "1D":
-            start_date = end_date - timedelta(days=1)
-        elif period == "1W":
-            start_date = end_date - timedelta(weeks=1)
-        elif period == "1M":
-            start_date = end_date - timedelta(days=30)
-        elif period == "3M":
-            start_date = end_date - timedelta(days=90)
-        elif period == "1Y":
-            start_date = end_date - timedelta(days=365)
-        else:
-            start_date = end_date - timedelta(days=30)  # Default to 1M
-
-        # Get positions
-        positions = self.get_positions()
-        symbols = [pos["symbol"] for pos in positions]
-
-        # Initialize result dictionary
-        result = {
-            "timestamp": [],
-            "equity": [],
-            "profit_loss": [],
-            "profit_loss_pct": [],
-        }
-
-        # If no positions, return empty result with current value
-        if not symbols:
-            return {
-                "timestamp": [end_date],
-                "equity": [current_value],
-                "profit_loss": [0.0],
-                "profit_loss_pct": [0.0],
-            }
-
-        # Get historical data for each position
-        portfolio_values = []
-        for symbol in symbols:
-            position = next((pos for pos in positions if pos["symbol"] == symbol), None)
-            if position:
-                qty = float(position["qty"])
-                df = self.get_historical_data([symbol], start_date, end_date)
-                if not df.empty:
-                    df["value"] = df["close"] * qty
-                    portfolio_values.append(df["value"])
-
-        if portfolio_values:
-            # Combine all position values
-            total_value = pd.concat(portfolio_values, axis=1).sum(axis=1)
-
-            # Calculate metrics
-            result["timestamp"] = total_value.index.tolist()
-            result["equity"] = total_value.values.tolist()
-            result["profit_loss"] = [v - result["equity"][0] for v in result["equity"]]
-            result["profit_loss_pct"] = [
-                (v - result["equity"][0]) / result["equity"][0] * 100
-                if result["equity"][0] != 0
-                else 0.0
-                for v in result["equity"]
-            ]
-
-        return result
-
-    def get_market_status(self) -> Dict[str, Any]:
-        """Get market status."""
-        try:
-            clock = self.client.get_clock()
-            return {
-                "is_open": clock.is_open,
-                "next_open": clock.next_open,
-                "next_close": clock.next_close,
-                "timestamp": clock.timestamp,
-            }
-        except Exception as e:
-            self.logger.error(f"Error getting market status: {e}")
-            return {
-                "is_open": False,
-                "next_open": None,
-                "next_close": None,
-                "timestamp": None,
-            }
-
-    def get_calendar(
-        self, start: Optional[datetime] = None, end: Optional[datetime] = None
-    ) -> List[Dict[str, Any]]:
-        """Get market calendar."""
-        try:
-            request = GetCalendarRequest(start=start, end=end)
-            calendar = self.client.get_calendar(request)
-            return [
-                {
-                    "date": day.date,
-                    "open": day.open,
-                    "close": day.close,
-                }
-                for day in calendar
-            ]
-        except Exception as e:
-            self.logger.error(f"Error getting calendar: {e}")
-            return []
-
-    def get_account_activities(
-        self, date: Optional[datetime] = None
-    ) -> List[Dict[str, Union[str, float, datetime, UUID, None]]]:
-        """Get account activities for a specific date.
+        """Submit an order.
 
         Args:
-            date: Optional[datetime] - The date to get activities for. If None, gets today's activities.
+            symbol: Symbol to trade
+            qty: Quantity to trade
+            side: Side of the trade (buy/sell)
+            type: Type of order (default: market)
+            time_in_force: Time in force (default: day)
+            limit_price: Limit price (optional)
+            stop_price: Stop price (optional)
 
         Returns:
-            List[Dict[str, Union[str, float, datetime, UUID, None]]]: List of activity dictionaries containing trade information
+            OrderInfo: Order information
+
+        Raises:
+            Exception: If there is an error submitting the order
         """
-        request_params = GetOrdersRequest(
-            status=QueryOrderStatus.ALL,
-            nested=True,
-            limit=500,
-            after=date.replace(hour=0, minute=0, second=0, microsecond=0)
-            if date
-            else None,
-            until=date.replace(hour=23, minute=59, second=59, microsecond=999999)
-            if date
-            else None,
-        )
-
-        orders = self.client.get_orders(filter=request_params)
-        orders = cast(List[Order], orders)  # Cast the Union type to List[Order]
-        logger.info(f"Retrieved {len(orders)} orders")
-
-        # Sort orders by timestamp in descending order
-        orders.sort(
-            key=lambda x: x.created_at if x.created_at else datetime.min, reverse=True
-        )
-
-        activities = []
-        for order in orders:
-            filled_qty = (
-                float(order.filled_qty) if order.filled_qty is not None else 0.0
-            )
-            if filled_qty > 0:
-                activity = {
-                    "timestamp": order.filled_at,
-                    "symbol": order.symbol,
-                    "side": order.side,
-                    "qty": filled_qty,
-                    "price": order.filled_avg_price
-                    if order.filled_avg_price is not None
-                    else 0.0,
-                    "order_id": order.id,
-                    "status": order.status,
-                }
-                activities.append(activity)
-
-        logger.info(f"Converted {len(activities)} orders to activities")
-        return activities
-
-    def get_portfolio_history(
-        self, period: str = "1M", timeframe: str = "1D", extended_hours: bool = False
-    ) -> Dict[str, Any]:
-        """Get portfolio history."""
         try:
-            timeframe_obj = TimeFrame(
-                1, timeframe.lower().replace("d", "Day").replace("m", "Min")
+            return self.client.place_order(
+                symbol=symbol,
+                qty=qty,
+                side=side,
+                type=type,
+                time_in_force=time_in_force,
+                limit_price=limit_price,
+                stop_price=stop_price,
             )
-            history = self.client.get_portfolio_history(
-                timeframe=timeframe_obj, period=period, extended_hours=extended_hours
-            )
-            return {
-                "timestamp": history.timestamp,
-                "equity": history.equity,
-                "profit_loss": history.profit_loss,
-                "profit_loss_pct": history.profit_loss_pct,
-                "base_value": history.base_value,
-            }
         except Exception as e:
-            self.logger.error(f"Error getting portfolio history: {e}")
-            return {}
+            self.logger.error("Error submitting order: %s", str(e))
+            raise
 
-    def get_historical_data(
-        self,
-        symbol: str,
-        start: datetime,
-        end: datetime,
-        timeframe: TimeFrame = TimeFrame.Day,
-    ) -> Dict[str, Any]:
-        """Get historical data for a specific symbol."""
+    def get_market_clock(self) -> ClockInfo:
+        """Get market clock information.
+
+        Returns:
+            ClockInfo: Market clock information
+
+        Raises:
+            Exception: If there is an error getting market clock information
+        """
         try:
-            request = StockBarsRequest(
-                symbol_or_symbols=symbol, timeframe=timeframe, start=start, end=end
-            )
-            bars = self.client.get_stock_bars(request)
-            return bars.dict() if bars else {}
+            return self.client.get_market_clock()
         except Exception as e:
-            self.logger.error(f"Error getting historical data for {symbol}: {e}")
-            return {}
+            self.logger.error("Error getting market clock: %s", str(e))
+            raise
+
+    def get_asset(self, symbol: str) -> Optional[AssetInfo]:
+        """Get asset information.
+
+        Args:
+            symbol: Symbol to get asset info for
+
+        Returns:
+            Optional[AssetInfo]: Asset information if found, None if not found
+
+        Raises:
+            Exception: If there is an error getting asset information
+        """
+        try:
+            return self.client.get_asset(symbol)
+        except Exception as e:
+            self.logger.error("Error getting asset %s: %s", symbol, str(e))
+            return None
+
+    def get_orders(
+        self, status: Optional[QueryOrderStatus] = None, limit: int = 100
+    ) -> List[OrderInfo]:
+        """Get orders.
+
+        Args:
+            status: Order status to filter by (optional)
+            limit: Maximum number of orders to return (default: 100)
+
+        Returns:
+            List[OrderInfo]: List of orders
+
+        Raises:
+            Exception: If there is an error getting orders
+        """
+        try:
+            return self.client.get_orders(status=status, limit=limit)
+        except Exception as e:
+            self.logger.error("Error getting orders: %s", str(e))
+            raise
+
+    def get_position(self, symbol: str) -> Optional[PositionInfo]:
+        """Get position for a symbol.
+
+        Args:
+            symbol: Symbol to get position for
+
+        Returns:
+            Optional[PositionInfo]: Position information if found, None if not found
+
+        Raises:
+            Exception: If there is an error getting position information
+        """
+        try:
+            return self.client.get_position(symbol)
+        except Exception as e:
+            self.logger.error("Error getting position %s: %s", symbol, str(e))
+            return None
+
+    def cancel_order(self, order_id: str) -> bool:
+        """Cancel an order.
+
+        Args:
+            order_id: Order ID to cancel
+
+        Returns:
+            bool: True if order was cancelled successfully, False otherwise
+
+        Raises:
+            Exception: If there is an error cancelling the order
+        """
+        try:
+            return self.client.cancel_order(order_id)
+        except Exception as e:
+            self.logger.error("Error cancelling order %s: %s", order_id, str(e))
+            return False
+
+    def get_order(self, order_id: str) -> Optional[OrderInfo]:
+        """Get order by ID.
+
+        Args:
+            order_id: Order ID to get
+
+        Returns:
+            Optional[OrderInfo]: Order information if found, None if not found
+
+        Raises:
+            Exception: If there is an error getting order information
+        """
+        try:
+            return self.client.get_order(order_id)
+        except Exception as e:
+            self.logger.error("Error getting order %s: %s", order_id, str(e))
+            return None
