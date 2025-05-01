@@ -6,16 +6,18 @@ import oauth
 from src import Config
 
 # Initialize configuration
-config = Config({
-    "ALPACA_API_KEY": os.getenv("ALPACA_API_KEY", ""),
-    "ALPACA_SECRET_KEY": os.getenv("ALPACA_SECRET_KEY", ""),
-    "ALPACA_PAPER": os.getenv("ALPACA_PAPER", "True").lower() == "true",
-    "INITIAL_CAPITAL": float(os.getenv("INITIAL_CAPITAL", "100000")),
-    "RISK_MAX_POSITION_SIZE": float(os.getenv("RISK_MAX_POSITION_SIZE", "0.1")),
-    "RISK_PER_TRADE": float(os.getenv("RISK_PER_TRADE", "0.01")),
-    "RISK_STOP_LOSS_PCT": float(os.getenv("RISK_STOP_LOSS_PCT", "0.02")),
-    "RISK_TAKE_PROFIT_PCT": float(os.getenv("RISK_TAKE_PROFIT_PCT", "0.04")),
-})
+config = Config(
+    {
+        "ALPACA_API_KEY": os.getenv("ALPACA_API_KEY", ""),
+        "ALPACA_SECRET_KEY": os.getenv("ALPACA_SECRET_KEY", ""),
+        "ALPACA_PAPER": os.getenv("ALPACA_PAPER", "True").lower() == "true",
+        "INITIAL_CAPITAL": float(os.getenv("INITIAL_CAPITAL", "100000")),
+        "RISK_MAX_POSITION_SIZE": float(os.getenv("RISK_MAX_POSITION_SIZE", "0.1")),
+        "RISK_PER_TRADE": float(os.getenv("RISK_PER_TRADE", "0.01")),
+        "RISK_STOP_LOSS_PCT": float(os.getenv("RISK_STOP_LOSS_PCT", "0.02")),
+        "RISK_TAKE_PROFIT_PCT": float(os.getenv("RISK_TAKE_PROFIT_PCT", "0.04")),
+    }
+)
 
 # … later, OAuth registrations …
 

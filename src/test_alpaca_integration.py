@@ -71,7 +71,11 @@ def test_alpaca_connection(alpaca_service: "AlpacaService") -> None:
 
     # Test order creation
     order = alpaca_service.submit_order(
-        symbol="AAPL", qty=1, side=OrderSide.BUY, type=OrderType.MARKET, time_in_force=TimeInForce.DAY
+        symbol="AAPL",
+        qty=1,
+        side=OrderSide.BUY,
+        type=OrderType.MARKET,
+        time_in_force=TimeInForce.DAY,
     )
     assert isinstance(order, Order)
     assert order.symbol == "AAPL"

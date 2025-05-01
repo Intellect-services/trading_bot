@@ -284,16 +284,18 @@ class AlpacaService:
             # we'll calculate it from account data and position values
             account = self.get_account()
             positions = self.get_positions()
-            
+
             # Calculate total portfolio value
             portfolio_value = float(account.portfolio_value)
-            
+
             # For now, return a simplified version
             return {
                 "timestamp": datetime.now().isoformat(),
                 "equity": portfolio_value,
                 "profit_loss": portfolio_value - float(account.last_equity),
-                "profit_loss_pct": (portfolio_value - float(account.last_equity)) / float(account.last_equity) * 100,
+                "profit_loss_pct": (portfolio_value - float(account.last_equity))
+                / float(account.last_equity)
+                * 100,
                 "base_value": float(account.last_equity),
                 "timeframe": timeframe,
             }

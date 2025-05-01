@@ -181,9 +181,7 @@ class Backtest:
             logger.error("Error updating portfolio value: %s", str(e))
             raise
 
-    def _calculate_metrics(
-        self, portfolio: Dict[str, Any], data: pd.DataFrame
-    ) -> BacktestMetrics:
+    def _calculate_metrics(self, portfolio: Dict[str, Any], data: pd.DataFrame) -> BacktestMetrics:
         """Calculate backtest performance metrics.
 
         Args:

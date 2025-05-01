@@ -11,7 +11,12 @@ from alpaca.data.timeframe import TimeFrame
 from alpaca.trading.client import TradingClient
 from alpaca.trading.enums import OrderSide, OrderType, QueryOrderStatus, TimeInForce, OrderStatus
 from alpaca.trading.models import Asset, Clock, Order, Position, TradeAccount
-from alpaca.trading.requests import MarketOrderRequest, LimitOrderRequest, StopOrderRequest, StopLimitOrderRequest
+from alpaca.trading.requests import (
+    MarketOrderRequest,
+    LimitOrderRequest,
+    StopOrderRequest,
+    StopLimitOrderRequest,
+)
 
 from ..utils.logger import setup_logger
 
@@ -428,7 +433,9 @@ class AlpacaClient:
                 )
             elif type == OrderType.STOP_LIMIT:
                 if limit_price is None or stop_price is None:
-                    raise ValueError("Both limit and stop prices are required for stop limit orders")
+                    raise ValueError(
+                        "Both limit and stop prices are required for stop limit orders"
+                    )
                 order = self.trading_client.submit_order(
                     StopLimitOrderRequest(
                         symbol=symbol,
@@ -466,8 +473,7 @@ class AlpacaClient:
             orders = cast(List[Order], self.trading_client.get_orders())
             if status is not None:
                 orders = [
-                    order for order in orders 
-                    if QueryOrderStatus(str(order.status)) == status
+                    order for order in orders if QueryOrderStatus(str(order.status)) == status
                 ]
             if limit > 0:
                 orders = orders[:limit]

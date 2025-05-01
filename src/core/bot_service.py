@@ -69,6 +69,7 @@ class BotService:
 
         # Create AlpacaService instance
         from ..core.alpaca_service import AlpacaService
+
         # Convert Config instance to dictionary for AlpacaService
         config_dict = {
             "ALPACA_API_KEY": config.ALPACA_API_KEY,

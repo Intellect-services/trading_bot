@@ -41,22 +41,21 @@ def run_backtest() -> Dict[str, Any]:
         from src.core.alpaca_client import AlpacaClient
         from src.core.alpaca_service import AlpacaService
         from src.strategies.moving_average import MovingAverageCrossover
-        
+
         alpaca_client = AlpacaClient(
             api_key=str(config.ALPACA_API_KEY),
             api_secret=str(config.ALPACA_SECRET_KEY),
-            base_url="https://paper-api.alpaca.markets" if config.ALPACA_PAPER else "https://api.alpaca.markets"
+            base_url="https://paper-api.alpaca.markets"
+            if config.ALPACA_PAPER
+            else "https://api.alpaca.markets",
         )
         alpaca_service = AlpacaService(config_data)
-        
+
         # Initialize strategy
         strategy = cast(BaseStrategy, MovingAverageCrossover(config_data))
-        
+
         # Initialize and run backtest
-        bot = TradingBot(
-            config=config,
-            strategy=strategy
-        )
+        bot = TradingBot(config=config, strategy=strategy)
 
         # Run backtest
         results = bot.backtest()
