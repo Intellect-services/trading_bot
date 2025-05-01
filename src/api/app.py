@@ -99,18 +99,21 @@ def get_portfolio_history() -> Tuple[Response, int]:
     """Get portfolio history."""
     try:
         if demo_mode:
-            return jsonify(
-                {
-                    "equity": [10000.0, 10000.0],
-                    "timestamp": [
-                        datetime.now().isoformat(),
-                        datetime.now().isoformat(),
-                    ],
-                    "profit_loss": [0, 0],
-                    "profit_loss_pct": [0, 0],
-                    "base_value": 10000.0,
-                }
-            ), 200
+            return (
+                jsonify(
+                    {
+                        "equity": [10000.0, 10000.0],
+                        "timestamp": [
+                            datetime.now().isoformat(),
+                            datetime.now().isoformat(),
+                        ],
+                        "profit_loss": [0, 0],
+                        "profit_loss_pct": [0, 0],
+                        "base_value": 10000.0,
+                    }
+                ),
+                200,
+            )
         history = alpaca_service.get_portfolio_history(period="30D", timeframe="1D")
         return jsonify(history), 200
     except Exception as e:
@@ -124,13 +127,16 @@ def get_market_status() -> Tuple[Response, int]:
     try:
         if demo_mode:
             market_open = datetime.now().hour >= 9 and datetime.now().hour < 16
-            return jsonify(
-                {
-                    "is_open": market_open,
-                    "next_open": None,
-                    "next_close": None,
-                }
-            ), 200
+            return (
+                jsonify(
+                    {
+                        "is_open": market_open,
+                        "next_open": None,
+                        "next_close": None,
+                    }
+                ),
+                200,
+            )
         status = alpaca_service.get_market_clock()
         return jsonify(status), 200
     except Exception as e:

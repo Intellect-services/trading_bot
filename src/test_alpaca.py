@@ -5,7 +5,6 @@ from typing import List, cast
 from alpaca.trading.client import TradingClient
 from alpaca.trading.models import Position, TradeAccount
 
-# Configure logging
 logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s")
 logger = logging.getLogger(__name__)
 
@@ -16,7 +15,9 @@ def test_alpaca_connection() -> None:
         # Initialize trading client
         logger.info("Initializing Alpaca trading client...")
         trading_client = TradingClient(
-            os.environ["ALPACA_API_KEY"], os.environ["ALPACA_API_SECRET"], paper=True
+            os.environ["ALPACA_API_KEY"],
+            os.environ["ALPACA_API_SECRET"],
+            paper=True,
         )
 
         # Test account information
@@ -29,7 +30,7 @@ def test_alpaca_connection() -> None:
         logger.info(f"Status: {account.status}")
 
         # Test positions
-        logger.info("\nFetching positions...")
+        logger.info("Fetching positions...")
         positions = cast(List[Position], trading_client.get_all_positions())
         if positions:
             for position in positions:
@@ -41,10 +42,9 @@ def test_alpaca_connection() -> None:
         else:
             logger.info("No positions found")
 
-        logger.info("\nAlpaca API integration test completed successfully!")
-
+        logger.info("Alpaca API integration test completed successfully!")
     except Exception as e:
-        logger.error(f"Error testing Alpaca integration: {str(e)}")
+        logger.error(f"Error testing Alpaca integration: {e}")
         raise
 
 
@@ -53,5 +53,5 @@ if __name__ == "__main__":
     os.environ["ALPACA_API_KEY"] = "test_api_key"
     os.environ["ALPACA_API_SECRET"] = "test_secret_key"
 
-    # Create AlpacaService instance
+    # Run test
     test_alpaca_connection()

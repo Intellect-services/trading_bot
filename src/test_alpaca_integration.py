@@ -40,7 +40,7 @@ def alpaca_service(mock_env_vars):
     config = {
         "ALPACA_API_KEY": os.environ["ALPACA_API_KEY"],
         "ALPACA_SECRET_KEY": os.environ["ALPACA_SECRET_KEY"],
-        "ALPACA_PAPER": os.environ["ALPACA_PAPER"] == "True"
+        "ALPACA_PAPER": os.environ["ALPACA_PAPER"] == "True",
     }
     return AlpacaService(config)
 
@@ -72,11 +72,7 @@ def test_alpaca_connection(alpaca_service):
 
     # Test order creation
     order = alpaca_service.submit_order(
-        symbol="AAPL",
-        qty=1,
-        side=OrderSide.BUY,
-        type="market",
-        time_in_force=TimeInForce.DAY
+        symbol="AAPL", qty=1, side=OrderSide.BUY, type="market", time_in_force=TimeInForce.DAY
     )
     assert isinstance(order, Order)
     assert order.symbol == "AAPL"
