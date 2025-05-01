@@ -5,8 +5,7 @@ from datetime import datetime
 from typing import Any, Callable, Dict, List, Optional, TypedDict, Union
 
 from flask import Response
-
-from .core.alpaca_types import Bar, Order, Position
+from alpaca.trading.models import Bar, Order, Position
 
 # Type aliases for route decorators
 RouteDecorator = Callable[..., Response]

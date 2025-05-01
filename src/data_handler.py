@@ -133,8 +133,11 @@ class DataHandler:
             if not end_date:
                 end_date = datetime.now()
 
+            # Convert timeframe string to TimeFrame object
+            tf = TimeFrame.Day if timeframe == "1D" else TimeFrame.Hour
+
             # Get data from Alpaca
-            data = self.client.get_historical_data([symbol], start_date, end_date, timeframe)
+            data = self.client.get_historical_data([symbol], tf, start_date, end_date)
             if isinstance(data, pd.DataFrame):
                 return data
             return pd.DataFrame()
@@ -154,7 +157,7 @@ class DataHandler:
         try:
             end = datetime.now()
             start = end - timedelta(minutes=1)
-            data = self.client.get_historical_data([symbol], start, end)
+            data = self.client.get_historical_data([symbol], TimeFrame.Minute, start, end)
             if isinstance(data, pd.DataFrame):
                 return data
             return pd.DataFrame()
@@ -224,7 +227,7 @@ class DataHandler:
             Order information if successful, None otherwise
         """
         try:
-            return self.client.submit_order(
+            return self.client.place_order(
                 symbol=symbol,
                 qty=qty,
                 side=side,

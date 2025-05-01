@@ -11,6 +11,8 @@ from alpaca.trading.client import TradingClient
 from alpaca.trading.enums import OrderSide, TimeInForce
 from alpaca.trading.models import Clock, Order, Position, TradeAccount
 from alpaca.trading.requests import MarketOrderRequest
+from core.alpaca_service import AlpacaService
+from core.types import Order, Position
 
 # Configure logging
 logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s")
@@ -21,90 +23,78 @@ if TYPE_CHECKING:
 
 
 @pytest.fixture
-def mock_env_vars() -> Generator[None, None, None]:
-    """Fixture to set up test environment variables."""
-    original_env = dict(os.environ)
+def mock_env_vars():
+    """Set up test environment variables."""
     os.environ["ALPACA_API_KEY"] = "test_api_key"
     os.environ["ALPACA_SECRET_KEY"] = "test_secret_key"
     os.environ["ALPACA_PAPER"] = "True"
     yield
-    os.environ.clear()
-    os.environ.update(original_env)
+    os.environ.pop("ALPACA_API_KEY", None)
+    os.environ.pop("ALPACA_SECRET_KEY", None)
+    os.environ.pop("ALPACA_PAPER", None)
 
 
 @pytest.fixture
-def alpaca_service(mock_env_vars: None) -> "AlpacaService":
-    """Fixture to create a test instance of AlpacaService."""
-    from src.core.alpaca_service import AlpacaService
-
+def alpaca_service(mock_env_vars):
+    """Create a test instance of AlpacaService."""
     config = {
         "ALPACA_API_KEY": os.environ["ALPACA_API_KEY"],
         "ALPACA_SECRET_KEY": os.environ["ALPACA_SECRET_KEY"],
-        "ALPACA_PAPER": os.environ["ALPACA_PAPER"].lower() == "true",
+        "ALPACA_PAPER": os.environ["ALPACA_PAPER"] == "True"
     }
     return AlpacaService(config)
 
 
-def test_alpaca_connection(alpaca_service: "AlpacaService") -> None:
-    try:
-        # Initialize trading client
-        logger.info("Initializing Alpaca trading client...")
-        trading_client = TradingClient(
-            os.environ["ALPACA_API_KEY"], os.environ["ALPACA_SECRET_KEY"], paper=True
-        )
+def test_alpaca_connection(alpaca_service):
+    """Test Alpaca API connection and basic operations."""
+    # Test account info
+    account = alpaca_service.get_account_info()
+    assert account is not None
+    assert hasattr(account, "cash")
+    assert hasattr(account, "equity")
+    assert hasattr(account, "buying_power")
 
-        # Test account information
-        logger.info("Fetching account information...")
-        account = cast(TradeAccount, trading_client.get_account())
-        logger.info(f"Account ID: {account.account_number}")
-        logger.info(f"Buying Power: ${account.buying_power}")
-        logger.info(f"Equity: ${account.equity}")
-        logger.info(f"Cash: ${account.cash}")
-        logger.info(f"Status: {account.status}")
+    # Test positions
+    positions = alpaca_service.get_positions()
+    assert isinstance(positions, list)
+    for position in positions:
+        assert isinstance(position, Position)
+        assert hasattr(position, "symbol")
+        assert hasattr(position, "qty")
+        assert hasattr(position, "avg_entry_price")
 
-        # Test positions
-        logger.info("\nFetching positions...")
-        positions = cast(list[Position], trading_client.get_all_positions())
-        if positions:
-            for position in positions:
-                logger.info(f"Symbol: {position.symbol}")
-                logger.info(f"Quantity: {position.qty}")
-                logger.info(f"Market Value: ${position.market_value}")
-                logger.info(f"Unrealized P/L: ${position.unrealized_pl}")
-                logger.info("---")
-        else:
-            logger.info("No positions found")
+    # Test market status
+    market_status = alpaca_service.get_market_status()
+    assert isinstance(market_status, dict)
+    assert "is_open" in market_status
+    assert "next_open" in market_status
+    assert "next_close" in market_status
 
-        # Test market status
-        logger.info("\nFetching market status...")
-        clock = cast(Clock, trading_client.get_clock())
-        logger.info(f"Market is {'open' if clock.is_open else 'closed'}")
-        logger.info(f"Next market open: {clock.next_open}")
-        logger.info(f"Next market close: {clock.next_close}")
+    # Test order creation
+    order = alpaca_service.submit_order(
+        symbol="AAPL",
+        qty=1,
+        side=OrderSide.BUY,
+        type="market",
+        time_in_force=TimeInForce.DAY
+    )
+    assert isinstance(order, Order)
+    assert order.symbol == "AAPL"
+    assert order.qty == 1
+    assert order.side == OrderSide.BUY
 
-        # Test order creation (paper trading)
-        logger.info("\nTesting order creation...")
-        order_data = MarketOrderRequest(
-            symbol="AAPL", qty=1, side=OrderSide.BUY, time_in_force=TimeInForce.DAY
-        )
+    # Test order cancellation
+    success = alpaca_service.cancel_order(order.id)
+    assert success is True
 
-        try:
-            order = cast(Order, trading_client.submit_order(order_data))
-            logger.info(f"Order submitted successfully: {order.id}")
-            logger.info(f"Order status: {order.status}")
-
-            # Cancel the test order
-            logger.info("\nCanceling test order...")
-            trading_client.cancel_order_by_id(order.id)
-            logger.info("Order canceled successfully")
-        except Exception as e:
-            logger.error(f"Error creating test order: {str(e)}")
-
-        logger.info("\nAlpaca API integration test completed successfully!")
-
-    except Exception as e:
-        logger.error(f"Error testing Alpaca integration: {str(e)}")
-        raise
+    # Test portfolio history
+    history = alpaca_service.get_portfolio_history()
+    assert isinstance(history, list)
+    for entry in history:
+        assert isinstance(entry, dict)
+        assert "timestamp" in entry
+        assert "equity" in entry
+        assert "profit_loss" in entry
 
 
 if __name__ == "__main__":

@@ -71,8 +71,8 @@ class Strategy:
             self.config = StrategyConfig(
                 max_position_size=config.RISK_MAX_POSITION_SIZE,
                 risk_per_trade=config.RISK_PER_TRADE,
-                stop_loss=config.RISK_STOP_LOSS,
-                take_profit=config.RISK_TAKE_PROFIT,
+                stop_loss=config.RISK_STOP_LOSS_PCT,
+                take_profit=config.RISK_TAKE_PROFIT_PCT,
             )
         elif isinstance(config, dict):
             self.config = StrategyConfig(

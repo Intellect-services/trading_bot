@@ -1,4 +1,4 @@
-"""Bot service module for managing bot lifecycle and status."""
+"""Bot service module for managing trading bot operations."""
 
 import logging
 import time
@@ -7,15 +7,13 @@ from enum import Enum, auto
 from threading import Event, Thread
 from typing import Any, Dict, List, Optional, Union
 
-from src.core.alpaca_client import AlpacaClient
-from src.core.bot import TradingBot
-from src.core.data_feed import DataFeed
-from src.core.portfolio import Portfolio
-from src.core.risk_manager import RiskManager
-from src.core.strategy import Strategy
-from src.strategies.moving_average import MovingAverageCrossover
-from src.utils.config import Config
-from src.utils.logger import setup_logger
+from ..core.alpaca_client import AlpacaClient
+from ..core.data_feed import DataFeed
+from ..core.risk_manager import RiskManager
+from ..core.strategy import Strategy
+from ..core.trading_bot import TradingBot
+from ..utils.config import Config
+from ..utils.logger import setup_logger
 
 logger = setup_logger(__name__)
 
@@ -31,261 +29,157 @@ class BotStatus(Enum):
 
 
 class BotService:
-    """Service class for managing trading bot operations."""
+    """Service for managing trading bot operations."""
 
-    def __init__(self, config: Config, alpaca_client: AlpacaClient) -> None:
+    def __init__(
+        self,
+        config: Config,
+        alpaca_client: AlpacaClient,
+        strategy: Optional[Strategy] = None,
+    ) -> None:
         """Initialize bot service.
 
         Args:
-            config: Configuration object
+            config: Configuration instance
             alpaca_client: Alpaca client instance
+            strategy: Optional strategy instance
         """
         self.config = config
-        self.portfolio = Portfolio(float(config["INITIAL_CAPITAL"]))
-        self.strategy = MovingAverageCrossover(config)
         self.alpaca_client = alpaca_client
-        self.data_feed = DataFeed(self.alpaca_client)
         self.risk_manager = RiskManager(config)
+        self.data_feed = DataFeed(config, alpaca_client)
+
+        if strategy is None:
+            from ..strategies.moving_average import MovingAverageCrossover
+
+            strategy = MovingAverageCrossover(config)
+
         self.bot = TradingBot(
             config=config,
-            strategy=self.strategy,
-            portfolio=self.portfolio,
+            strategy=strategy,
             data_feed=self.data_feed,
             risk_manager=self.risk_manager,
         )
-        self._error_count = 0
-        self.current_value: float = float(config["INITIAL_CAPITAL"])
-        self.status = BotStatus.STOPPED
-        self.error_message: Optional[str] = None
-        self._thread: Optional[Thread] = None
-        self._stop_event = Event()
-        self._last_update: Optional[datetime] = None
-        self._is_running = False
-        self._start_time: Optional[datetime] = None
-        self._runtime = 0
-        self._last_error_time: Optional[datetime] = None
-        self._max_errors = 10
-        self._error_reset_time = 300  # 5 minutes in seconds
-        self.logger = logging.getLogger(__name__)
-        self.initial_value: float = 0.0
-        self.last_value: float = 0.0
-        self.total_return: float = 0.0
-        self.daily_return: float = 0.0
-        self.total_trades: int = 0
-        self.active_positions: int = 0
+
+        self.logger = logger
         logger.info("Bot service initialized")
 
-    def start(self) -> bool:
-        """Start the bot service.
-
-        Returns:
-            True if started successfully, False otherwise
-        """
-        if self.status != BotStatus.STOPPED:
-            logger.warning(f"Bot is not in STOPPED state (current state: {self.status.name})")
-            return False
-
+    def start(self) -> None:
+        """Start the trading bot."""
         try:
-            logger.info("Starting bot service...")
-            self.status = BotStatus.STARTING
-            self._stop_event.clear()
-            self._is_running = True
-            self._start_time = datetime.now()
-            self._runtime = 0
-            self._error_count = 0
-            self._last_error_time = None
-
-            # Initialize bot
-            logger.info("Initializing bot...")
-            self.bot = TradingBot(
-                config=self.config,
-                strategy=self.strategy,
-                portfolio=self.portfolio,
-                data_feed=self.data_feed,
-                risk_manager=self.risk_manager,
-            )
-
-            # Start bot in a separate thread
-            logger.info("Starting bot thread...")
-            self._thread = Thread(target=self._run_bot, daemon=True)
-            self._thread.start()
-
-            # Wait for thread to start
-            time.sleep(1)
-            if not self._thread.is_alive():
-                raise RuntimeError("Bot thread failed to start")
-
-            self.status = BotStatus.RUNNING
-            self._last_update = datetime.now()
-            logger.info("Bot service started successfully")
-            return True
-
+            self.bot.start()
+            logger.info("Trading bot started")
         except Exception as e:
-            self.status = BotStatus.ERROR
-            self.error_message = str(e)
-            self._is_running = False
-            self._last_error_time = datetime.now()
-            self._error_count += 1
-            logger.error(f"Error starting bot: {e}")
-            return False
-
-    def stop(self) -> bool:
-        """Stop the bot service.
-
-        Returns:
-            True if stopped successfully, False otherwise
-        """
-        if self.status not in [BotStatus.RUNNING, BotStatus.ERROR]:
-            logger.warning(
-                f"Bot is not in RUNNING or ERROR state (current state: {self.status.name})"
-            )
-            return False
-
-        try:
-            logger.info("Stopping bot service...")
-            self.status = BotStatus.STOPPING
-            self._is_running = False
-            self._stop_event.set()
-
-            if self._thread and self._thread.is_alive():
-                logger.info("Waiting for bot thread to stop...")
-                self._thread.join(timeout=5)
-
-            if self.bot:
-                logger.info("Stopping bot...")
-                self.bot.stop()
-
-            self.status = BotStatus.STOPPED
-            self._last_update = datetime.now()
-            self._start_time = None
-            self._runtime = 0
-            logger.info("Bot service stopped successfully")
-            return True
-
-        except Exception as e:
-            self.status = BotStatus.ERROR
-            self.error_message = str(e)
-            self._last_error_time = datetime.now()
-            self._error_count += 1
-            logger.error(f"Error stopping bot: {e}")
-            return False
-
-    def _run_bot(self) -> None:
-        """Run the bot in a separate thread."""
-        try:
-            if not self.bot:
-                raise RuntimeError("Bot not initialized")
-
-            while self._is_running and not self._stop_event.is_set():
-                try:
-                    # Check error count and reset if needed
-                    if (
-                        self._last_error_time
-                        and (datetime.now() - self._last_error_time).total_seconds()
-                        > self._error_reset_time
-                    ):
-                        self._error_count = 0
-                        self._last_error_time = None
-
-                    # Update runtime
-                    if self._start_time:
-                        self._runtime = (datetime.now() - self._start_time).total_seconds()
-
-                    # Run one iteration
-                    self.bot._run()
-                    self._last_update = datetime.now()
-                    time.sleep(1)
-
-                except Exception as e:
-                    self._last_error_time = datetime.now()
-                    self._error_count += 1
-                    logger.error(f"Error in bot iteration: {e}")
-
-                    # Stop bot if too many errors
-                    if self._error_count >= self._max_errors:
-                        logger.error("Too many errors, stopping bot")
-                        self.status = BotStatus.ERROR
-                        self.error_message = f"Too many errors ({self._error_count})"
-                        self._is_running = False
-                        break
-
-                    time.sleep(1)
-                    continue
-
-        except Exception as e:
-            self.status = BotStatus.ERROR
-            self.error_message = str(e)
-            self._is_running = False
-            self._last_error_time = datetime.now()
-            self._error_count += 1
-            logger.error("Error in bot thread: %s", e)
-
-    def get_status(self) -> Dict[str, Any]:
-        """Get current bot status.
-
-        Returns:
-            Dictionary containing bot status information
-        """
-        runtime_str = "00:00:00"
-        if self._start_time:
-            total_seconds = int(self._runtime)
-            hours = total_seconds // 3600
-            minutes = (total_seconds % 3600) // 60
-            seconds = total_seconds % 60
-            runtime_str = f"{hours:02d}:{minutes:02d}:{seconds:02d}"
-
-        positions = self.alpaca_client.get_positions()
-        return {
-            "status": self.status.name,
-            "error_message": self.error_message,
-            "last_update": self._last_update.isoformat() if self._last_update else None,
-            "runtime": runtime_str,
-            "symbols": [position.symbol for position in positions],
-            "initial_capital": float(self.config["INITIAL_CAPITAL"]),
-            "current_capital": self.current_value,
-            "active_positions": len(positions),
-            "error_count": self._error_count,
-            "last_error_time": self._last_error_time.isoformat() if self._last_error_time else None,
-            "start_time": self._start_time.isoformat() if self._start_time else None,
-        }
-
-    def get_current_balance(self) -> float:
-        """Get current portfolio balance.
-
-        Returns:
-            Current balance
-        """
-        return self.current_value
-
-    def update_metrics(self) -> None:
-        """Update bot metrics."""
-        try:
-            # Get current account value
-            account = self.alpaca_client.get_account()
-            current_value = float(account.get("equity", 0))
-
-            # Calculate returns
-            if self.initial_value > 0:
-                self.total_return = (current_value - self.initial_value) / self.initial_value
-                self.daily_return = (
-                    (current_value - self.last_value) / self.last_value
-                    if self.last_value > 0
-                    else 0.0
-                )
-
-            # Update values
-            self.last_value = current_value
-            self.current_value = current_value
-            self.total_trades = len(self.alpaca_client.get_all_positions())
-            self.active_positions = len(self.alpaca_client.get_all_positions())
-
-            # Log metrics
-            logger.info(
-                f"Metrics updated - Current Value: ${current_value:.2f}, "
-                f"Total Return: {self.total_return * 100:.2f}%, "
-                f"Daily Return: {self.daily_return * 100:.2f}%, "
-                f"Active Positions: {self.active_positions}"
-            )
-        except Exception as e:
-            logger.error(f"Error updating metrics: {e}")
+            logger.error("Error starting trading bot: %s", str(e))
             raise
+
+    def stop(self) -> None:
+        """Stop the trading bot."""
+        try:
+            self.bot.stop()
+            logger.info("Trading bot stopped")
+        except Exception as e:
+            logger.error("Error stopping trading bot: %s", str(e))
+            raise
+
+    def get_status(self) -> Dict[str, Union[str, float, int, bool]]:
+        """Get the current status of the trading bot.
+
+        Returns:
+            Dict[str, Union[str, float, int, bool]]: Bot status information
+        """
+        try:
+            account = self.alpaca_client.get_account()
+            positions = self.alpaca_client.get_positions()
+
+            return {
+                "status": "running" if self.bot.is_running else "stopped",
+                "initial_capital": float(self.config.INITIAL_CAPITAL),
+                "current_capital": float(account.equity),
+                "active_positions": len(positions),
+                "total_trades": len(self.bot.trades),
+                "last_update": datetime.now().isoformat(),
+            }
+        except Exception as e:
+            logger.error("Error getting bot status: %s", str(e))
+            return {
+                "status": "error",
+                "error": str(e),
+            }
+
+    def get_positions(self) -> List[Dict[str, Union[str, float]]]:
+        """Get current positions.
+
+        Returns:
+            List[Dict[str, Union[str, float]]]: List of positions
+        """
+        try:
+            positions = self.alpaca_client.get_positions()
+            return [
+                {
+                    "symbol": position.symbol,
+                    "quantity": float(position.qty),
+                    "avg_price": float(position.avg_entry_price),
+                    "current_price": float(position.current_price),
+                    "market_value": float(position.market_value),
+                    "unrealized_pl": float(position.unrealized_pl),
+                    "unrealized_plpc": float(position.unrealized_plpc),
+                }
+                for position in positions
+            ]
+        except Exception as e:
+            logger.error("Error getting positions: %s", str(e))
+            return []
+
+    def get_trades(self) -> List[Dict[str, Union[str, float, datetime]]]:
+        """Get executed trades.
+
+        Returns:
+            List[Dict[str, Union[str, float, datetime]]]: List of trades
+        """
+        try:
+            return [
+                {
+                    "timestamp": trade.timestamp,
+                    "symbol": trade.symbol,
+                    "quantity": float(trade.quantity),
+                    "price": float(trade.price),
+                    "side": trade.side,
+                }
+                for trade in self.bot.trades
+            ]
+        except Exception as e:
+            logger.error("Error getting trades: %s", str(e))
+            return []
+
+    def get_portfolio_history(
+        self, timeframe: str = "1D"
+    ) -> Dict[str, Union[List[datetime], List[float], str]]:
+        """Get portfolio history.
+
+        Args:
+            timeframe: Timeframe for history (default: "1D")
+
+        Returns:
+            Dict[str, Union[List[datetime], List[float], str]]: Portfolio history
+        """
+        try:
+            history = self.alpaca_client.get_portfolio_history(timeframe=timeframe)
+            return {
+                "timestamp": history.timestamp,
+                "equity": history.equity,
+                "profit_loss": history.profit_loss,
+                "profit_loss_pct": history.profit_loss_pct,
+                "base_value": float(history.base_value),
+                "timeframe": timeframe,
+            }
+        except Exception as e:
+            logger.error("Error getting portfolio history: %s", str(e))
+            return {
+                "timestamp": [],
+                "equity": [],
+                "profit_loss": [],
+                "profit_loss_pct": [],
+                "base_value": 0.0,
+                "timeframe": timeframe,
+            }

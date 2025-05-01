@@ -12,43 +12,61 @@ from authlib.integrations.flask_client import OAuth
 from flask import Flask, redirect, render_template, request, session, url_for
 from flask_socketio import SocketIO
 from werkzeug.wrappers.response import Response as WerkzeugResponse
+from flask_cors import CORS
 
+from .core.alpaca_client import AlpacaClient
 from .core.alpaca_service import AlpacaService
 from .core.bot_service import BotService
 from .core.trading_bot import TradingBot
 from .strategies.moving_average import MovingAverageCrossover
 from .utils.config import Config
+from .utils.logger import setup_logger
 
 # Configure logging
-logging.basicConfig(level=logging.DEBUG)
-logger = logging.getLogger(__name__)
+logger = setup_logger(__name__)
 
 # Initialize Flask app
 app = Flask(__name__)
+CORS(app)
 app.secret_key = os.getenv("FLASK_SECRET_KEY", "your-secret-key")
 socketio = SocketIO(app, cors_allowed_origins="*")
 
 # Initialize configuration
-config_data = {
-    "ALPACA_API_KEY": os.getenv("ALPACA_API_KEY", ""),
-    "ALPACA_SECRET_KEY": os.getenv("ALPACA_SECRET_KEY", ""),
-    "ALPACA_PAPER": os.getenv("ALPACA_PAPER", "True").lower() == "true",
-    "RISK_MAX_POSITION_SIZE": float(os.getenv("RISK_MAX_POSITION_SIZE", "0.1")),
-    "RISK_PER_TRADE": float(os.getenv("RISK_PER_TRADE", "0.01")),
-    "RISK_STOP_LOSS": float(os.getenv("RISK_STOP_LOSS", "0.02")),
-    "RISK_TAKE_PROFIT": float(os.getenv("RISK_TAKE_PROFIT", "0.04")),
-}
-config = Config(config_data)
+config = Config(
+    ALPACA_API_KEY=os.getenv("ALPACA_API_KEY", ""),
+    ALPACA_SECRET_KEY=os.getenv("ALPACA_SECRET_KEY", ""),
+    ALPACA_PAPER=os.getenv("ALPACA_PAPER", "True").lower() == "true",
+    INITIAL_CAPITAL=float(os.getenv("INITIAL_CAPITAL", "100000")),
+    RISK_MAX_POSITION_SIZE=float(os.getenv("RISK_MAX_POSITION_SIZE", "0.1")),
+    RISK_PER_TRADE=float(os.getenv("RISK_PER_TRADE", "0.01")),
+    RISK_STOP_LOSS_PCT=float(os.getenv("RISK_STOP_LOSS_PCT", "0.02")),
+    RISK_TAKE_PROFIT_PCT=float(os.getenv("RISK_TAKE_PROFIT_PCT", "0.04")),
+)
 
 # Initialize services
 try:
-    alpaca_service = AlpacaService(config_data)
-    bot_service = BotService(config)
+    alpaca_client = AlpacaClient(
+        api_key=config.ALPACA_API_KEY,
+        api_secret=config.ALPACA_SECRET_KEY,
+        base_url="https://paper-api.alpaca.markets"
+        if config.ALPACA_PAPER
+        else "https://api.alpaca.markets",
+    )
+    alpaca_service = AlpacaService(
+        {
+            "ALPACA_API_KEY": config.ALPACA_API_KEY,
+            "ALPACA_SECRET_KEY": config.ALPACA_SECRET_KEY,
+            "ALPACA_PAPER": config.ALPACA_PAPER,
+        }
+    )
+    bot_service = BotService(config, alpaca_client)
     logger.info("Successfully initialized AlpacaService and BotService")
 except Exception as e:
-    logger.error(f"Failed to initialize services: {e}")
+    logger.error("Error initializing services: %s", str(e))
     # Initialize in demo mode if services fail
     demo_mode = True
+    alpaca_service = None
+    bot_service = None
     logger.info("Running in demo mode")
 else:
     demo_mode = False
@@ -297,6 +315,115 @@ def handle_connect() -> None:
 def handle_disconnect() -> None:
     """Handle WebSocket disconnection."""
     logger.info("Client disconnected")
+
+
+@app.route("/api/status", methods=["GET"])
+def get_status_api() -> Dict[str, str]:
+    """Get bot status.
+
+    Returns:
+        Dict[str, str]: JSON response with bot status
+    """
+    try:
+        if bot_service is None:
+            return {"status": "error", "error": "Bot service not initialized"}, 500
+
+        status = bot_service.get_status()
+        return status, 200
+    except Exception as e:
+        logger.error("Error getting status: %s", str(e))
+        return {"status": "error", "error": str(e)}, 500
+
+
+@app.route("/api/start", methods=["POST"])
+def start_bot_api() -> Dict[str, str]:
+    """Start the trading bot.
+
+    Returns:
+        Dict[str, str]: JSON response with start status
+    """
+    try:
+        if bot_service is None:
+            return {"status": "error", "error": "Bot service not initialized"}, 500
+
+        bot_service.start()
+        return {"status": "success"}, 200
+    except Exception as e:
+        logger.error("Error starting bot: %s", str(e))
+        return {"status": "error", "error": str(e)}, 500
+
+
+@app.route("/api/stop", methods=["POST"])
+def stop_bot_api() -> Dict[str, str]:
+    """Stop the trading bot.
+
+    Returns:
+        Dict[str, str]: JSON response with stop status
+    """
+    try:
+        if bot_service is None:
+            return {"status": "error", "error": "Bot service not initialized"}, 500
+
+        bot_service.stop()
+        return {"status": "success"}, 200
+    except Exception as e:
+        logger.error("Error stopping bot: %s", str(e))
+        return {"status": "error", "error": str(e)}, 500
+
+
+@app.route("/api/positions", methods=["GET"])
+def get_positions_api() -> Dict[str, List[Dict[str, Union[str, float]]]]:
+    """Get current positions.
+
+    Returns:
+        Dict[str, List[Dict[str, Union[str, float]]]]: JSON response with positions
+    """
+    try:
+        if bot_service is None:
+            return {"status": "error", "error": "Bot service not initialized"}, 500
+
+        positions = bot_service.get_positions()
+        return {"positions": positions}, 200
+    except Exception as e:
+        logger.error("Error getting positions: %s", str(e))
+        return {"status": "error", "error": str(e)}, 500
+
+
+@app.route("/api/portfolio/history", methods=["GET"])
+def get_portfolio_history() -> Dict[str, List[Dict[str, Union[str, float]]]]:
+    """Get portfolio history.
+
+    Returns:
+        Dict[str, List[Dict[str, Union[str, float]]]]: JSON response with portfolio history
+    """
+    try:
+        if bot_service is None:
+            return {"status": "error", "error": "Bot service not initialized"}, 500
+
+        timeframe = request.args.get("timeframe", "1D")
+        history = bot_service.get_portfolio_history(timeframe)
+        return {"history": history}, 200
+    except Exception as e:
+        logger.error("Error getting portfolio history: %s", str(e))
+        return {"status": "error", "error": str(e)}, 500
+
+
+@app.route("/api/market/status", methods=["GET"])
+def get_market_status_api() -> Dict[str, bool]:
+    """Get market status.
+
+    Returns:
+        Dict[str, bool]: JSON response with market status
+    """
+    try:
+        if alpaca_service is None:
+            return {"status": "error", "error": "Alpaca service not initialized"}, 500
+
+        status = alpaca_service.get_market_status()
+        return {"is_open": status}, 200
+    except Exception as e:
+        logger.error("Error getting market status: %s", str(e))
+        return {"status": "error", "error": str(e)}, 500
 
 
 if __name__ == "__main__":
