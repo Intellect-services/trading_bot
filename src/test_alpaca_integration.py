@@ -3,12 +3,12 @@
 # Standard library imports
 import logging
 import os
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Generator
 
 # Third-party imports
 import pytest
-from alpaca.trading.enums import OrderSide, TimeInForce
-from alpaca.trading.models import Order, Position
+from alpaca.trading.enums import OrderSide, TimeInForce, OrderType
+from alpaca.trading.models import Order as AlpacaOrder, Position as AlpacaPosition
 
 # Local imports
 from core.types import Order, Position
@@ -22,7 +22,7 @@ if TYPE_CHECKING:
 
 
 @pytest.fixture
-def mock_env_vars():
+def mock_env_vars() -> Generator[None, None, None]:
     """Set up test environment variables."""
     os.environ["ALPACA_API_KEY"] = "test_api_key"
     os.environ["ALPACA_SECRET_KEY"] = "test_secret_key"
@@ -34,7 +34,7 @@ def mock_env_vars():
 
 
 @pytest.fixture
-def alpaca_service(mock_env_vars):
+def alpaca_service(mock_env_vars: Generator[None, None, None]) -> "AlpacaService":
     """Create a test instance of AlpacaService."""
     config = {
         "ALPACA_API_KEY": os.environ["ALPACA_API_KEY"],
@@ -44,10 +44,10 @@ def alpaca_service(mock_env_vars):
     return AlpacaService(config)
 
 
-def test_alpaca_connection(alpaca_service):
+def test_alpaca_connection(alpaca_service: "AlpacaService") -> None:
     """Test Alpaca API connection and basic operations."""
     # Test account info
-    account = alpaca_service.get_account_info()
+    account = alpaca_service.get_account()
     assert account is not None
     assert hasattr(account, "cash")
     assert hasattr(account, "equity")
@@ -71,7 +71,7 @@ def test_alpaca_connection(alpaca_service):
 
     # Test order creation
     order = alpaca_service.submit_order(
-        symbol="AAPL", qty=1, side=OrderSide.BUY, type="market", time_in_force=TimeInForce.DAY
+        symbol="AAPL", qty=1, side=OrderSide.BUY, type=OrderType.MARKET, time_in_force=TimeInForce.DAY
     )
     assert isinstance(order, Order)
     assert order.symbol == "AAPL"
@@ -84,12 +84,10 @@ def test_alpaca_connection(alpaca_service):
 
     # Test portfolio history
     history = alpaca_service.get_portfolio_history()
-    assert isinstance(history, list)
-    for entry in history:
-        assert isinstance(entry, dict)
-        assert "timestamp" in entry
-        assert "equity" in entry
-        assert "profit_loss" in entry
+    assert isinstance(history, dict)
+    assert "timestamp" in history
+    assert "equity" in history
+    assert "profit_loss" in history
 
 
 if __name__ == "__main__":

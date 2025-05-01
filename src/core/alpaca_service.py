@@ -244,3 +244,59 @@ class AlpacaService:
         except Exception as e:
             self.logger.error("Error getting order %s: %s", order_id, str(e))
             return None
+
+    def get_market_status(self) -> ClockInfo:
+        """Get market status.
+
+        Returns:
+            ClockInfo: Market clock information
+
+        Raises:
+            Exception: If there is an error getting market status
+        """
+        try:
+            return self.client.get_market_clock()
+        except Exception as e:
+            self.logger.error("Error getting market status: %s", str(e))
+            raise
+
+    def get_portfolio_history(
+        self,
+        period: str = "1M",
+        timeframe: str = "1D",
+        extended_hours: bool = False,
+    ) -> Dict[str, Any]:
+        """Get portfolio history.
+
+        Args:
+            period: Time period to get history for (default: 1M)
+            timeframe: Time frame for data points (default: 1D)
+            extended_hours: Whether to include extended hours (default: False)
+
+        Returns:
+            Dict[str, Any]: Portfolio history data
+
+        Raises:
+            Exception: If there is an error getting portfolio history
+        """
+        try:
+            # Since Alpaca's Python SDK doesn't provide a direct method for portfolio history,
+            # we'll calculate it from account data and position values
+            account = self.get_account()
+            positions = self.get_positions()
+            
+            # Calculate total portfolio value
+            portfolio_value = float(account.portfolio_value)
+            
+            # For now, return a simplified version
+            return {
+                "timestamp": datetime.now().isoformat(),
+                "equity": portfolio_value,
+                "profit_loss": portfolio_value - float(account.last_equity),
+                "profit_loss_pct": (portfolio_value - float(account.last_equity)) / float(account.last_equity) * 100,
+                "base_value": float(account.last_equity),
+                "timeframe": timeframe,
+            }
+        except Exception as e:
+            self.logger.error("Error getting portfolio history: %s", str(e))
+            raise

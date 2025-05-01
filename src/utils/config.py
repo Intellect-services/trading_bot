@@ -130,6 +130,7 @@ class Config:
         self.INITIAL_CAPITAL = float(config_data.get("INITIAL_CAPITAL", 100000.0))
         self.RISK_MAX_POSITION_SIZE = float(config_data.get("RISK_MAX_POSITION_SIZE", 0.1))
         self.RISK_STOP_LOSS_PCT = float(config_data.get("RISK_STOP_LOSS_PCT", 0.02))
+        self.RISK_TAKE_PROFIT_PCT = float(config_data.get("RISK_TAKE_PROFIT_PCT", 0.04))
         self.RISK_MAX_DRAWDOWN = float(config_data.get("RISK_MAX_DRAWDOWN", 0.1))
         self.RISK_MAX_LEVERAGE = float(config_data.get("RISK_MAX_LEVERAGE", 1.0))
         self.RISK_PER_TRADE = float(config_data.get("RISK_PER_TRADE", 0.01))

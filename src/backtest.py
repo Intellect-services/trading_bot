@@ -2,7 +2,7 @@
 
 import json
 from datetime import datetime
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List, Optional, cast
 
 import pandas as pd
 
@@ -12,6 +12,7 @@ from src.core.data_feed import MockDataFeed
 from src.core.portfolio import Portfolio
 from src.core.risk_manager import RiskManager
 from src.core.strategy import Strategy
+from src.strategies.base import BaseStrategy
 from src.utils.config import Config
 from src.utils.logger import setup_logger
 
@@ -25,10 +26,11 @@ def run_backtest() -> Dict[str, Any]:
         config_data = {
             "RISK_MAX_POSITION_SIZE": 0.1,
             "RISK_STOP_LOSS_PCT": 0.02,
+            "RISK_TAKE_PROFIT_PCT": 0.04,
             "RISK_MAX_DRAWDOWN": 0.1,
             "RISK_MAX_LEVERAGE": 2.0,
             "RISK_PER_TRADE": 0.01,
-            "INITIAL_BALANCE": 10000.0,
+            "INITIAL_CAPITAL": 10000.0,
             "ALPACA_API_KEY": "",
             "ALPACA_SECRET_KEY": "",
             "ALPACA_PAPER": True,
@@ -36,32 +38,28 @@ def run_backtest() -> Dict[str, Any]:
         config = Config(config_data)
 
         # Initialize components
-        risk_manager = RiskManager(
-            {
-                "max_position_size": config_data["RISK_MAX_POSITION_SIZE"],
-                "stop_loss": config_data["RISK_STOP_LOSS_PCT"],
-                "take_profit": config_data["RISK_STOP_LOSS_PCT"]
-                * 2,  # Use 2x stop loss as take profit
-                "max_drawdown": config_data["RISK_MAX_DRAWDOWN"],
-                "max_leverage": config_data["RISK_MAX_LEVERAGE"],
-                "risk_per_trade": config_data["RISK_PER_TRADE"],
-            }
+        from src.core.alpaca_client import AlpacaClient
+        from src.core.alpaca_service import AlpacaService
+        from src.strategies.moving_average import MovingAverageCrossover
+        
+        alpaca_client = AlpacaClient(
+            api_key=str(config.ALPACA_API_KEY),
+            api_secret=str(config.ALPACA_SECRET_KEY),
+            base_url="https://paper-api.alpaca.markets" if config.ALPACA_PAPER else "https://api.alpaca.markets"
         )
-
-        portfolio = Portfolio(float(config_data["INITIAL_BALANCE"]))
-        data_feed = MockDataFeed()
-        strategy = Strategy(config_data)
-
+        alpaca_service = AlpacaService(config_data)
+        
+        # Initialize strategy
+        strategy = cast(BaseStrategy, MovingAverageCrossover(config_data))
+        
         # Initialize and run backtest
         bot = TradingBot(
-            strategy=strategy,
-            risk_manager=risk_manager,
-            portfolio=portfolio,
-            data_feed=data_feed,
+            config=config,
+            strategy=strategy
         )
 
         # Run backtest
-        results = bot.run_backtest()
+        results = bot.backtest()
 
         # Save results
         save_results(results)

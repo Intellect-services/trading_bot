@@ -3,13 +3,15 @@
 import logging
 import os
 from datetime import datetime
-from typing import Optional, Tuple
+from typing import Optional, Tuple, cast
 
 from flask import Flask, Response, jsonify
 from flask_cors import CORS
 
 from ..core.alpaca_service import AlpacaService
-from ..core.trading_bot import TradingBot
+from ..core.bot import TradingBot
+from ..strategies.base import BaseStrategy
+from ..strategies.moving_average import MovingAverageCrossover
 from ..utils.config import Config
 from ..utils.logger import setup_logger
 
@@ -35,7 +37,8 @@ config = Config(config_data)
 # Initialize services
 try:
     alpaca_service = AlpacaService(config_data)
-    trading_bot = TradingBot(alpaca_service)
+    strategy = cast(BaseStrategy, MovingAverageCrossover(config_data))
+    trading_bot = TradingBot(config=config, strategy=strategy)
     logger.info("Successfully initialized AlpacaService and TradingBot")
 except Exception as e:
     logger.error(f"Failed to initialize services: {e}")

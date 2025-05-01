@@ -33,7 +33,7 @@ def main() -> None:
         config = Config(config_data)
 
         # Initialize services
-        alpaca_service = AlpacaService()
+        alpaca_service = AlpacaService(config_data)
         trading_bot = TradingBot(alpaca_service)
 
         # Start bot

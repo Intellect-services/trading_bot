@@ -4,7 +4,6 @@ from dataclasses import dataclass
 from datetime import datetime
 from typing import Any, Callable, Dict, List, Optional, TypedDict, Union
 
-from alpaca.trading.models import Bar
 from flask import Response
 
 # Type aliases for route decorators
@@ -69,7 +68,7 @@ class MarketStatus(TypedDict):
 
 
 @dataclass
-class Bar:
+class PriceBar:
     """Represents a price bar."""
 
     timestamp: datetime

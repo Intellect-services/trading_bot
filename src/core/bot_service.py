@@ -5,10 +5,10 @@ import time
 from datetime import datetime, timedelta
 from enum import Enum, auto
 from threading import Event, Thread
-from typing import Any, Dict, List, Optional, Union
+from typing import Any, Dict, List, Optional, Union, cast
 
 from ..core.alpaca_client import AlpacaClient
-from ..core.data_feed import DataFeed
+from ..core.data_feed import AlpacaDataFeed
 from ..core.risk_manager import RiskManager
 from ..core.strategy import Strategy
 from ..core.trading_bot import TradingBot
@@ -47,25 +47,54 @@ class BotService:
         self.config = config
         self.alpaca_client = alpaca_client
         self.risk_manager = RiskManager(config)
-        self.data_feed = DataFeed(config, alpaca_client)
+        self.data_feed = AlpacaDataFeed(alpaca_client)
 
         if strategy is None:
             from ..strategies.moving_average import MovingAverageCrossover
 
-            strategy = MovingAverageCrossover(config)
+            # Convert Config instance to dictionary
+            config_dict = {
+                "ALPACA_API_KEY": config.ALPACA_API_KEY,
+                "ALPACA_SECRET_KEY": config.ALPACA_SECRET_KEY,
+                "ALPACA_PAPER": config.ALPACA_PAPER,
+                "INITIAL_CAPITAL": config.INITIAL_CAPITAL,
+                "RISK_MAX_POSITION_SIZE": config.RISK_MAX_POSITION_SIZE,
+                "RISK_STOP_LOSS_PCT": config.RISK_STOP_LOSS_PCT,
+                "RISK_TAKE_PROFIT_PCT": config.RISK_TAKE_PROFIT_PCT,
+                "RISK_MAX_DRAWDOWN": config.RISK_MAX_DRAWDOWN,
+                "RISK_MAX_LEVERAGE": config.RISK_MAX_LEVERAGE,
+                "RISK_PER_TRADE": config.RISK_PER_TRADE,
+            }
+            strategy = MovingAverageCrossover(config_dict)
 
-        self.bot = TradingBot(
-            config=config,
-            strategy=strategy,
-            data_feed=self.data_feed,
-            risk_manager=self.risk_manager,
-        )
+        # Create AlpacaService instance
+        from ..core.alpaca_service import AlpacaService
+        # Convert Config instance to dictionary for AlpacaService
+        config_dict = {
+            "ALPACA_API_KEY": config.ALPACA_API_KEY,
+            "ALPACA_SECRET_KEY": config.ALPACA_SECRET_KEY,
+            "ALPACA_PAPER": config.ALPACA_PAPER,
+            "INITIAL_CAPITAL": config.INITIAL_CAPITAL,
+            "RISK_MAX_POSITION_SIZE": config.RISK_MAX_POSITION_SIZE,
+            "RISK_STOP_LOSS_PCT": config.RISK_STOP_LOSS_PCT,
+            "RISK_TAKE_PROFIT_PCT": config.RISK_TAKE_PROFIT_PCT,
+            "RISK_MAX_DRAWDOWN": config.RISK_MAX_DRAWDOWN,
+            "RISK_MAX_LEVERAGE": config.RISK_MAX_LEVERAGE,
+            "RISK_PER_TRADE": config.RISK_PER_TRADE,
+        }
+        self.alpaca_service = AlpacaService(config_dict)
 
-        self.logger = logger
+        # Initialize TradingBot with AlpacaService
+        self.bot = TradingBot(alpaca_service=self.alpaca_service)
+
         logger.info("Bot service initialized")
 
     def start(self) -> None:
-        """Start the trading bot."""
+        """Start the trading bot.
+
+        Raises:
+            Exception: If bot fails to start
+        """
         try:
             self.bot.start()
             logger.info("Trading bot started")
@@ -74,7 +103,11 @@ class BotService:
             raise
 
     def stop(self) -> None:
-        """Stop the trading bot."""
+        """Stop the trading bot.
+
+        Raises:
+            Exception: If bot fails to stop
+        """
         try:
             self.bot.stop()
             logger.info("Trading bot stopped")
@@ -87,6 +120,9 @@ class BotService:
 
         Returns:
             Dict[str, Union[str, float, int, bool]]: Bot status information
+
+        Raises:
+            Exception: If status retrieval fails
         """
         try:
             account = self.alpaca_client.get_account()
@@ -97,29 +133,29 @@ class BotService:
                 "initial_capital": float(self.config.INITIAL_CAPITAL),
                 "current_capital": float(account.equity),
                 "active_positions": len(positions),
-                "total_trades": len(self.bot.trades),
-                "last_update": datetime.now().isoformat(),
+                "total_trades": len(self.bot.trades) if hasattr(self.bot, "trades") else 0,
             }
         except Exception as e:
             logger.error("Error getting bot status: %s", str(e))
-            return {
-                "status": "error",
-                "error": str(e),
-            }
+            raise
 
     def get_positions(self) -> List[Dict[str, Union[str, float]]]:
         """Get current positions.
 
         Returns:
             List[Dict[str, Union[str, float]]]: List of positions
+
+        Raises:
+            Exception: If position retrieval fails
         """
         try:
             positions = self.alpaca_client.get_positions()
             return [
                 {
                     "symbol": position.symbol,
-                    "quantity": float(position.qty),
-                    "avg_price": float(position.avg_entry_price),
+                    "qty": float(position.qty),
+                    "side": position.side,
+                    "avg_entry_price": float(position.avg_entry_price),
                     "current_price": float(position.current_price),
                     "market_value": float(position.market_value),
                     "unrealized_pl": float(position.unrealized_pl),
@@ -129,28 +165,34 @@ class BotService:
             ]
         except Exception as e:
             logger.error("Error getting positions: %s", str(e))
-            return []
+            raise
 
     def get_trades(self) -> List[Dict[str, Union[str, float, datetime]]]:
-        """Get executed trades.
+        """Get trade history.
 
         Returns:
             List[Dict[str, Union[str, float, datetime]]]: List of trades
+
+        Raises:
+            Exception: If trade history retrieval fails
         """
         try:
+            if not hasattr(self.bot, "trades"):
+                return []
+            trades = self.bot.trades
             return [
                 {
-                    "timestamp": trade.timestamp,
                     "symbol": trade.symbol,
-                    "quantity": float(trade.quantity),
-                    "price": float(trade.price),
+                    "qty": float(trade.qty),
                     "side": trade.side,
+                    "price": float(trade.price),
+                    "timestamp": trade.timestamp,
                 }
-                for trade in self.bot.trades
+                for trade in trades
             ]
         except Exception as e:
             logger.error("Error getting trades: %s", str(e))
-            return []
+            raise
 
     def get_portfolio_history(
         self, timeframe: str = "1D"
@@ -162,24 +204,30 @@ class BotService:
 
         Returns:
             Dict[str, Union[List[datetime], List[float], str]]: Portfolio history
+
+        Raises:
+            Exception: If portfolio history retrieval fails
         """
         try:
-            history = self.alpaca_client.get_portfolio_history(timeframe=timeframe)
+            end = datetime.now()
+            start = end - timedelta(days=30)  # Default to 30 days
+
+            if timeframe == "1D":
+                start = end - timedelta(days=30)
+            elif timeframe == "1W":
+                start = end - timedelta(weeks=12)
+            elif timeframe == "1M":
+                start = end - timedelta(days=365)
+
+            account = self.alpaca_client.get_account()
+            equity = float(account.equity)
+            initial_capital = float(self.config.INITIAL_CAPITAL)
+
             return {
-                "timestamp": history.timestamp,
-                "equity": history.equity,
-                "profit_loss": history.profit_loss,
-                "profit_loss_pct": history.profit_loss_pct,
-                "base_value": float(history.base_value),
+                "timestamp": [end],
+                "equity": [equity],
                 "timeframe": timeframe,
             }
         except Exception as e:
             logger.error("Error getting portfolio history: %s", str(e))
-            return {
-                "timestamp": [],
-                "equity": [],
-                "profit_loss": [],
-                "profit_loss_pct": [],
-                "base_value": 0.0,
-                "timeframe": timeframe,
-            }
+            raise

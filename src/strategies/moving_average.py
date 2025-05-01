@@ -8,6 +8,7 @@ import pandas as pd
 from pandas import DataFrame, Series
 
 from src.core.strategy import Strategy
+from src.utils.config import Config
 from src.utils.logger import setup_logger
 
 logger = setup_logger(__name__)
@@ -35,7 +36,9 @@ class MovingAverageCrossover(Strategy):
             rsi_overbought: RSI overbought threshold
             rsi_oversold: RSI oversold threshold
         """
-        super().__init__(config)
+        # Convert dictionary to Config instance
+        config_instance = Config.from_dict(config)
+        super().__init__(config_instance)
         self.short_window = short_window
         self.long_window = long_window
         self.lookback = max(short_window, long_window) * 2  # Ensure enough data for calculations

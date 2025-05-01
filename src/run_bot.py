@@ -38,7 +38,7 @@ def run_bot(config_data: Optional[Dict[str, Any]] = None) -> None:
         config = Config(config_data)
 
         # Initialize services
-        alpaca_service = AlpacaService()
+        alpaca_service = AlpacaService(config_data)
         trading_bot = TradingBot(alpaca_service)
 
         # Start bot

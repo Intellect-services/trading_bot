@@ -2,15 +2,18 @@
 
 from dataclasses import dataclass
 from datetime import datetime
-from typing import Dict, List, Optional, Union
+from typing import Any, Dict, List, Optional, Union, cast, TypeVar
 
 import pandas as pd
+from pandas import Series
 
 from ..core.risk_manager import RiskManager
 from ..utils.config import Config
 from ..utils.logger import setup_logger
 
 logger = setup_logger(__name__)
+
+T = TypeVar("T", int, float, str, bool, datetime)
 
 
 @dataclass
@@ -59,40 +62,25 @@ class Strategy:
         state: Current strategy state
     """
 
-    def __init__(
-        self, config: Optional[Union[Config, Dict[str, Union[int, float, str]]]] = None
-    ) -> None:
+    def __init__(self, config: Config) -> None:
         """Initialize strategy.
 
         Args:
-            config: Strategy configuration parameters
+            config: Configuration instance
         """
-        if isinstance(config, Config):
-            self.config = StrategyConfig(
-                max_position_size=config.RISK_MAX_POSITION_SIZE,
-                risk_per_trade=config.RISK_PER_TRADE,
-                stop_loss=config.RISK_STOP_LOSS_PCT,
-                take_profit=config.RISK_TAKE_PROFIT_PCT,
-            )
-        elif isinstance(config, dict):
-            self.config = StrategyConfig(
-                max_position_size=float(config.get("max_position_size", 0.1)),
-                risk_per_trade=float(config.get("risk_per_trade", 0.01)),
-                stop_loss=float(config.get("stop_loss", 0.02)),
-                take_profit=float(config.get("take_profit", 0.04)),
-            )
-        else:
-            self.config = StrategyConfig()
-
-        self.name = "base_strategy"
+        self.config = config
+        self.strategy_config = StrategyConfig(
+            max_position_size=config.RISK_MAX_POSITION_SIZE,
+            risk_per_trade=config.RISK_PER_TRADE,
+            stop_loss=config.RISK_STOP_LOSS_PCT,
+            take_profit=config.RISK_TAKE_PROFIT_PCT,
+        )
+        self.state: Dict[str, Any] = {}
+        self.data: Dict[str, pd.DataFrame] = {}
         self.signals: List[pd.DataFrame] = []
         self.trades: List[Trade] = []
         self.positions: Dict[str, Position] = {}
-        self.data: Dict[str, pd.DataFrame] = {}
-        self.state: Dict[str, Union[str, float, datetime]] = {}
         self.logger = logger
-
-        self.logger.info("Initialized %s strategy", self.name)
 
     def initialize_symbol(self, symbol: str, data: pd.DataFrame) -> None:
         """Initialize strategy for a symbol.
@@ -102,34 +90,30 @@ class Strategy:
             data: Historical data for the symbol
 
         Raises:
-            ValueError: If data is empty or invalid
+            ValueError: If data is empty or missing required columns
         """
         if data.empty:
-            raise ValueError(f"Empty data provided for {symbol}")
+            raise ValueError("Empty data provided")
+        if "close" not in data.columns:
+            raise ValueError("Data missing 'close' column")
 
         try:
             self.data[symbol] = self._calculate_indicators(data)
             self.logger.info("Initialized strategy for %s", symbol)
         except Exception as e:
-            self.logger.error("Error initializing strategy for %s: %s", symbol, str(e))
+            self.logger.error("Error initializing symbol %s: %s", symbol, str(e))
             raise
 
     def generate_signals(self) -> Dict[str, float]:
-        """Generate trading signals based on current state.
+        """Generate trading signals.
 
         Returns:
-            Dict[str, float]: Dictionary of signals by symbol where:
-                - 1.0 indicates a long position
-                - -1.0 indicates a short position
-                - 0.0 indicates no position
-
-        Raises:
-            NotImplementedError: This method must be implemented by subclasses
+            Dict[str, float]: Trading signals
         """
         raise NotImplementedError("Subclasses must implement generate_signals")
 
     def update_state(
-        self, data: Union[pd.Series, Dict[str, Union[float, str]]], timestamp: datetime
+        self, data: Union[Series[Any], Dict[str, Union[float, str]]], timestamp: datetime
     ) -> None:
         """Update the strategy state with new market data.
 
@@ -144,20 +128,29 @@ class Strategy:
             raise ValueError("Invalid timestamp provided")
 
         try:
-            if isinstance(data, pd.Series):
-                self.state = data.to_dict()
+            if isinstance(data, Series):
+                # Convert Series to dictionary and handle type conversion
+                data_dict = data.to_dict()
+                self.state = {
+                    str(k): float(v) if isinstance(v, (int, float)) else str(v)
+                    for k, v in data_dict.items()
+                }
             else:
-                self.state = data.copy()
+                # Handle dictionary input
+                self.state = {
+                    str(k): float(v) if isinstance(v, (int, float)) else str(v)
+                    for k, v in data.items()
+                }
             self.state["timestamp"] = timestamp
         except Exception as e:
             self.logger.error("Error updating state: %s", str(e))
             raise
 
-    def get_state(self) -> Dict[str, Union[str, float, datetime]]:
+    def get_state(self) -> Dict[str, Any]:
         """Get the current strategy state.
 
         Returns:
-            Dict[str, Union[str, float, datetime]]: Current state
+            Dict[str, Any]: Current strategy state
         """
         return self.state.copy()
 
@@ -190,15 +183,21 @@ class Strategy:
             df = data.copy()
 
             # Calculate SMA
-            df["sma_20"] = df["close"].rolling(window=20).mean()
-            df["sma_50"] = df["close"].rolling(window=50).mean()
+            df["sma_20"] = df["close"].astype(float).rolling(window=20).mean()
+            df["sma_50"] = df["close"].astype(float).rolling(window=50).mean()
 
             # Calculate RSI
-            delta = df["close"].diff()
+            delta = df["close"].astype(float).diff()
             gain = delta.where(delta > 0, 0).rolling(window=14).mean()
             loss = -delta.where(delta < 0, 0).rolling(window=14).mean()
             rs = gain / loss
             df["rsi"] = 100 - (100 / (1 + rs))
+
+            # Calculate MACD
+            exp1 = df["close"].astype(float).ewm(span=12, adjust=False).mean()
+            exp2 = df["close"].astype(float).ewm(span=26, adjust=False).mean()
+            df["macd"] = exp1 - exp2
+            df["signal"] = df["macd"].ewm(span=9, adjust=False).mean()
 
             return df
 
@@ -206,83 +205,100 @@ class Strategy:
             self.logger.error("Error calculating indicators: %s", str(e))
             raise
 
-    def update_position(self, symbol: str, quantity: float, price: float, side: str) -> None:
-        """Update the current position after a trade execution.
+    def add_trade(
+        self,
+        symbol: str,
+        side: str,
+        qty: float,
+        price: float,
+        timestamp: datetime,
+    ) -> None:
+        """Add a trade to the strategy.
 
         Args:
-            symbol: Trading symbol
-            quantity: Trade quantity
-            price: Execution price
-            side: Trade side ('buy' or 'sell')
+            symbol: Symbol traded
+            side: Trade side (buy/sell)
+            qty: Trade quantity
+            price: Trade price
+            timestamp: Trade timestamp
 
         Raises:
-            ValueError: If quantity is not positive or price is not positive
+            ValueError: If trade parameters are invalid
         """
-        if quantity <= 0:
-            raise ValueError("Quantity must be positive")
-        if price <= 0:
-            raise ValueError("Price must be positive")
-        if side not in ["buy", "sell"]:
-            raise ValueError("Side must be 'buy' or 'sell'")
+        if not isinstance(timestamp, datetime):
+            raise ValueError("Invalid timestamp provided")
+        if not isinstance(qty, (int, float)) or qty <= 0:
+            raise ValueError("Invalid quantity provided")
+        if not isinstance(price, (int, float)) or price <= 0:
+            raise ValueError("Invalid price provided")
 
         try:
+            # Create trade record
             trade = Trade(
-                timestamp=datetime.now(),
+                timestamp=timestamp,
                 symbol=symbol,
-                quantity=quantity,
-                price=price,
+                quantity=float(qty),
+                price=float(price),
                 side=side,
             )
             self.trades.append(trade)
 
-            if side == "buy":
-                if symbol not in self.positions:
-                    self.positions[symbol] = Position(quantity=0, avg_price=0)
+            # Update position
+            if symbol not in self.positions:
+                if side == "buy":
+                    self.positions[symbol] = Position(quantity=qty, avg_price=price)
+            else:
                 position = self.positions[symbol]
-                total_quantity = position.quantity + quantity
-                total_cost = (position.quantity * position.avg_price) + (quantity * price)
-                position.avg_price = total_cost / total_quantity if total_quantity > 0 else 0
-                position.quantity = total_quantity
-            else:  # sell
-                if symbol in self.positions:
-                    position = self.positions[symbol]
-                    position.quantity -= quantity
+                if side == "buy":
+                    # Calculate new average price
+                    total_qty = position.quantity + qty
+                    total_value = (position.quantity * position.avg_price) + (qty * price)
+                    position.avg_price = total_value / total_qty
+                    position.quantity = total_qty
+                else:  # sell
+                    position.quantity -= qty
                     if position.quantity <= 0:
                         del self.positions[symbol]
 
             self.logger.info(
-                "Updated position for %s: %s",
+                "Added trade: %s %s %.2f @ %.2f",
+                side,
                 symbol,
-                self.positions.get(symbol, "No position"),
+                qty,
+                price,
             )
 
         except Exception as e:
-            self.logger.error("Error updating position: %s", str(e))
+            self.logger.error("Error adding trade: %s", str(e))
             raise
 
     def calculate_position_size(self, price: float, account_value: float) -> float:
-        """Calculate position size based on account value and risk parameters.
+        """Calculate position size based on risk parameters.
 
         Args:
-            price: Current market price
+            price: Current price of the asset
             account_value: Current account value
 
         Returns:
-            float: Position size in base currency
+            float: Position size in units
 
         Raises:
-            ValueError: If price or account_value is not positive
+            ValueError: If price or account value is invalid
         """
-        if price <= 0:
-            raise ValueError("Price must be positive")
-        if account_value <= 0:
-            raise ValueError("Account value must be positive")
+        if not isinstance(price, (int, float)) or price <= 0:
+            raise ValueError("Invalid price provided")
+        if not isinstance(account_value, (int, float)) or account_value <= 0:
+            raise ValueError("Invalid account value provided")
 
         try:
-            return (account_value * self.config.max_position_size) / price
+            risk_amount = account_value * self.strategy_config.risk_per_trade
+            stop_loss_amount = price * self.strategy_config.stop_loss
+            position_size = risk_amount / stop_loss_amount
+            max_position_size = account_value * self.strategy_config.max_position_size / price
+            return min(position_size, max_position_size)
         except Exception as e:
             self.logger.error("Error calculating position size: %s", str(e))
-            raise
+            return 0.0
 
     @staticmethod
     def format_price(price: float, decimals: int = 2) -> str:
@@ -290,19 +306,33 @@ class Strategy:
 
         Args:
             price: Price to format
-            decimals: Number of decimal places (default: 2)
+            decimals: Number of decimal places
 
         Returns:
             str: Formatted price string
 
         Raises:
-            ValueError: If decimals is negative
+            ValueError: If price or decimals is invalid
         """
-        if decimals < 0:
-            raise ValueError("Decimals must be non-negative")
+        if not isinstance(price, (int, float)):
+            raise ValueError("Invalid price provided")
+        if not isinstance(decimals, int) or decimals < 0:
+            raise ValueError("Invalid decimals provided")
 
         try:
             return f"{price:.{decimals}f}"
         except Exception as e:
             logger.error("Error formatting price: %s", str(e))
-            raise
+            return str(price)
+
+    def get_max_position_size(self) -> float:
+        """Get maximum position size.
+
+        Returns:
+            float: Maximum position size
+        """
+        try:
+            return self.strategy_config.max_position_size
+        except Exception as e:
+            self.logger.error("Error getting max position size: %s", str(e))
+            return 0.0

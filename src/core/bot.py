@@ -255,3 +255,64 @@ class TradingBot:
         """
         # TODO: Implement signal execution logic
         pass
+
+    def backtest(self) -> Dict[str, Any]:
+        """Run backtest simulation.
+
+        Returns:
+            Dict[str, Any]: Backtest results
+        """
+        try:
+            from src.backtesting.engine import BacktestEngine
+
+            # Get historical data for backtesting
+            data = self.get_historical_data(
+                symbol=self.symbols[0] if self.symbols else "SPY",
+                timeframe=TimeFrame.Day,
+                limit=1000
+            )
+            if not data:
+                raise ValueError("No historical data available for backtesting")
+
+            # Convert data to DataFrame
+            df = pd.DataFrame({
+                "timestamp": [bar.timestamp for bar in data],
+                "open": [float(bar.open) for bar in data],
+                "high": [float(bar.high) for bar in data],
+                "low": [float(bar.low) for bar in data],
+                "close": [float(bar.close) for bar in data],
+                "volume": [float(bar.volume) for bar in data],
+            })
+            df.set_index("timestamp", inplace=True)
+
+            engine = BacktestEngine(
+                strategy=cast(Strategy, self.strategy),
+                initial_capital=self.config.INITIAL_CAPITAL,
+            )
+
+            # Run backtest
+            results = engine.run(data=df)
+
+            # Add additional metrics
+            results.update({
+                "strategy": self.strategy.__class__.__name__,
+                "initial_capital": self.config.INITIAL_CAPITAL,
+                "risk_settings": {
+                    "max_position_size": self.config.RISK_MAX_POSITION_SIZE,
+                    "stop_loss_pct": self.config.RISK_STOP_LOSS_PCT,
+                    "take_profit_pct": self.config.RISK_TAKE_PROFIT_PCT,
+                    "max_drawdown": self.config.RISK_MAX_DRAWDOWN,
+                    "max_leverage": self.config.RISK_MAX_LEVERAGE,
+                    "risk_per_trade": self.config.RISK_PER_TRADE,
+                },
+            })
+
+            return results
+
+        except Exception as e:
+            logger.error(f"Error running backtest: {e}")
+            return {
+                "error": str(e),
+                "status": "failed",
+                "timestamp": datetime.now().isoformat(),
+            }
