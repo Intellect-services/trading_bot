@@ -2,6 +2,7 @@
 import os
 
 import oauth
+
 from src import Config
 
 # Initialize configuration
