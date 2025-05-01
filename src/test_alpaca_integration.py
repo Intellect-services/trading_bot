@@ -1,17 +1,16 @@
 """Integration tests for Alpaca API."""
 
+# Standard library imports
 import logging
 import os
-from datetime import datetime
-from typing import TYPE_CHECKING, Any, Generator, cast
-from unittest.mock import MagicMock, patch
+from typing import TYPE_CHECKING
 
+# Third-party imports
 import pytest
-from alpaca.trading.client import TradingClient
 from alpaca.trading.enums import OrderSide, TimeInForce
-from alpaca.trading.models import Clock, Order, Position, TradeAccount
-from alpaca.trading.requests import MarketOrderRequest
-from core.alpaca_service import AlpacaService
+from alpaca.trading.models import Order, Position
+
+# Local imports
 from core.types import Order, Position
 
 # Configure logging
