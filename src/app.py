@@ -1,12 +1,22 @@
 # … earlier imports unchanged …
-import os
-from flask import Flask, render_template, redirect, url_for, session, flash, jsonify, request
-from flask_socketio import SocketIO
-from authlib.integrations.flask_client import OAuth
 import logging
+import os
 import secrets
-from flask_session import Session
 
+from authlib.integrations.flask_client import OAuth
+from flask import (
+    Flask,
+    flash,
+    jsonify,
+    redirect,
+    render_template,
+    request,
+    session,
+    url_for,
+)
+from flask_socketio import SocketIO
+
+from flask_session import Session
 from src import Config
 
 # Configure logging
