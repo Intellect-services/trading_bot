@@ -13,14 +13,16 @@ from src import Config
 logging.basicConfig(level=logging.DEBUG)
 logger = logging.getLogger(__name__)
 
-app = Flask(__name__, static_folder='static')
+app = Flask(__name__, static_folder="static")
 app.secret_key = os.getenv("SECRET_KEY", secrets.token_hex(32))
 
 # Configure session
-app.config['SESSION_TYPE'] = 'filesystem'
-app.config['SESSION_FILE_DIR'] = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'flask_session')
-app.config['SESSION_FILE_THRESHOLD'] = 100
-app.config['PERMANENT_SESSION_LIFETIME'] = 3600  # 1 hour
+app.config["SESSION_TYPE"] = "filesystem"
+app.config["SESSION_FILE_DIR"] = os.path.join(
+    os.path.dirname(os.path.abspath(__file__)), "flask_session"
+)
+app.config["SESSION_FILE_THRESHOLD"] = 100
+app.config["PERMANENT_SESSION_LIFETIME"] = 3600  # 1 hour
 Session(app)
 
 socketio = SocketIO(app)
@@ -71,137 +73,141 @@ linkedin = oauth.register(
     client_kwargs={"scope": "r_liteprofile r_emailaddress"},
 )
 
-@app.route('/', methods=['GET'])
+
+@app.route("/", methods=["GET"])
 def index():
     """Render the main trading dashboard."""
     try:
-        if not session.get('user'):
+        if not session.get("user"):
             app.logger.debug("No user in session, redirecting to login")
-            return redirect(url_for('login'))
-        
+            return redirect(url_for("login"))
+
         app.logger.debug(f"User in session: {session.get('user')}")
-        return render_template('index.html')
+        return render_template("index.html")
     except Exception as e:
         app.logger.error(f"Index route error: {str(e)}")
-        flash('An error occurred. Please try again.', 'danger')
-        return redirect(url_for('login'))
+        flash("An error occurred. Please try again.", "danger")
+        return redirect(url_for("login"))
 
-@app.route('/login', methods=['GET', 'POST'])
+
+@app.route("/login", methods=["GET", "POST"])
 def login():
     """Handle login page and authentication."""
-    if request.method == 'POST':
+    if request.method == "POST":
         try:
-            email = request.form.get('email')
-            password = request.form.get('password')
-            
+            email = request.form.get("email")
+            password = request.form.get("password")
+
             app.logger.debug(f"Login attempt for email: {email}")
-            
+
             # For demo purposes, accept admin@admin.com/admin
-            if email == 'admin@admin.com' and password == 'admin':
-                user_data = {
-                    'name': 'Admin User',
-                    'email': email,
-                    'id': 'admin'
-                }
-                session['user'] = user_data
+            if email == "admin@admin.com" and password == "admin":
+                user_data = {"name": "Admin User", "email": email, "id": "admin"}
+                session["user"] = user_data
                 app.logger.debug(f"Login successful for user: {user_data}")
-                flash('Successfully logged in!', 'success')
-                return redirect(url_for('index'))
-            
+                flash("Successfully logged in!", "success")
+                return redirect(url_for("index"))
+
             app.logger.debug("Invalid credentials")
-            flash('Invalid email or password', 'danger')
-            return redirect(url_for('login'))
+            flash("Invalid email or password", "danger")
+            return redirect(url_for("login"))
         except Exception as e:
             app.logger.error(f"Login error: {str(e)}")
-            flash('An error occurred during login. Please try again.', 'danger')
-            return redirect(url_for('login'))
-    
-    return render_template('login.html')
+            flash("An error occurred during login. Please try again.", "danger")
+            return redirect(url_for("login"))
 
-@app.route('/auth/<provider>', methods=['GET'])
+    return render_template("login.html")
+
+
+@app.route("/auth/<provider>", methods=["GET"])
 def auth(provider):
     """Handle OAuth authentication."""
-    if provider not in ['google', 'github', 'linkedin']:
-        flash('Invalid authentication provider', 'danger')
-        return redirect(url_for('login'))
-    
+    if provider not in ["google", "github", "linkedin"]:
+        flash("Invalid authentication provider", "danger")
+        return redirect(url_for("login"))
+
     client = oauth.create_client(provider)
     if not client:
-        flash('Authentication provider not configured', 'danger')
-        return redirect(url_for('login'))
-    
-    redirect_uri = url_for('auth_callback', provider=provider, _external=True)
+        flash("Authentication provider not configured", "danger")
+        return redirect(url_for("login"))
+
+    redirect_uri = url_for("auth_callback", provider=provider, _external=True)
     return client.authorize_redirect(redirect_uri)
 
-@app.route('/auth/<provider>/callback', methods=['GET'])
+
+@app.route("/auth/<provider>/callback", methods=["GET"])
 def auth_callback(provider):
     """Handle OAuth callback."""
-    if provider not in ['google', 'github', 'linkedin']:
-        flash('Invalid authentication provider', 'danger')
-        return redirect(url_for('login'))
-    
+    if provider not in ["google", "github", "linkedin"]:
+        flash("Invalid authentication provider", "danger")
+        return redirect(url_for("login"))
+
     client = oauth.create_client(provider)
     if not client:
-        flash('Authentication provider not configured', 'danger')
-        return redirect(url_for('login'))
-    
+        flash("Authentication provider not configured", "danger")
+        return redirect(url_for("login"))
+
     try:
         token = client.authorize_access_token()
-        user_info = client.get('userinfo').json()
-        session['user'] = user_info
-        flash('Successfully logged in!', 'success')
-        return redirect(url_for('index'))
+        user_info = client.get("userinfo").json()
+        session["user"] = user_info
+        flash("Successfully logged in!", "success")
+        return redirect(url_for("index"))
     except Exception as e:
         app.logger.error(f"OAuth error: {str(e)}")
-        flash('Authentication failed. Please try again.', 'danger')
-        return redirect(url_for('login'))
+        flash("Authentication failed. Please try again.", "danger")
+        return redirect(url_for("login"))
 
-@app.route('/logout', methods=['GET'])
+
+@app.route("/logout", methods=["GET"])
 def logout():
     """Handle user logout."""
     try:
-        session.pop('user', None)
-        flash('Successfully logged out!', 'success')
-        return redirect(url_for('index'))
+        session.pop("user", None)
+        flash("Successfully logged out!", "success")
+        return redirect(url_for("index"))
     except Exception as e:
         app.logger.error(f"Logout error: {str(e)}")
-        flash('An error occurred during logout.', 'danger')
-        return redirect(url_for('index'))
+        flash("An error occurred during logout.", "danger")
+        return redirect(url_for("index"))
 
-@app.route('/api/start', methods=['POST'])
+
+@app.route("/api/start", methods=["POST"])
 def start_bot():
     """Start the trading bot."""
     try:
         # Initialize trading bot if not already running
-        if not hasattr(app, 'trading_bot'):
+        if not hasattr(app, "trading_bot"):
             from src.core.bot import TradingBot
             from src.strategies.moving_average import MovingAverageCrossover
-            
+
             strategy = MovingAverageCrossover(config)
             app.trading_bot = TradingBot(config=config, strategy=strategy)
-        
+
         app.trading_bot.start()
         return jsonify({"status": "success"}), 200
     except Exception as e:
         app.logger.error(f"Error starting bot: {e}")
         return jsonify({"status": "error", "message": str(e)}), 500
 
-@app.route('/api/stop', methods=['POST'])
+
+@app.route("/api/stop", methods=["POST"])
 def stop_bot():
     """Stop the trading bot."""
     try:
-        if hasattr(app, 'trading_bot'):
+        if hasattr(app, "trading_bot"):
             app.trading_bot.stop()
         return jsonify({"status": "success"}), 200
     except Exception as e:
         app.logger.error(f"Error stopping bot: {e}")
         return jsonify({"status": "error", "message": str(e)}), 500
 
-@app.route('/api/status', methods=['GET'])
+
+@app.route("/api/status", methods=["GET"])
 def get_status():
     """Get bot status."""
     try:
-        if hasattr(app, 'trading_bot'):
+        if hasattr(app, "trading_bot"):
             status = app.trading_bot.get_status()
         else:
             status = {"status": "stopped"}
@@ -210,5 +216,6 @@ def get_status():
         app.logger.error(f"Error getting status: {e}")
         return jsonify({"status": "error", "message": str(e)}), 500
 
-if __name__ == '__main__':
-    app.run(host='0.0.0.0', port=5001, debug=True)
+
+if __name__ == "__main__":
+    app.run(host="0.0.0.0", port=5001, debug=True)
