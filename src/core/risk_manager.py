@@ -53,15 +53,16 @@ class RiskManager:
                 risk_per_trade=config.RISK_PER_TRADE,
             )
         elif isinstance(config, dict):
+            risk_config = config.get("risk", {})
             self.config = RiskConfig(
-                max_position_size=float(config.get("max_position_size", 0.1)),
-                stop_loss=float(config.get("stop_loss", 0.02)),
-                take_profit=float(config.get("take_profit", 0.04)),
-                max_drawdown=float(config.get("max_drawdown", 0.2)),
-                max_leverage=float(config.get("max_leverage", 1.0)),
-                risk_per_trade=float(config.get("risk_per_trade", 0.01)),
-                trailing_stop=float(config.get("trailing_stop", 0.01)),
-                trailing_stop_activation=float(config.get("trailing_stop_activation", 0.02)),
+                max_position_size=float(risk_config.get("max_position_size", 0.1)),
+                stop_loss=float(risk_config.get("stop_loss", 0.02)),
+                take_profit=float(risk_config.get("take_profit", 0.04)),
+                max_drawdown=float(risk_config.get("max_drawdown", 0.2)),
+                max_leverage=float(risk_config.get("max_leverage", 1.0)),
+                risk_per_trade=float(risk_config.get("risk_per_trade", 0.01)),
+                trailing_stop=float(risk_config.get("trailing_stop", 0.01)),
+                trailing_stop_activation=float(risk_config.get("trailing_stop_activation", 0.02)),
             )
         else:
             self.config = RiskConfig()
@@ -70,8 +71,38 @@ class RiskManager:
         self.highest_prices: Dict[str, float] = {}
         self.lowest_prices: Dict[str, float] = {}
 
+    @property
+    def max_position_size(self) -> float:
+        """Get maximum position size."""
+        return self.config.max_position_size
+
+    @property
+    def stop_loss(self) -> float:
+        """Get stop loss percentage."""
+        return self.config.stop_loss
+
+    @property
+    def take_profit(self) -> float:
+        """Get take profit percentage."""
+        return self.config.take_profit
+
+    @property
+    def max_drawdown(self) -> float:
+        """Get maximum drawdown percentage."""
+        return self.config.max_drawdown
+
+    @property
+    def max_leverage(self) -> float:
+        """Get maximum leverage."""
+        return self.config.max_leverage
+
+    @property
+    def risk_per_trade(self) -> float:
+        """Get risk per trade percentage."""
+        return self.config.risk_per_trade
+
     def apply_risk_management(
-        self, price: float, position: Optional[Position], account_value: float
+        self, price: float, position: Optional[Union[Position, Dict[str, float]]], account_value: float
     ) -> bool:
         """Apply risk management rules to a position.
 
@@ -93,6 +124,10 @@ class RiskManager:
 
         if position is None:
             return True
+
+        # Convert dictionary position to Position object if needed
+        if isinstance(position, dict):
+            position = Position(size=float(position["size"]), avg_price=float(position["avg_price"]))
 
         position_value = position.size * price
         if position_value / account_value > self.config.max_position_size:

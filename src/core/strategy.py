@@ -5,7 +5,7 @@ from datetime import datetime
 from typing import Any, Dict, List, Optional, TypeVar, Union, cast
 
 import pandas as pd
-from pandas import Series
+from pandas.core.series import Series
 
 from ..core.risk_manager import RiskManager
 from ..utils.config import Config
@@ -62,18 +62,19 @@ class Strategy:
         state: Current strategy state
     """
 
-    def __init__(self, config: Config) -> None:
+    def __init__(self, config: Union[Config, Dict[str, Any]]) -> None:
         """Initialize strategy.
 
         Args:
-            config: Configuration instance
+            config: Configuration instance or dictionary
         """
         self.config = config
+        risk_config = config.get("risk", {}) if isinstance(config, dict) else config
         self.strategy_config = StrategyConfig(
-            max_position_size=config.RISK_MAX_POSITION_SIZE,
-            risk_per_trade=config.RISK_PER_TRADE,
-            stop_loss=config.RISK_STOP_LOSS_PCT,
-            take_profit=config.RISK_TAKE_PROFIT_PCT,
+            max_position_size=risk_config.get("max_position_size", 0.1),
+            risk_per_trade=risk_config.get("risk_per_trade", 0.01),
+            stop_loss=risk_config.get("stop_loss", 0.02),
+            take_profit=risk_config.get("take_profit", 0.04),
         )
         self.state: Dict[str, Any] = {}
         self.data: Dict[str, pd.DataFrame] = {}
@@ -113,7 +114,7 @@ class Strategy:
         raise NotImplementedError("Subclasses must implement generate_signals")
 
     def update_state(
-        self, data: Union[Series[Any], Dict[str, Union[float, str]]], timestamp: datetime
+        self, data: Union[pd.Series, Dict[str, Union[float, str]]], timestamp: datetime
     ) -> None:
         """Update the strategy state with new market data.
 
@@ -128,7 +129,7 @@ class Strategy:
             raise ValueError("Invalid timestamp provided")
 
         try:
-            if isinstance(data, Series):
+            if isinstance(data, pd.Series):
                 # Convert Series to dictionary and handle type conversion
                 data_dict = data.to_dict()
                 self.state = {
