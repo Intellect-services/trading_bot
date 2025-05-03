@@ -7,6 +7,12 @@
   --light-color: #f8f9fa;
   --dark-color: #202124;
   --gray-color: #5f6368;
+  --primary-blue: #1a73e8;
+  --secondary-blue: #4285f4;
+  --dark-blue: #0d47a1;
+  --light-blue: #e8f0fe;
+  --success-green: #34a853;
+  --danger-red: #ea4335;
 }
 
 /* General Styles */
@@ -153,24 +159,22 @@ body {
 /* Cards */
 .card {
   border: none;
-  border-radius: 1rem;
   box-shadow: 0 2px 4px rgba(0, 0, 0, 0.05);
+  border-radius: 8px;
   margin-bottom: 1.5rem;
   height: 100%;
 }
 
 .card-header {
   background-color: white;
-  border-bottom: 1px solid rgba(0, 0, 0, 0.05);
+  border-bottom: 1px solid #e0e0e0;
   padding: 1rem 1.5rem;
   border-radius: 1rem 1rem 0 0 !important;
 }
 
 .card-title {
-  font-size: 1.1rem;
-  font-weight: 500;
-  margin: 0;
-  color: var(--dark-color);
+  color: var(--primary-blue);
+  font-weight: 600;
 }
 
 .card-body {
@@ -296,4 +300,58 @@ body {
   max-width: 400px;
   border-radius: 0.5rem;
   box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+}
+
+.navbar {
+  background: linear-gradient(
+    135deg,
+    var(--primary-blue) 0%,
+    var(--secondary-blue) 100%
+  );
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+}
+
+.navbar-brand {
+  color: white !important;
+}
+
+.nav-link {
+  color: rgba(255, 255, 255, 0.8) !important;
+}
+
+.nav-link:hover {
+  color: white !important;
+}
+
+.btn-outline-primary {
+  color: var(--primary-blue);
+  border-color: var(--primary-blue);
+}
+
+.btn-outline-primary:hover {
+  background-color: var(--primary-blue);
+  border-color: var(--primary-blue);
+}
+
+.btn-outline-dark {
+  color: #333;
+  border-color: #333;
+}
+
+.btn-outline-dark:hover {
+  background-color: #333;
+  border-color: #333;
+}
+
+.table th {
+  color: var(--primary-blue);
+  font-weight: 600;
+}
+
+.text-success {
+  color: var(--success-green) !important;
+}
+
+.text-danger {
+  color: var(--danger-red) !important;
 }
