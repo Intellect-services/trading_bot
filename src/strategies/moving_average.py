@@ -1,7 +1,7 @@
 """Moving average crossover strategy."""
 
 from datetime import datetime
-from typing import Any
+from typing import Any, Union
 
 import numpy as np
 import pandas as pd
@@ -77,7 +77,9 @@ class MovingAverageCrossover(Strategy):
 
         return signals
 
-    def update_state(self, data: Series[Any] | dict[str, float | str], timestamp: datetime) -> None:
+    def update_state(
+        self, data: Union[Series, dict[str, Union[float, str]]], timestamp: datetime
+    ) -> None:
         """Update strategy state with new market data."""
         if isinstance(data, dict):
             self.price_history.append(float(data["close"]))
