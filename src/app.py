@@ -2,10 +2,12 @@
 import logging
 import os
 import secrets
+from typing import Any, Dict, Optional, Union
 
 from authlib.integrations.flask_client import OAuth
 from flask import (
     Flask,
+    Response,
     flash,
     jsonify,
     redirect,
@@ -18,6 +20,8 @@ from flask_socketio import SocketIO
 
 from flask_session import Session
 from src import Config
+from src.core.bot import TradingBot
+from src.strategies.moving_average import MovingAverageCrossover
 
 # Configure logging
 logging.basicConfig(level=logging.DEBUG)
@@ -85,7 +89,7 @@ linkedin = oauth.register(
 
 
 @app.route("/", methods=["GET"])
-def index():
+def index() -> Response:
     """Render the main trading dashboard."""
     try:
         if not session.get("user"):
@@ -101,7 +105,7 @@ def index():
 
 
 @app.route("/login", methods=["GET", "POST"])
-def login():
+def login() -> Response:
     """Handle login page and authentication."""
     if request.method == "POST":
         try:
@@ -130,7 +134,7 @@ def login():
 
 
 @app.route("/auth/<provider>", methods=["GET"])
-def auth(provider):
+def auth(provider: str) -> Response:
     """Handle OAuth authentication."""
     if provider not in ["google", "github", "linkedin"]:
         flash("Invalid authentication provider", "danger")
@@ -146,7 +150,7 @@ def auth(provider):
 
 
 @app.route("/auth/<provider>/callback", methods=["GET"])
-def auth_callback(provider):
+def auth_callback(provider: str) -> Response:
     """Handle OAuth callback."""
     if provider not in ["google", "github", "linkedin"]:
         flash("Invalid authentication provider", "danger")
@@ -170,7 +174,7 @@ def auth_callback(provider):
 
 
 @app.route("/logout", methods=["GET"])
-def logout():
+def logout() -> Response:
     """Handle user logout."""
     try:
         session.pop("user", None)
@@ -183,14 +187,11 @@ def logout():
 
 
 @app.route("/api/start", methods=["POST"])
-def start_bot():
+def start_bot() -> Response:
     """Start the trading bot."""
     try:
         # Initialize trading bot if not already running
         if not hasattr(app, "trading_bot"):
-            from src.core.bot import TradingBot
-            from src.strategies.moving_average import MovingAverageCrossover
-
             strategy = MovingAverageCrossover(config)
             app.trading_bot = TradingBot(config=config, strategy=strategy)
 
@@ -202,7 +203,7 @@ def start_bot():
 
 
 @app.route("/api/stop", methods=["POST"])
-def stop_bot():
+def stop_bot() -> Response:
     """Stop the trading bot."""
     try:
         if hasattr(app, "trading_bot"):
@@ -214,7 +215,7 @@ def stop_bot():
 
 
 @app.route("/api/status", methods=["GET"])
-def get_status():
+def get_status() -> Response:
     """Get bot status."""
     try:
         if hasattr(app, "trading_bot"):

@@ -69,13 +69,21 @@ class Strategy:
             config: Configuration instance or dictionary
         """
         self.config = config
-        risk_config = config.get("risk", {}) if isinstance(config, dict) else config
-        self.strategy_config = StrategyConfig(
-            max_position_size=risk_config.get("max_position_size", 0.1),
-            risk_per_trade=risk_config.get("risk_per_trade", 0.01),
-            stop_loss=risk_config.get("stop_loss", 0.02),
-            take_profit=risk_config.get("take_profit", 0.04),
-        )
+        if isinstance(config, dict):
+            risk_config: Dict[str, Any] = config.get("risk", {})
+            self.strategy_config = StrategyConfig(
+                max_position_size=float(risk_config.get("max_position_size", 0.1)),
+                risk_per_trade=float(risk_config.get("risk_per_trade", 0.01)),
+                stop_loss=float(risk_config.get("stop_loss", 0.02)),
+                take_profit=float(risk_config.get("take_profit", 0.04)),
+            )
+        else:
+            self.strategy_config = StrategyConfig(
+                max_position_size=config.RISK_MAX_POSITION_SIZE,
+                risk_per_trade=config.RISK_PER_TRADE,
+                stop_loss=config.RISK_STOP_LOSS_PCT,
+                take_profit=config.RISK_STOP_LOSS_PCT * 2,
+            )
         self.state: Dict[str, Any] = {}
         self.data: Dict[str, pd.DataFrame] = {}
         self.signals: List[pd.DataFrame] = []

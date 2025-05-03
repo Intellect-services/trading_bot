@@ -2,7 +2,7 @@
 
 from dataclasses import dataclass
 from decimal import Decimal
-from typing import Dict, Optional, Union
+from typing import Any, Dict, Optional, Union
 
 from ..utils.config import Config
 from ..utils.logger import setup_logger
@@ -35,9 +35,7 @@ class RiskConfig:
 class RiskManager:
     """Risk management class."""
 
-    def __init__(
-        self, config: Optional[Union[Config, Dict[str, Union[int, float, str]]]] = None
-    ) -> None:
+    def __init__(self, config: Optional[Union[Config, Dict[str, Any]]] = None) -> None:
         """Initialize risk manager.
 
         Args:
@@ -53,7 +51,7 @@ class RiskManager:
                 risk_per_trade=config.RISK_PER_TRADE,
             )
         elif isinstance(config, dict):
-            risk_config = config.get("risk", {})
+            risk_config: Dict[str, Any] = config.get("risk", {})
             self.config = RiskConfig(
                 max_position_size=float(risk_config.get("max_position_size", 0.1)),
                 stop_loss=float(risk_config.get("stop_loss", 0.02)),
