@@ -2,7 +2,7 @@
 import logging
 import os
 import secrets
-from typing import Any, Dict, Optional, Union, cast
+from typing import Optional, Union, cast
 
 from authlib.integrations.flask_client import OAuth
 from flask import (
@@ -17,7 +17,6 @@ from flask import (
     url_for,
 )
 from flask_socketio import SocketIO
-from werkzeug.wrappers.response import Response as WerkzeugResponse
 
 from flask_session import Session
 from src import Config
@@ -89,25 +88,28 @@ linkedin = oauth.register(
     client_kwargs={"scope": "r_liteprofile r_emailaddress"},
 )
 
+# declare the attribute so mypy knows about it
+app.trading_bot: Optional[TradingBot] = None
+
 
 @app.route("/", methods=["GET"])
-def index() -> Response:
+def index() -> Union[Response, str]:
     """Render the main trading dashboard."""
     try:
         if not session.get("user"):
             app.logger.debug("No user in session, redirecting to login")
-            return cast(Response, redirect(url_for("login")))
+            return redirect(url_for("login"))
 
         app.logger.debug(f"User in session: {session.get('user')}")
-        return cast(Response, render_template("index.html"))
+        return render_template("index.html")
     except Exception as e:
-        app.logger.error(f"Index route error: {str(e)}")
+        app.logger.error(f"Index route error: {e}")
         flash("An error occurred. Please try again.", "danger")
-        return cast(Response, redirect(url_for("login")))
+        return redirect(url_for("login"))
 
 
 @app.route("/login", methods=["GET", "POST"])
-def login() -> Response:
+def login() -> Union[Response, str]:
     """Handle login page and authentication."""
     if request.method == "POST":
         try:
@@ -122,17 +124,17 @@ def login() -> Response:
                 session["user"] = user_data
                 app.logger.debug(f"Login successful for user: {user_data}")
                 flash("Successfully logged in!", "success")
-                return cast(Response, redirect(url_for("index")))
+                return redirect(url_for("index"))
 
             app.logger.debug("Invalid credentials")
             flash("Invalid email or password", "danger")
-            return cast(Response, redirect(url_for("login")))
+            return redirect(url_for("login"))
         except Exception as e:
-            app.logger.error(f"Login error: {str(e)}")
+            app.logger.error(f"Login error: {e}")
             flash("An error occurred during login. Please try again.", "danger")
-            return cast(Response, redirect(url_for("login")))
+            return redirect(url_for("login"))
 
-    return cast(Response, render_template("login.html"))
+    return render_template("login.html")
 
 
 @app.route("/auth/<provider>", methods=["GET"])
@@ -140,15 +142,15 @@ def auth(provider: str) -> Response:
     """Handle OAuth authentication."""
     if provider not in ["google", "github", "linkedin"]:
         flash("Invalid authentication provider", "danger")
-        return cast(Response, redirect(url_for("login")))
+        return redirect(url_for("login"))
 
     client = oauth.create_client(provider)
     if not client:
         flash("Authentication provider not configured", "danger")
-        return cast(Response, redirect(url_for("login")))
+        return redirect(url_for("login"))
 
     redirect_uri = url_for("auth_callback", provider=provider, _external=True)
-    return cast(Response, client.authorize_redirect(redirect_uri))
+    return redirect(client.authorize_redirect(redirect_uri))
 
 
 @app.route("/auth/<provider>/callback", methods=["GET"])
@@ -156,23 +158,23 @@ def auth_callback(provider: str) -> Response:
     """Handle OAuth callback."""
     if provider not in ["google", "github", "linkedin"]:
         flash("Invalid authentication provider", "danger")
-        return cast(Response, redirect(url_for("login")))
+        return redirect(url_for("login"))
 
     client = oauth.create_client(provider)
     if not client:
         flash("Authentication provider not configured", "danger")
-        return cast(Response, redirect(url_for("login")))
+        return redirect(url_for("login"))
 
     try:
         token = client.authorize_access_token()
         user_info = client.get("userinfo").json()
         session["user"] = user_info
         flash("Successfully logged in!", "success")
-        return cast(Response, redirect(url_for("index")))
+        return redirect(url_for("index"))
     except Exception as e:
         app.logger.error(f"OAuth error: {str(e)}")
         flash("Authentication failed. Please try again.", "danger")
-        return cast(Response, redirect(url_for("login")))
+        return redirect(url_for("login"))
 
 
 @app.route("/logout", methods=["GET"])
@@ -181,65 +183,64 @@ def logout() -> Response:
     try:
         session.pop("user", None)
         flash("Successfully logged out!", "success")
-        return cast(Response, redirect(url_for("index")))
+        return redirect(url_for("index"))
     except Exception as e:
         app.logger.error(f"Logout error: {str(e)}")
         flash("An error occurred during logout.", "danger")
-        return cast(Response, redirect(url_for("index")))
+        return redirect(url_for("index"))
 
 
 @app.route("/api/start", methods=["POST"])
 def start_bot() -> Response:
     """Start the trading bot."""
     try:
-        # Initialize trading bot if not already running
-        if not hasattr(app, "trading_bot"):
-            strategy = MovingAverageCrossover(config.to_dict())
-            app.trading_bot = TradingBot(config=config, strategy=cast(Strategy, strategy))
+        if app.trading_bot is None:
+            strategy = MovingAverageCrossover(config)
+            app.trading_bot = TradingBot(config=config, strategy=strategy)
 
         app.trading_bot.start()
         response = jsonify({"status": "success"})
         response.status_code = 200
-        return cast(Response, response)
+        return response
     except Exception as e:
         app.logger.error(f"Error starting bot: {e}")
         response = jsonify({"status": "error", "message": str(e)})
         response.status_code = 500
-        return cast(Response, response)
+        return response
 
 
 @app.route("/api/stop", methods=["POST"])
 def stop_bot() -> Response:
     """Stop the trading bot."""
     try:
-        if hasattr(app, "trading_bot"):
+        if app.trading_bot is not None:
             app.trading_bot.stop()
         response = jsonify({"status": "success"})
         response.status_code = 200
-        return cast(Response, response)
+        return response
     except Exception as e:
         app.logger.error(f"Error stopping bot: {e}")
         response = jsonify({"status": "error", "message": str(e)})
         response.status_code = 500
-        return cast(Response, response)
+        return response
 
 
 @app.route("/api/status", methods=["GET"])
 def get_status() -> Response:
     """Get bot status."""
     try:
-        if hasattr(app, "trading_bot"):
+        if app.trading_bot is not None:
             status = app.trading_bot.get_status()
         else:
             status = {"status": "stopped"}
         response = jsonify(status)
         response.status_code = 200
-        return cast(Response, response)
+        return response
     except Exception as e:
         app.logger.error(f"Error getting status: {e}")
         response = jsonify({"status": "error", "message": str(e)})
         response.status_code = 500
-        return cast(Response, response)
+        return response
 
 
 if __name__ == "__main__":

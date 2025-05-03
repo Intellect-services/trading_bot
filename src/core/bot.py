@@ -35,7 +35,7 @@ class TradingBot:
     def __init__(
         self,
         config: Config,
-        strategy: BaseStrategy,
+        strategy: Strategy,
         portfolio: Optional[Portfolio] = None,
         data_feed: Optional[Any] = None,
         risk_manager: Optional[Any] = None,
