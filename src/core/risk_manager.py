@@ -102,7 +102,10 @@ class RiskManager:
         return self.config.risk_per_trade
 
     def apply_risk_management(
-        self, price: float, position: Optional[Union[Position, Dict[str, float]]], account_value: float
+        self,
+        price: float,
+        position: Optional[Union[Position, Dict[str, float]]],
+        account_value: float,
     ) -> bool:
         """Apply risk management rules to a position.
 
@@ -127,7 +130,9 @@ class RiskManager:
 
         # Convert dictionary position to Position object if needed
         if isinstance(position, dict):
-            position = Position(size=float(position["size"]), avg_price=float(position["avg_price"]))
+            position = Position(
+                size=float(position["size"]), avg_price=float(position["avg_price"])
+            )
 
         position_value = position.size * price
         if position_value / account_value > self.config.max_position_size:
