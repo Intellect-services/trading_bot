@@ -19,7 +19,7 @@ class MovingAverageCrossover(Strategy):
 
     def __init__(
         self,
-        config: dict[str, Any],
+        config: Union[Config, dict[str, Any]],
         short_window: int = 20,
         long_window: int = 50,
         rsi_period: int = 14,

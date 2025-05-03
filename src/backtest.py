@@ -12,7 +12,6 @@ from src.core.data_feed import MockDataFeed
 from src.core.portfolio import Portfolio
 from src.core.risk_manager import RiskManager
 from src.core.strategy import Strategy
-from src.strategies.base import BaseStrategy
 from src.utils.config import Config
 from src.utils.logger import setup_logger
 
@@ -52,7 +51,7 @@ def run_backtest() -> Dict[str, Any]:
         alpaca_service = AlpacaService(config_data)
 
         # Initialize strategy
-        strategy = cast(BaseStrategy, MovingAverageCrossover(config_data))
+        strategy = MovingAverageCrossover(config_data)
 
         # Initialize and run backtest
         bot = TradingBot(config=config, strategy=strategy)

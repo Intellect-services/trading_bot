@@ -235,7 +235,7 @@ class TradingBot:
                     data = self.get_historical_data(symbol, TimeFrame.Minute, limit=100)
                     if data:
                         # Generate signals
-                        signals = self.strategy.generate_signals(pd.DataFrame(data))
+                        signals = self.strategy.generate_signals(pd.DataFrame(data))  # type: ignore[call-arg]
                         if signals is not None:
                             # Execute trades based on signals
                             self._execute_signals(symbol, signals)
@@ -288,7 +288,7 @@ class TradingBot:
             df.set_index("timestamp", inplace=True)
 
             engine = BacktestEngine(
-                strategy=cast(Strategy, self.strategy),
+                strategy=self.strategy,
                 initial_capital=self.config.INITIAL_CAPITAL,
             )
 

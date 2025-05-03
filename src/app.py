@@ -2,7 +2,7 @@
 import logging
 import os
 import secrets
-from typing import Optional, Union, cast
+from typing import TYPE_CHECKING, Optional, Union
 
 from authlib.integrations.flask_client import OAuth
 from flask import (
@@ -17,6 +17,7 @@ from flask import (
     url_for,
 )
 from flask_socketio import SocketIO
+from werkzeug.wrappers.response import Response as WerkzeugResponse
 
 from flask_session import Session
 from src import Config
@@ -88,12 +89,12 @@ linkedin = oauth.register(
     client_kwargs={"scope": "r_liteprofile r_emailaddress"},
 )
 
-# declare the attribute so mypy knows about it
-app.trading_bot: Optional[TradingBot] = None
+# initialize trading_bot under mypy stub
+app.trading_bot = None  # type: ignore[attr-defined]
 
 
 @app.route("/", methods=["GET"])
-def index() -> Union[Response, str]:
+def index() -> Union[Response, WerkzeugResponse, str]:
     """Render the main trading dashboard."""
     try:
         if not session.get("user"):
@@ -109,7 +110,7 @@ def index() -> Union[Response, str]:
 
 
 @app.route("/login", methods=["GET", "POST"])
-def login() -> Union[Response, str]:
+def login() -> Union[Response, WerkzeugResponse, str]:
     """Handle login page and authentication."""
     if request.method == "POST":
         try:
@@ -138,7 +139,7 @@ def login() -> Union[Response, str]:
 
 
 @app.route("/auth/<provider>", methods=["GET"])
-def auth(provider: str) -> Response:
+def auth(provider: str) -> Union[Response, WerkzeugResponse]:
     """Handle OAuth authentication."""
     if provider not in ["google", "github", "linkedin"]:
         flash("Invalid authentication provider", "danger")
@@ -154,7 +155,7 @@ def auth(provider: str) -> Response:
 
 
 @app.route("/auth/<provider>/callback", methods=["GET"])
-def auth_callback(provider: str) -> Response:
+def auth_callback(provider: str) -> Union[Response, WerkzeugResponse]:
     """Handle OAuth callback."""
     if provider not in ["google", "github", "linkedin"]:
         flash("Invalid authentication provider", "danger")
@@ -178,7 +179,7 @@ def auth_callback(provider: str) -> Response:
 
 
 @app.route("/logout", methods=["GET"])
-def logout() -> Response:
+def logout() -> Union[Response, WerkzeugResponse]:
     """Handle user logout."""
     try:
         session.pop("user", None)
@@ -191,7 +192,7 @@ def logout() -> Response:
 
 
 @app.route("/api/start", methods=["POST"])
-def start_bot() -> Response:
+def start_bot() -> Union[Response, WerkzeugResponse]:
     """Start the trading bot."""
     try:
         if app.trading_bot is None:
@@ -210,7 +211,7 @@ def start_bot() -> Response:
 
 
 @app.route("/api/stop", methods=["POST"])
-def stop_bot() -> Response:
+def stop_bot() -> Union[Response, WerkzeugResponse]:
     """Stop the trading bot."""
     try:
         if app.trading_bot is not None:
@@ -226,7 +227,7 @@ def stop_bot() -> Response:
 
 
 @app.route("/api/status", methods=["GET"])
-def get_status() -> Response:
+def get_status() -> Union[Response, WerkzeugResponse]:
     """Get bot status."""
     try:
         if app.trading_bot is not None:

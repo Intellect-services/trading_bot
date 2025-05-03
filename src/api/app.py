@@ -10,7 +10,7 @@ from flask_cors import CORS
 
 from ..core.alpaca_service import AlpacaService
 from ..core.bot import TradingBot
-from ..strategies.base import BaseStrategy
+from ..core.strategy import Strategy
 from ..strategies.moving_average import MovingAverageCrossover
 from ..utils.config import Config
 from ..utils.logger import setup_logger
@@ -37,7 +37,7 @@ config = Config(config_data)
 # Initialize services
 try:
     alpaca_service = AlpacaService(config_data)
-    strategy = cast(BaseStrategy, MovingAverageCrossover(config_data))
+    strategy = MovingAverageCrossover(config_data)
     trading_bot = TradingBot(config=config, strategy=strategy)
     logger.info("Successfully initialized AlpacaService and TradingBot")
 except Exception as e:
