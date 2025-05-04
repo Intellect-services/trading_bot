@@ -37,7 +37,7 @@ config = Config(config_data)
 # Initialize services
 try:
     alpaca_service = AlpacaService(config_data)
-    strategy = MovingAverageCrossover(config_data)
+    strategy = MovingAverageCrossover(config)
     trading_bot = TradingBot(config=config, strategy=strategy)
     logger.info("Successfully initialized AlpacaService and TradingBot")
 except Exception as e:

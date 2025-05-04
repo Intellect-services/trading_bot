@@ -52,20 +52,8 @@ class BotService:
         if strategy is None:
             from ..strategies.moving_average import MovingAverageCrossover
 
-            # Convert Config instance to dictionary
-            config_dict = {
-                "ALPACA_API_KEY": config.ALPACA_API_KEY,
-                "ALPACA_SECRET_KEY": config.ALPACA_SECRET_KEY,
-                "ALPACA_PAPER": config.ALPACA_PAPER,
-                "INITIAL_CAPITAL": config.INITIAL_CAPITAL,
-                "RISK_MAX_POSITION_SIZE": config.RISK_MAX_POSITION_SIZE,
-                "RISK_STOP_LOSS_PCT": config.RISK_STOP_LOSS_PCT,
-                "RISK_TAKE_PROFIT_PCT": config.RISK_TAKE_PROFIT_PCT,
-                "RISK_MAX_DRAWDOWN": config.RISK_MAX_DRAWDOWN,
-                "RISK_MAX_LEVERAGE": config.RISK_MAX_LEVERAGE,
-                "RISK_PER_TRADE": config.RISK_PER_TRADE,
-            }
-            strategy = MovingAverageCrossover(config_dict)
+            # Use Config instance directly instead of raw dict
+            strategy = MovingAverageCrossover(config)
 
         # Create AlpacaService instance
         from ..core.alpaca_service import AlpacaService

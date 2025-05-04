@@ -1,11 +1,13 @@
 """Moving average crossover strategy."""
 
+from __future__ import annotations
+
 from datetime import datetime
 from typing import Any, Union
 
 import numpy as np
 import pandas as pd
-from pandas import DataFrame, Series
+from pandas import DataFrame
 
 from src.core.strategy import Strategy
 from src.utils.config import Config
@@ -19,30 +21,19 @@ class MovingAverageCrossover(Strategy):
 
     def __init__(
         self,
-        config: Union[Config, dict[str, Any]],
+        config: Config,
         short_window: int = 20,
         long_window: int = 50,
         rsi_period: int = 14,
         rsi_overbought: float = 70.0,
         rsi_oversold: float = 30.0,
-    ):
-        """Initialize the strategy.
-
-        Args:
-            config: Strategy configuration
-            short_window: Short-term moving average window
-            long_window: Long-term moving average window
-            rsi_period: RSI calculation period
-            rsi_overbought: RSI overbought threshold
-            rsi_oversold: RSI oversold threshold
-        """
-        # Convert dictionary to Config instance
-        config_instance = Config.from_dict(config)
-        super().__init__(config_instance)
+    ) -> None:
+        """Initialize the strategy with a Config instance."""
+        super().__init__(config)
         self.short_window = short_window
         self.long_window = long_window
         self.lookback = max(short_window, long_window) * 2  # Ensure enough data for calculations
-        self.signal_threshold = float(config.get("signal_threshold", 0.0))
+        self.signal_threshold: float = 0.0
         self.rsi_period = rsi_period
         self.rsi_overbought = rsi_overbought
         self.rsi_oversold = rsi_oversold
@@ -78,7 +69,7 @@ class MovingAverageCrossover(Strategy):
         return signals
 
     def update_state(
-        self, data: Union[Series, dict[str, Union[float, str]]], timestamp: datetime
+        self, data: pd.Series[Any] | dict[str, float | str], timestamp: datetime
     ) -> None:
         """Update strategy state with new market data."""
         if isinstance(data, dict):

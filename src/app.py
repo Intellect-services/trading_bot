@@ -2,7 +2,7 @@
 import logging
 import os
 import secrets
-from typing import TYPE_CHECKING, Optional, Union
+from typing import Optional, Union
 
 from authlib.integrations.flask_client import OAuth
 from flask import (
@@ -29,7 +29,13 @@ from src.strategies.moving_average import MovingAverageCrossover
 logging.basicConfig(level=logging.DEBUG)
 logger = logging.getLogger(__name__)
 
-app = Flask(__name__, static_folder="static")
+# Subclass Flask so mypy knows about trading_bot attribute
+class TradingFlask(Flask):
+    trading_bot: Optional[TradingBot] = None
+
+
+# instantiate the app as TradingFlask so mypy recognizes trading_bot
+app: TradingFlask = TradingFlask(__name__, static_folder="static")
 app.secret_key = os.getenv("SECRET_KEY", secrets.token_hex(32))
 
 # Configure session
@@ -88,9 +94,6 @@ linkedin = oauth.register(
     api_base_url="https://api.linkedin.com/v2/",
     client_kwargs={"scope": "r_liteprofile r_emailaddress"},
 )
-
-# initialize trading_bot under mypy stub
-app.trading_bot = None  # type: ignore[attr-defined]
 
 
 @app.route("/", methods=["GET"])

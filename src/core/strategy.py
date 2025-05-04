@@ -1,11 +1,13 @@
 """Base strategy module for implementing trading strategies."""
 
+from __future__ import annotations
+
 from dataclasses import dataclass
 from datetime import datetime
 from typing import Any, Dict, List, Optional, TypeVar, Union, cast
 
 import pandas as pd
-from pandas.core.series import Series
+from pandas import Series
 
 from ..core.risk_manager import RiskManager
 from ..utils.config import Config
@@ -122,7 +124,7 @@ class Strategy:
         raise NotImplementedError("Subclasses must implement generate_signals")
 
     def update_state(
-        self, data: Union[pd.Series, Dict[str, Union[float, str]]], timestamp: datetime
+        self, data: pd.Series[Any] | Dict[str, Union[float, str]], timestamp: datetime
     ) -> None:
         """Update the strategy state with new market data.
 

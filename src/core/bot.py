@@ -246,7 +246,7 @@ class TradingBot:
                 logger.error(f"Error in trading loop: {e}")
                 time.sleep(5)
 
-    def _execute_signals(self, symbol: str, signals: pd.DataFrame) -> None:
+    def _execute_signals(self, symbol: str, signals: Union[pd.DataFrame, Dict[str, float]]) -> None:
         """Execute trades based on signals.
 
         Args:

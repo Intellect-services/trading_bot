@@ -51,7 +51,7 @@ def run_backtest() -> Dict[str, Any]:
         alpaca_service = AlpacaService(config_data)
 
         # Initialize strategy
-        strategy = MovingAverageCrossover(config_data)
+        strategy = MovingAverageCrossover(config)
 
         # Initialize and run backtest
         bot = TradingBot(config=config, strategy=strategy)
