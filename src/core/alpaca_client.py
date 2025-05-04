@@ -4,25 +4,47 @@ import logging
 from datetime import datetime
 from typing import Any, Dict, Iterator, List, Optional, TypeVar, Union, cast
 
-from alpaca.data.historical import StockHistoricalDataClient
-from alpaca.data.models import Bar, BarSet
-from alpaca.data.requests import StockBarsRequest
-from alpaca.data.timeframe import TimeFrame
-from alpaca.trading.client import TradingClient
-from alpaca.trading.enums import (
-    OrderSide,
-    OrderStatus,
-    OrderType,
-    QueryOrderStatus,
-    TimeInForce,
-)
-from alpaca.trading.models import Asset, Clock, Order, Position, TradeAccount
-from alpaca.trading.requests import (
-    LimitOrderRequest,
-    MarketOrderRequest,
-    StopLimitOrderRequest,
-    StopOrderRequest,
-)
+try:
+    from alpaca.data.historical import StockHistoricalDataClient
+    from alpaca.data.models import Bar, BarSet
+    from alpaca.data.requests import StockBarsRequest
+    from alpaca.data.timeframe import TimeFrame
+    from alpaca.trading.client import TradingClient
+    from alpaca.trading.enums import (
+        OrderSide,
+        OrderStatus,
+        OrderType,
+        QueryOrderStatus,
+        TimeInForce,
+    )
+    from alpaca.trading.models import Asset, Clock, Order, Position, TradeAccount
+    from alpaca.trading.requests import (
+        LimitOrderRequest,
+        MarketOrderRequest,
+        StopLimitOrderRequest,
+        StopOrderRequest,
+    )
+except ImportError:
+    StockHistoricalDataClient = Any
+    Bar = Any
+    BarSet = Any
+    StockBarsRequest = Any
+    TimeFrame = Any  # type: ignore[name-defined]
+    TradingClient = Any
+    OrderSide = Any
+    OrderStatus = Any
+    OrderType = Any
+    QueryOrderStatus = Any
+    TimeInForce = Any
+    Asset = Any
+    Clock = Any
+    Order = Any
+    Position = Any
+    TradeAccount = Any
+    LimitOrderRequest = Any
+    MarketOrderRequest = Any
+    StopLimitOrderRequest = Any
+    StopOrderRequest = Any
 
 from ..utils.logger import setup_logger
 

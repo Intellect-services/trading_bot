@@ -9,9 +9,15 @@ from typing import Any, Callable, Dict, List, Optional, Union, cast
 
 import numpy as np
 import pandas as pd
-from alpaca.data import TimeFrame
-from alpaca.data.historical import StockHistoricalDataClient
-from alpaca.data.requests import StockBarsRequest
+
+try:
+    from alpaca.data import TimeFrame
+    from alpaca.data.historical import StockHistoricalDataClient
+    from alpaca.data.requests import StockBarsRequest
+except ImportError:
+    TimeFrame = Any
+    StockHistoricalDataClient = Any
+    StockBarsRequest = Any
 
 from ..utils.logger import setup_logger
 from .alpaca_client import (

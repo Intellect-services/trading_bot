@@ -4,8 +4,16 @@ import logging
 from datetime import datetime
 from typing import Any, Dict, List, Optional
 
-from alpaca.data.timeframe import TimeFrame
-from alpaca.trading.enums import OrderSide, OrderType, QueryOrderStatus, TimeInForce
+try:
+    from alpaca.data.timeframe import TimeFrame
+    from alpaca.trading.enums import OrderSide, OrderType, QueryOrderStatus, TimeInForce
+except ImportError:
+    # Alpaca SDK not installed in test environment; stub dependencies
+    TimeFrame: Any = None  # type: ignore[name-defined]
+    OrderSide: Any = None
+    OrderType: Any = None
+    QueryOrderStatus: Any = None
+    TimeInForce: Any = None
 
 from ..utils.logger import setup_logger
 from .alpaca_client import (
