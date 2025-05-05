@@ -51,18 +51,25 @@ socketio = SocketIO(app)
 oauth = OAuth(app)
 
 # Initialize configuration
-config = Config(
-    {
-        "ALPACA_API_KEY": os.getenv("ALPACA_API_KEY", ""),
-        "ALPACA_SECRET_KEY": os.getenv("ALPACA_SECRET_KEY", ""),
-        "ALPACA_PAPER": os.getenv("ALPACA_PAPER", "True").lower() == "true",
-        "INITIAL_CAPITAL": float(os.getenv("INITIAL_CAPITAL", "100000")),
-        "RISK_MAX_POSITION_SIZE": float(os.getenv("RISK_MAX_POSITION_SIZE", "0.1")),
-        "RISK_PER_TRADE": float(os.getenv("RISK_PER_TRADE", "0.01")),
-        "RISK_STOP_LOSS_PCT": float(os.getenv("RISK_STOP_LOSS_PCT", "0.02")),
-        "RISK_TAKE_PROFIT_PCT": float(os.getenv("RISK_TAKE_PROFIT_PCT", "0.04")),
-    }
-)
+config_data = {
+    "ALPACA_API_KEY": os.getenv("ALPACA_API_KEY", ""),
+    "ALPACA_SECRET_KEY": os.getenv("ALPACA_SECRET_KEY", ""),
+    "ALPACA_PAPER": os.getenv("ALPACA_PAPER", "True").lower() == "true",
+    "INITIAL_CAPITAL": float(os.getenv("INITIAL_CAPITAL", "100000")),
+    "RISK_MAX_POSITION_SIZE": float(os.getenv("RISK_MAX_POSITION_SIZE", "0.1")),
+    "RISK_PER_TRADE": float(os.getenv("RISK_PER_TRADE", "0.01")),
+    "RISK_MAX_DRAWDOWN": float(os.getenv("RISK_MAX_DRAWDOWN", "0.10")),
+    "RISK_MAX_LEVERAGE": float(os.getenv("RISK_MAX_LEVERAGE", "1.0")),
+    "STRATEGY_SYMBOLS": ["SPY"],
+    "STRATEGY_TIMEFRAME": "1Min",
+    "SHORT_WINDOW": 20,
+    "LONG_WINDOW": 50,
+    "LOOKBACK_DAYS": 10,
+    "LOG_LEVEL": "INFO",
+    "LOG_FILE": None,
+    "PEAK_EQUITY": 0.0,
+}
+config = Config.from_dict(config_data)
 
 # OAuth configurations
 google = oauth.register(

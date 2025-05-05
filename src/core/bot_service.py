@@ -1,4 +1,4 @@
-"""Bot service module for managing trading bot operations."""
+"""Bot service for managing trading operations."""
 
 import logging
 import time
@@ -6,6 +6,15 @@ from datetime import datetime, timedelta
 from enum import Enum, auto
 from threading import Event, Thread
 from typing import Any, Dict, List, Optional, Union, cast
+
+from alpaca.data.timeframe import TimeFrame
+from alpaca.trading.enums import OrderSide, OrderType, TimeInForce
+from alpaca.trading.models import Account
+
+from src.core.alpaca_service import AlpacaService
+from src.core.alpaca_types import Asset, Clock, Order, Position, TradeAccount
+from src.core.data_feed import DataFeed
+from src.strategies.moving_average import MovingAverageCrossover
 
 from ..core.alpaca_client import AlpacaClient
 from ..core.data_feed import AlpacaDataFeed
@@ -29,54 +38,22 @@ class BotStatus(Enum):
 
 
 class BotService:
-    """Service for managing trading bot operations."""
+    """Service for managing trading operations."""
 
-    def __init__(
-        self,
-        config: Config,
-        alpaca_client: AlpacaClient,
-        strategy: Optional[Strategy] = None,
-    ) -> None:
-        """Initialize bot service.
-
-        Args:
-            config: Configuration instance
-            alpaca_client: Alpaca client instance
-            strategy: Optional strategy instance
-        """
-        self.config = config
-        self.alpaca_client = alpaca_client
-        self.risk_manager = RiskManager(config)
-        self.data_feed = AlpacaDataFeed(alpaca_client)
-
-        if strategy is None:
-            from ..strategies.moving_average import MovingAverageCrossover
-
-            # Use Config instance directly instead of raw dict
-            strategy = MovingAverageCrossover(config)
-
-        # Create AlpacaService instance
-        from ..core.alpaca_service import AlpacaService
-
-        # Convert Config instance to dictionary for AlpacaService
-        config_dict = {
-            "ALPACA_API_KEY": config.ALPACA_API_KEY,
-            "ALPACA_SECRET_KEY": config.ALPACA_SECRET_KEY,
-            "ALPACA_PAPER": config.ALPACA_PAPER,
-            "INITIAL_CAPITAL": config.INITIAL_CAPITAL,
-            "RISK_MAX_POSITION_SIZE": config.RISK_MAX_POSITION_SIZE,
-            "RISK_STOP_LOSS_PCT": config.RISK_STOP_LOSS_PCT,
-            "RISK_TAKE_PROFIT_PCT": config.RISK_TAKE_PROFIT_PCT,
-            "RISK_MAX_DRAWDOWN": config.RISK_MAX_DRAWDOWN,
-            "RISK_MAX_LEVERAGE": config.RISK_MAX_LEVERAGE,
-            "RISK_PER_TRADE": config.RISK_PER_TRADE,
-        }
-        self.alpaca_service = AlpacaService(config_dict)
-
-        # Initialize TradingBot with AlpacaService
-        self.bot = TradingBot(alpaca_service=self.alpaca_service)
-
-        logger.info("Bot service initialized")
+    def __init__(self, config: Config) -> None:
+        """Initialize the bot service with configuration."""
+        try:
+            self.config = config
+            self.alpaca_service = AlpacaService(config.api_key, config.api_secret)
+            self.risk_manager = RiskManager(config.risk_factor, config.max_position_size)
+            self.strategy = MovingAverageCrossover(
+                short_window=config.short_window, long_window=config.long_window
+            )
+            self.positions: Dict[str, Position] = {}
+            self.update_positions()
+        except Exception as e:
+            logger.error(f"Failed to initialize bot service: {e}")
+            raise
 
     def start(self) -> None:
         """Start the trading bot.
@@ -128,32 +105,12 @@ class BotService:
             logger.error("Error getting bot status: %s", str(e))
             raise
 
-    def get_positions(self) -> List[Dict[str, Union[str, float]]]:
-        """Get current positions.
-
-        Returns:
-            List[Dict[str, Union[str, float]]]: List of positions
-
-        Raises:
-            Exception: If position retrieval fails
-        """
+    def get_positions(self) -> List[Position]:
+        """Get all positions."""
         try:
-            positions = self.alpaca_client.get_positions()
-            return [
-                {
-                    "symbol": position.symbol,
-                    "qty": float(position.qty),
-                    "side": position.side,
-                    "avg_entry_price": float(position.avg_entry_price),
-                    "current_price": float(position.current_price),
-                    "market_value": float(position.market_value),
-                    "unrealized_pl": float(position.unrealized_pl),
-                    "unrealized_plpc": float(position.unrealized_plpc),
-                }
-                for position in positions
-            ]
+            return self.alpaca_service.get_all_positions()
         except Exception as e:
-            logger.error("Error getting positions: %s", str(e))
+            logger.error(f"Failed to get positions: {e}")
             raise
 
     def get_trades(self) -> List[Dict[str, Union[str, float, datetime]]]:
@@ -219,4 +176,164 @@ class BotService:
             }
         except Exception as e:
             logger.error("Error getting portfolio history: %s", str(e))
+            raise
+
+    def get_account(self) -> Account:
+        """Get account information."""
+        try:
+            return self.alpaca_service.get_account()
+        except Exception as e:
+            logger.error(f"Failed to get account info: {e}")
+            raise
+
+    def get_open_position(self, symbol: str) -> Optional[Position]:
+        """Get open position for a symbol."""
+        try:
+            return self.alpaca_service.get_open_position(symbol)
+        except Exception as e:
+            logger.error(f"Failed to get open position: {e}")
+            raise
+
+    def get_asset(self, symbol: str) -> Asset:
+        """Get asset information.
+
+        Args:
+            symbol: Symbol to get asset for
+
+        Returns:
+            Asset: Asset information
+        """
+        return self.alpaca_service.get_asset(symbol)
+
+    def get_clock(self) -> Clock:
+        """Get market clock."""
+        try:
+            return self.alpaca_service.get_clock()
+        except Exception as e:
+            logger.error(f"Failed to get clock: {e}")
+            raise
+
+    def submit_order(
+        self,
+        symbol: str,
+        qty: float,
+        side: OrderSide,
+        type: OrderType = OrderType.MARKET,
+        time_in_force: TimeInForce = TimeInForce.DAY,
+        limit_price: Optional[float] = None,
+        stop_price: Optional[float] = None,
+    ) -> Order:
+        """Submit an order."""
+        try:
+            return self.alpaca_service.submit_order(
+                symbol=symbol,
+                qty=qty,
+                side=side,
+                type=type,
+                time_in_force=time_in_force,
+                limit_price=limit_price,
+                stop_price=stop_price,
+            )
+        except Exception as e:
+            logger.error(f"Failed to submit order: {e}")
+            raise
+
+    def get_orders(self, status: Optional[str] = None) -> List[Order]:
+        """Get orders.
+
+        Args:
+            status: Order status to filter by
+
+        Returns:
+            List[Order]: List of orders
+        """
+        return self.alpaca_service.get_orders(status=status)
+
+    def get_order_by_id(self, order_id: str) -> Order:
+        """Get order by ID.
+
+        Args:
+            order_id: ID of order to get
+
+        Returns:
+            Order: Order information
+        """
+        return self.alpaca_service.get_order_by_id(order_id)
+
+    def cancel_order_by_id(self, order_id: str) -> None:
+        """Cancel an order.
+
+        Args:
+            order_id: ID of order to cancel
+        """
+        self.alpaca_service.cancel_order_by_id(order_id)
+
+    def update_positions(self) -> None:
+        """Update positions dictionary."""
+        try:
+            positions = self.get_positions()
+            self.positions = {p.symbol: p for p in positions}
+        except Exception as e:
+            logger.error(f"Failed to update positions: {e}")
+            raise
+
+    def check_market_status(self) -> bool:
+        """Check if market is open."""
+        try:
+            clock = self.get_clock()
+            return clock.is_open
+        except Exception as e:
+            logger.error(f"Failed to check market status: {e}")
+            return False
+
+    def run_strategy(self, symbol: str) -> None:
+        """Run trading strategy for a symbol."""
+        try:
+            if not self.check_market_status():
+                logger.info("Market is closed")
+                return
+
+            # Get historical data
+            bars = self.alpaca_service.get_bars(
+                symbol=symbol, timeframe=TimeFrame.Day, limit=self.config.lookback_period
+            )
+
+            if bars.empty:
+                logger.warning(f"No data available for {symbol}")
+                return
+
+            # Update strategy state
+            self.strategy.update_state(bars)
+
+            # Get current position
+            position = self.get_open_position(symbol)
+
+            # Calculate position size based on risk
+            close_price = bars.iloc[-1]["close"]
+            position_size = self.risk_manager.calculate_position_size(close_price, symbol)
+
+            # Check for buy signal
+            if self.strategy.should_buy(symbol) and not position:
+                self.submit_order(
+                    symbol=symbol,
+                    qty=position_size,
+                    side=OrderSide.BUY,
+                    type=OrderType.MARKET,
+                    time_in_force=TimeInForce.DAY,
+                )
+                logger.info(f"Buy signal for {symbol}")
+
+            # Check for sell signal
+            elif self.strategy.should_sell(symbol) and position:
+                self.submit_order(
+                    symbol=symbol,
+                    qty=float(position.qty),
+                    side=OrderSide.SELL,
+                    type=OrderType.MARKET,
+                    time_in_force=TimeInForce.DAY,
+                )
+                logger.info(f"Sell signal for {symbol}")
+
+        except Exception as e:
+            logger.error(f"Failed to run strategy: {e}")
             raise

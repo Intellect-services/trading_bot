@@ -34,7 +34,7 @@ def run_backtest() -> Dict[str, Any]:
             "ALPACA_SECRET_KEY": "",
             "ALPACA_PAPER": True,
         }
-        config = Config(config_data)
+        config = Config.from_dict(config_data)
 
         # Initialize components
         from src.core.alpaca_client import AlpacaClient

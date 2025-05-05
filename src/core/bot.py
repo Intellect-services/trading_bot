@@ -3,23 +3,23 @@
 import logging
 import secrets  # For secure random number generation
 import time
-from datetime import datetime
-from typing import Any, Dict, List, Mapping, Optional, Union, cast
+from datetime import datetime, timedelta
+from typing import Any, Dict, List, Optional, Union, cast
 
+import alpaca_trade_api as tradeapi
 import pandas as pd
-from alpaca.data.historical import StockHistoricalDataClient
-from alpaca.data.models import Bar
-from alpaca.data.requests import StockBarsRequest
-from alpaca.data.timeframe import TimeFrame
-from alpaca.trading.client import TradingClient
-from alpaca.trading.enums import OrderSide, TimeInForce
-from alpaca.trading.models import Order
-from alpaca.trading.models import Position as AlpacaPosition
-from alpaca.trading.models import TradeAccount
-from alpaca.trading.requests import MarketOrderRequest
+from alpaca_trade_api.entity import Bar
+from alpaca_trade_api.rest import REST
 
+from src.core.alpaca_service import AlpacaService
+from src.core.alpaca_types import Asset
+from src.core.alpaca_types import Bar as AlpacaBar
+from src.core.alpaca_types import BarSet, Clock, Order, OrderSide, OrderType
+from src.core.alpaca_types import Position as AlpacaPosition
+from src.core.alpaca_types import TimeInForce, TradeAccount
 from src.core.portfolio import Portfolio
 from src.core.position import Position
+from src.core.risk_manager import RiskManager
 from src.core.strategy import Strategy
 from src.strategies.base import BaseStrategy
 from src.utils.config import Config
@@ -32,291 +32,239 @@ logger = logging.getLogger(__name__)
 class TradingBot:
     """Main trading bot class that manages trading operations."""
 
-    def __init__(
-        self,
-        config: Config,
-        strategy: Strategy,
-        portfolio: Optional[Portfolio] = None,
-        data_feed: Optional[Any] = None,
-        risk_manager: Optional[Any] = None,
-    ) -> None:
-        """Initialize the trading bot.
-
-        Args:
-            config: Configuration object
-            strategy: Trading strategy to use
-            portfolio: Portfolio manager (optional)
-            data_feed: Data feed provider (optional)
-            risk_manager: Risk management system (optional)
-        """
+    def __init__(self, config: Config, strategy: Strategy, alpaca_service: AlpacaService):
+        """Initialize the trading bot."""
         self.config = config
         self.strategy = strategy
-        self.portfolio = portfolio
-        self.data_feed = data_feed
-        self.risk_manager = risk_manager
-        self.trading_client = TradingClient(
-            api_key=config.ALPACA_API_KEY,
-            secret_key=config.ALPACA_SECRET_KEY,
-            paper=config.ALPACA_PAPER,
-        )
-        self.data_client = StockHistoricalDataClient(
-            api_key=config.ALPACA_API_KEY, secret_key=config.ALPACA_SECRET_KEY
-        )
-        self.positions: Dict[str, AlpacaPosition] = {}
-        self.is_running: bool = False
-        self.symbols: List[str] = []
-        self.initial_capital: float = 0.0
+        self.alpaca_service = alpaca_service
+
+        # Initialize state
+        self.account: Dict[str, Any] = self.alpaca_service.get_account()
+        self.equity = float(self.account["equity"])
+        self.cash = float(self.account["cash"])
+        self.buying_power = float(self.account["buying_power"])
+
+        # Initialize portfolio and risk manager
+        self.portfolio = Portfolio(self.equity)
+        self.risk_manager = RiskManager(self.equity)
+
+        # Trading state
+        self.is_trading = True
+        self.positions: Dict[str, Dict[str, Any]] = {}
+        self.orders: Dict[str, Dict[str, Any]] = {}
+        self.market_clock: Dict[str, Any] = {}
+
+        # Performance tracking
+        self.winning_trades = 0
+        self.losing_trades = 0
+        self.total_trades = 0
+        self.total_pnl = 0.0
+
         logger.info("Trading bot initialized")
 
-    def start(self) -> None:
-        """Start the trading bot."""
-        if not self.config.is_valid:
-            raise ValueError("Invalid configuration")
-
-        self.is_running = True
-        logger.info("Trading bot started")
-
-        # Initialize positions
-        self._update_positions()
-
-    def stop(self) -> None:
-        """Stop the trading bot."""
-        self.is_running = False
-        logger.info("Trading bot stopped")
-
-    def _update_positions(self) -> None:
-        """Update current positions from Alpaca."""
+    def update_state(self) -> None:
+        """Update the bot's state with latest market data."""
         try:
-            positions = self.trading_client.get_all_positions()
-            self.positions = {
-                position.symbol: position
-                for position in positions
-                if isinstance(position, AlpacaPosition)
-            }
+            # Update account information
+            self.account = self.alpaca_service.get_account()
+            self.equity = float(self.account["equity"])
+            self.cash = float(self.account["cash"])
+            self.buying_power = float(self.account["buying_power"])
+
+            # Update positions
+            positions = self.alpaca_service.get_positions()
+            self.positions = {pos["symbol"]: pos for pos in positions}
+
+            # Update orders
+            orders = self.alpaca_service.get_orders()
+            self.orders = {order["id"]: order for order in orders}
+
+            # Update market clock
+            self.market_clock = self.alpaca_service.get_clock()
+
+            logger.debug("Bot state updated successfully")
         except Exception as e:
-            logger.error(f"Error updating positions: {e}")
-            self.positions = {}
+            logger.error(f"Error updating bot state: {e}")
+            raise
 
-    def get_position(self, symbol: str) -> Optional[AlpacaPosition]:
-        """Get position for a specific symbol.
-
-        Args:
-            symbol: Trading symbol
-
-        Returns:
-            Position object if exists, None otherwise
-        """
-        return self.positions.get(symbol)
-
-    def get_status(self) -> Dict[str, Any]:
-        """Get the current status of the trading bot.
-
-        Returns:
-            Dictionary containing bot status information
-        """
-        return {
-            "running": self.is_running,
-            "positions": len(self.positions),
-            "strategy": self.strategy.__class__.__name__,
-            "timestamp": datetime.now().isoformat(),
-        }
-
-    def get_metrics(self) -> Dict[str, Any]:
-        """Get trading metrics.
-
-        Returns:
-            Dictionary containing trading metrics
-        """
-        return {
-            "initial_capital": self.initial_capital,
-            "current_capital": self._get_current_capital(),
-            "total_trades": self._get_total_trades(),
-            "win_rate": self._get_win_rate(),
-            "profit_factor": self._get_profit_factor(),
-            "sharpe_ratio": self._get_sharpe_ratio(),
-            "active_positions": len(self.positions),
-        }
-
-    def _get_current_capital(self) -> float:
-        """Get current capital from Alpaca account."""
+    def _check_risk_limits(self) -> bool:
+        """Check if any risk limits are breached."""
         try:
-            account = self.trading_client.get_account()
-            if isinstance(account, TradeAccount) and account.cash is not None:
-                return float(account.cash)
-            return 0.0
-        except Exception as e:
-            logger.error(f"Error getting current capital: {e}")
-            return 0.0
+            # Check maximum drawdown
+            current_drawdown = (
+                self.portfolio.peak_equity - self.equity
+            ) / self.portfolio.peak_equity
+            if current_drawdown > self.config.risk_max_drawdown:
+                logger.warning(f"Maximum drawdown limit breached: {current_drawdown:.2%}")
+                return True
 
-    def _get_total_trades(self) -> int:
-        """Get total number of trades."""
-        # TODO: Implement proper trade counting
-        return 0
-
-    def _get_win_rate(self) -> float:
-        """Get win rate as a percentage."""
-        # TODO: Implement proper win rate calculation
-        return 0.0
-
-    def _get_profit_factor(self) -> float:
-        """Get profit factor."""
-        # TODO: Implement proper profit factor calculation
-        return 0.0
-
-    def _get_sharpe_ratio(self) -> float:
-        """Get Sharpe ratio."""
-        # TODO: Implement proper Sharpe ratio calculation
-        return 0.0
-
-    def execute_trade(self, symbol: str, side: OrderSide, quantity: float) -> Optional[Order]:
-        """Execute a trade.
-
-        Args:
-            symbol: Trading symbol
-            side: Order side (buy/sell)
-            quantity: Number of shares
-
-        Returns:
-            Order object if successful, None otherwise
-        """
-        try:
-            order_data = MarketOrderRequest(
-                symbol=symbol, qty=quantity, side=side, time_in_force=TimeInForce.DAY
+            # Check leverage
+            total_position_value = sum(
+                float(pos["market_value"]) for pos in self.positions.values()
             )
-            order = cast(Order, self.trading_client.submit_order(order_data))
+            current_leverage = total_position_value / self.equity
+            if current_leverage > self.config.risk_max_leverage:
+                logger.warning(f"Maximum leverage limit breached: {current_leverage:.2f}")
+                return True
+
+            # Check position sizes
+            for pos in self.positions.values():
+                position_size = float(pos["market_value"]) / self.equity
+                if position_size > self.config.risk_max_position_size:
+                    logger.warning(
+                        f"Maximum position size limit breached for {pos['symbol']}: {position_size:.2%}"
+                    )
+                    return True
+
+            return False
+        except Exception as e:
+            logger.error(f"Error checking risk limits: {e}")
+            return True
+
+    def _stop_trading(self) -> None:
+        """Stop trading and close all positions."""
+        logger.warning("Stopping trading due to risk limits breach")
+        self.is_trading = False
+        self._close_all_positions()
+
+    def _reduce_position(self, symbol: str, target_size: float) -> None:
+        """Reduce position size to target size."""
+        try:
+            position = self.positions.get(symbol)
+            if position:
+                current_size = float(position["qty"])
+                reduce_size = current_size - target_size
+                if reduce_size > 0:
+                    self.submit_order(
+                        symbol=symbol,
+                        qty=str(reduce_size),
+                        side=OrderSide.SELL if position["side"] == "long" else OrderSide.BUY,
+                        type=OrderType.MARKET,
+                        time_in_force=TimeInForce.DAY,
+                    )
+        except Exception as e:
+            logger.error(f"Error reducing position for {symbol}: {e}")
+
+    def _close_position(self, symbol: str) -> None:
+        """Close a specific position."""
+        try:
+            position = self.positions.get(symbol)
+            if position:
+                self.submit_order(
+                    symbol=symbol,
+                    qty=position["qty"],
+                    side=OrderSide.SELL if position["side"] == "long" else OrderSide.BUY,
+                    type=OrderType.MARKET,
+                    time_in_force=TimeInForce.DAY,
+                )
+        except Exception as e:
+            logger.error(f"Error closing position for {symbol}: {e}")
+
+    def _close_all_positions(self) -> None:
+        """Close all open positions."""
+        for symbol in list(self.positions.keys()):
+            self._close_position(symbol)
+
+    def submit_order(
+        self,
+        symbol: str,
+        qty: str,
+        side: OrderSide,
+        type: OrderType,
+        time_in_force: TimeInForce,
+        limit_price: Optional[str] = None,
+        stop_price: Optional[str] = None,
+    ) -> None:
+        """Submit a new order."""
+        try:
+            order = self.alpaca_service.submit_order(
+                symbol=symbol,
+                qty=qty,
+                side=side,
+                type=type,
+                time_in_force=time_in_force,
+                limit_price=limit_price,
+                stop_price=stop_price,
+            )
+            self.orders[order["id"]] = order
             logger.info(f"Order submitted: {order}")
-            return order
         except Exception as e:
-            logger.error(f"Error executing trade: {e}")
-            return None
+            logger.error(f"Error submitting order: {e}")
+            raise
 
-    def get_historical_data(
-        self, symbol: str, timeframe: TimeFrame, limit: int = 100
-    ) -> Optional[List[Bar]]:
-        """Get historical price data.
-
-        Args:
-            symbol: Trading symbol
-            timeframe: Timeframe for the data
-            limit: Number of bars to retrieve
-
-        Returns:
-            List of historical bars if successful, None otherwise
-        """
+    def execute_trade(self, symbol: str, signal: Dict[str, Any]) -> None:
+        """Execute a trade based on the signal."""
         try:
-            request_params = StockBarsRequest(
-                symbol_or_symbols=symbol, timeframe=timeframe, limit=limit
+            # Get current position
+            position = self.positions.get(symbol)
+
+            # Calculate position size
+            position_size = self.strategy.calculate_position_size(
+                price=float(signal["price"]), risk_amount=self.equity * self.config.risk_per_trade
             )
-            bars = self.data_client.get_stock_bars(request_params)
-            return list(bars[symbol]) if bars else None
+
+            if position:
+                # Check if we should close the position
+                if self.strategy.should_close_position(price=float(signal["price"])):
+                    self._close_position(symbol)
+                    logger.info(f"Closed position for {symbol}")
+            else:
+                # Check if we should open a new position
+                if self.strategy.should_open_position(price=float(signal["price"])):
+                    # Get stop loss and take profit levels
+                    stop_loss = self.strategy.get_stop_loss(price=float(signal["price"]))
+                    take_profit = self.strategy.get_take_profit(price=float(signal["price"]))
+
+                    # Submit the order
+                    self.submit_order(
+                        symbol=symbol,
+                        qty=str(position_size),
+                        side=OrderSide.BUY if signal["side"] == "long" else OrderSide.SELL,
+                        type=OrderType.MARKET,
+                        time_in_force=TimeInForce.DAY,
+                        stop_price=str(stop_loss) if stop_loss else None,
+                        limit_price=str(take_profit) if take_profit else None,
+                    )
+                    logger.info(f"Opened new position for {symbol}")
         except Exception as e:
-            logger.error(f"Error getting historical data: {e}")
-            return None
+            logger.error(f"Error executing trade for {symbol}: {e}")
 
-    def add_symbol(self, symbol: str) -> None:
-        """Add a symbol to track.
-
-        Args:
-            symbol: Trading symbol to add
-        """
-        if symbol not in self.symbols:
-            self.symbols.append(symbol)
-            logger.info(f"Added symbol: {symbol}")
-
-    def _run(self) -> None:
-        """Main trading loop."""
-        while self.is_running:
-            try:
-                # Update positions
-                self._update_positions()
-
-                # Get market data for all symbols
-                for symbol in self.symbols:
-                    data = self.get_historical_data(symbol, TimeFrame.Minute, limit=100)
-                    if data:
-                        # Generate signals
-                        signals = self.strategy.generate_signals(pd.DataFrame(data))  # type: ignore[call-arg]
-                        if signals is not None:
-                            # Execute trades based on signals
-                            self._execute_signals(symbol, signals)
-
-                # Sleep for a short time
-                time.sleep(1)
-            except Exception as e:
-                logger.error(f"Error in trading loop: {e}")
-                time.sleep(5)
-
-    def _execute_signals(self, symbol: str, signals: Union[pd.DataFrame, Dict[str, float]]) -> None:
-        """Execute trades based on signals.
-
-        Args:
-            symbol: Trading symbol
-            signals: DataFrame containing trading signals
-        """
-        # TODO: Implement signal execution logic
-        pass
-
-    def backtest(self) -> Dict[str, Any]:
-        """Run backtest simulation.
-
-        Returns:
-            Dict[str, Any]: Backtest results
-        """
+    def run(self) -> None:
+        """Run the trading bot."""
         try:
-            from src.backtesting.engine import BacktestEngine
+            while self.is_trading:
+                # Update bot state
+                self.update_state()
 
-            # Get historical data for backtesting
-            data = self.get_historical_data(
-                symbol=self.symbols[0] if self.symbols else "SPY",
-                timeframe=TimeFrame.Day,
-                limit=1000,
-            )
-            if not data:
-                raise ValueError("No historical data available for backtesting")
+                # Check if market is open
+                if not self.market_clock["is_open"]:
+                    logger.info("Market is closed")
+                    continue
 
-            # Convert data to DataFrame
-            df = pd.DataFrame(
-                {
-                    "timestamp": [bar.timestamp for bar in data],
-                    "open": [float(bar.open) for bar in data],
-                    "high": [float(bar.high) for bar in data],
-                    "low": [float(bar.low) for bar in data],
-                    "close": [float(bar.close) for bar in data],
-                    "volume": [float(bar.volume) for bar in data],
-                }
-            )
-            df.set_index("timestamp", inplace=True)
+                # Check risk limits
+                if self._check_risk_limits():
+                    self._stop_trading()
+                    continue
 
-            engine = BacktestEngine(
-                strategy=self.strategy,
-                initial_capital=self.config.INITIAL_CAPITAL,
-            )
+                # Get latest market data and generate signals
+                for symbol in self.config.strategy_symbols:
+                    # Get historical data
+                    bars = self.alpaca_service.get_bars(
+                        symbol=symbol,
+                        timeframe=self.config.strategy_timeframe,
+                        start=datetime.now() - timedelta(days=self.config.lookback_days),
+                        end=datetime.now(),
+                    )
 
-            # Run backtest
-            results = engine.run(data=df)
+                    # Generate trading signals
+                    signals = self.strategy.generate_signals(bars)
 
-            # Add additional metrics
-            results.update(
-                {
-                    "strategy": self.strategy.__class__.__name__,
-                    "initial_capital": self.config.INITIAL_CAPITAL,
-                    "risk_settings": {
-                        "max_position_size": self.config.RISK_MAX_POSITION_SIZE,
-                        "stop_loss_pct": self.config.RISK_STOP_LOSS_PCT,
-                        "take_profit_pct": self.config.RISK_TAKE_PROFIT_PCT,
-                        "max_drawdown": self.config.RISK_MAX_DRAWDOWN,
-                        "max_leverage": self.config.RISK_MAX_LEVERAGE,
-                        "risk_per_trade": self.config.RISK_PER_TRADE,
-                    },
-                }
-            )
+                    # Execute trades based on signals
+                    for signal in signals:
+                        self.execute_trade(symbol, signal)
 
-            return results
-
+                logger.info("Trading iteration completed")
         except Exception as e:
-            logger.error(f"Error running backtest: {e}")
-            return {
-                "error": str(e),
-                "status": "failed",
-                "timestamp": datetime.now().isoformat(),
-            }
+            logger.error(f"Error in trading loop: {e}")
+            self._stop_trading()
+            raise

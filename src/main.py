@@ -30,7 +30,7 @@ def main() -> None:
             "ALPACA_SECRET_KEY": os.getenv("ALPACA_API_SECRET", ""),
             "ALPACA_PAPER": True,
         }
-        config = Config(config_data)
+        config = Config.from_dict(config_data)
 
         # Initialize services
         alpaca_service = AlpacaService(config_data)

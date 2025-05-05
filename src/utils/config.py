@@ -5,9 +5,10 @@ import logging
 import os
 from datetime import datetime, time
 from pathlib import Path
-from typing import Any, Dict, Optional, Union
+from typing import Any, ClassVar, Dict, List, Optional, Type, TypeVar, Union, cast
 
 from dotenv import load_dotenv
+from pydantic import BaseModel, Field, ValidationError, root_validator, validator
 
 # Configure basic logging
 logging.basicConfig(level=logging.INFO)
@@ -15,6 +16,8 @@ logger = logging.getLogger(__name__)
 
 # Load environment variables from .env file
 load_dotenv()
+
+T = TypeVar("T", bound="Config")
 
 
 def get_config(key: Optional[str] = None, default: Any = None) -> Any:
@@ -79,10 +82,10 @@ def save_config_to_file(config: Dict[str, str], file_path: str) -> None:
 
 # Default configuration
 DEFAULT_CONFIG = {
-    "API_KEY": "",
-    "SECRET_KEY": "",
-    "PAPER": True,
-    "INITIAL_BALANCE": 100000.0,
+    "ALPACA_API_KEY": "",
+    "ALPACA_SECRET_KEY": "",
+    "ALPACA_PAPER": True,
+    "INITIAL_CAPITAL": 100000.0,
     "MAX_POSITION_SIZE": 0.1,
     "STOP_LOSS": 0.02,
     "MAX_DRAWDOWN": 0.20,
@@ -115,65 +118,119 @@ def validate_config(config: Dict[str, Any]) -> bool:
     return True
 
 
-class Config:
-    """Configuration class for the trading bot."""
+class Config(BaseModel):
+    """Configuration for the trading bot."""
 
-    def __init__(self, config_data: Dict[str, Any]) -> None:
-        """Initialize configuration.
+    # API Configuration
+    ALPACA_API_KEY: str = Field(..., description="Alpaca API key")
+    ALPACA_SECRET_KEY: str = Field(..., description="Alpaca API secret key")
+    ALPACA_PAPER: bool = Field(True, description="Whether to use paper trading")
 
-        Args:
-            config_data: Configuration data dictionary
-        """
-        self.ALPACA_API_KEY = config_data.get("ALPACA_API_KEY", "")
-        self.ALPACA_SECRET_KEY = config_data.get("ALPACA_SECRET_KEY", "")
-        self.ALPACA_PAPER = config_data.get("ALPACA_PAPER", True)
-        self.INITIAL_CAPITAL = float(config_data.get("INITIAL_CAPITAL", 100000.0))
-        self.RISK_MAX_POSITION_SIZE = float(config_data.get("RISK_MAX_POSITION_SIZE", 0.1))
-        self.RISK_STOP_LOSS_PCT = float(config_data.get("RISK_STOP_LOSS_PCT", 0.02))
-        self.RISK_TAKE_PROFIT_PCT = float(config_data.get("RISK_TAKE_PROFIT_PCT", 0.04))
-        self.RISK_MAX_DRAWDOWN = float(config_data.get("RISK_MAX_DRAWDOWN", 0.1))
-        self.RISK_MAX_LEVERAGE = float(config_data.get("RISK_MAX_LEVERAGE", 1.0))
-        self.RISK_PER_TRADE = float(config_data.get("RISK_PER_TRADE", 0.01))
+    # Risk Management
+    RISK_PER_TRADE: float = Field(
+        0.02, description="Maximum risk per trade as percentage of portfolio"
+    )
+    RISK_MAX_DRAWDOWN: float = Field(0.10, description="Maximum drawdown before stopping trading")
+    RISK_MAX_LEVERAGE: float = Field(1.0, description="Maximum leverage allowed")
+    RISK_MAX_POSITION_SIZE: float = Field(
+        0.20, description="Maximum position size as percentage of portfolio"
+    )
+
+    # Strategy Settings
+    STRATEGY_SYMBOLS: List[str] = Field(["SPY"], description="List of symbols to trade")
+    STRATEGY_TIMEFRAME: str = Field("1Min", description="Timeframe for strategy")
+    SHORT_WINDOW: int = Field(20, description="Short moving average window")
+    LONG_WINDOW: int = Field(50, description="Long moving average window")
+    LOOKBACK_DAYS: int = Field(10, description="Number of days to look back for historical data")
+
+    # Portfolio Settings
+    INITIAL_CAPITAL: float = Field(100000.0, description="Initial capital for trading")
+    PEAK_EQUITY: float = Field(0.0, description="Peak equity value")
+
+    # Logging
+    LOG_LEVEL: str = Field("INFO", description="Logging level")
+    LOG_FILE: Optional[str] = Field(None, description="Log file path")
+
+    @validator("RISK_PER_TRADE", "RISK_MAX_DRAWDOWN", "RISK_MAX_LEVERAGE", "RISK_MAX_POSITION_SIZE")
+    def validate_percentage(cls, v: float) -> float:
+        """Validate that percentage values are between 0 and 1."""
+        if not 0 <= v <= 1:
+            raise ValueError("Percentage values must be between 0 and 1")
+        return v
+
+    @root_validator(pre=True)
+    def validate_windows(cls, values: Dict[str, Any]) -> Dict[str, Any]:
+        """Validate that short window is less than long window."""
+        short_window = values.get("SHORT_WINDOW")
+        long_window = values.get("LONG_WINDOW")
+        if short_window is not None and long_window is not None:
+            if short_window >= long_window:
+                raise ValueError("SHORT_WINDOW must be less than LONG_WINDOW")
+        return values
 
     @classmethod
-    def from_file(cls, config_file: str) -> "Config":
-        """Create Config instance from file.
-
-        Args:
-            config_file: Path to configuration file
-
-        Returns:
-            Config instance
-        """
-        with open(config_file, "r") as f:
-            config_data = json.load(f)
-        return cls(config_data)
+    def from_env(cls: Type[T]) -> T:
+        """Create a Config instance from environment variables."""
+        return cls(
+            ALPACA_API_KEY=os.getenv("ALPACA_API_KEY", ""),
+            ALPACA_SECRET_KEY=os.getenv("ALPACA_SECRET_KEY", ""),
+            ALPACA_PAPER=os.getenv("ALPACA_PAPER", "true").lower() == "true",
+            INITIAL_CAPITAL=float(os.getenv("INITIAL_CAPITAL", "100000.0")),
+            RISK_PER_TRADE=float(os.getenv("RISK_PER_TRADE", "0.02")),
+            RISK_MAX_DRAWDOWN=float(os.getenv("RISK_MAX_DRAWDOWN", "0.10")),
+            RISK_MAX_LEVERAGE=float(os.getenv("RISK_MAX_LEVERAGE", "1.0")),
+            RISK_MAX_POSITION_SIZE=float(os.getenv("RISK_MAX_POSITION_SIZE", "0.20")),
+            STRATEGY_SYMBOLS=os.getenv("STRATEGY_SYMBOLS", "SPY").split(","),
+            STRATEGY_TIMEFRAME=os.getenv("STRATEGY_TIMEFRAME", "1Min"),
+            SHORT_WINDOW=int(os.getenv("SHORT_WINDOW", "20")),
+            LONG_WINDOW=int(os.getenv("LONG_WINDOW", "50")),
+            LOOKBACK_DAYS=int(os.getenv("LOOKBACK_DAYS", "10")),
+            LOG_LEVEL=os.getenv("LOG_LEVEL", "INFO"),
+            LOG_FILE=os.getenv("LOG_FILE", None),
+        )
 
     @classmethod
-    def from_dict(cls, config_data: Dict[str, Any]) -> "Config":
-        """Create Config instance from dictionary.
+    def from_dict(cls: Type[T], config_dict: Dict[str, Any]) -> T:
+        """Create a Config instance from a dictionary."""
+        return cls(**config_dict)
 
-        Args:
-            config_data: Configuration data dictionary
+    def to_dict(self) -> Dict[str, Any]:
+        """Convert config to dictionary."""
+        return self.dict()
 
-        Returns:
-            Config instance
-        """
-        return cls(config_data)
+    def update(self, **kwargs: Any) -> None:
+        """Update config values."""
+        for key, value in kwargs.items():
+            if hasattr(self, key):
+                setattr(self, key, value)
+            else:
+                raise ValueError(f"Invalid config key: {key}")
 
-    @property
-    def is_valid(self) -> bool:
-        """Check if configuration is valid.
+    def save_to_file(self, filepath: str) -> None:
+        """Save config to file."""
+        with open(filepath, "w") as f:
+            json.dump(self.to_dict(), f, indent=4)
 
-        Returns:
-            True if configuration is valid, False otherwise
-        """
-        return bool(self.ALPACA_API_KEY and self.ALPACA_SECRET_KEY)
+    @classmethod
+    def load_from_file(cls: Type[T], filepath: str) -> T:
+        """Load config from file."""
+        try:
+            with open(filepath, "r") as f:
+                config_dict = json.load(f)
+            return cls.from_dict(config_dict)
+        except FileNotFoundError:
+            raise ValueError(f"Config file not found: {filepath}")
+        except json.JSONDecodeError:
+            raise ValueError(f"Invalid JSON in config file: {filepath}")
+        except Exception as e:
+            raise ValueError(f"Error loading config file: {e}")
 
-    def __str__(self) -> str:
-        """Return a string representation of the configuration."""
-        return f"Config(paper={self.ALPACA_PAPER})"
+    class Config:
+        """Pydantic config."""
+
+        validate_assignment = True
+        extra = "forbid"
 
 
 # Create a global instance
-config = Config(dict(os.environ))
+config = Config.from_env()

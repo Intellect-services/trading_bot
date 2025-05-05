@@ -32,7 +32,7 @@ config_data = {
     "RISK_STOP_LOSS": float(os.getenv("RISK_STOP_LOSS", "0.02")),
     "RISK_TAKE_PROFIT": float(os.getenv("RISK_TAKE_PROFIT", "0.04")),
 }
-config = Config(config_data)
+config = Config.from_dict(config_data)
 
 # Initialize services
 try:

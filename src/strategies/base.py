@@ -6,14 +6,21 @@ from typing import Any, Dict, List, Optional
 
 import pandas as pd
 
+from src.utils.config import Config
+
 logger = logging.getLogger(__name__)
 
 
 class BaseStrategy(ABC):
     """Abstract base class for all trading strategies."""
 
-    def __init__(self) -> None:
-        """Initialize the strategy."""
+    def __init__(self, config: Config) -> None:
+        """Initialize the strategy.
+
+        Args:
+            config: Configuration object containing strategy parameters
+        """
+        self.config = config
         self.logger = logging.getLogger(self.__class__.__name__)
         self.logger.info(f"Initializing {self.__class__.__name__}")
 
@@ -122,4 +129,48 @@ class BaseStrategy(ABC):
         Args:
             params: Dictionary of parameters to update
         """
+        pass
+
+    @abstractmethod
+    def update_state(self, data: pd.DataFrame) -> None:
+        """Update strategy state with new market data.
+
+        Args:
+            data: DataFrame containing market data with columns:
+                - symbol: Asset symbol
+                - timestamp: Data timestamp
+                - open: Opening price
+                - high: High price
+                - low: Low price
+                - close: Closing price
+                - volume: Trading volume
+        """
+        pass
+
+    @abstractmethod
+    def should_buy(self, symbol: str) -> bool:
+        """Check if we should buy the asset.
+
+        Args:
+            symbol: Asset symbol
+
+        Returns:
+            True if we should buy, False otherwise
+        """
+        pass
+
+    @abstractmethod
+    def should_sell(self, symbol: str) -> bool:
+        """Check if we should sell the asset.
+
+        Args:
+            symbol: Asset symbol
+
+        Returns:
+            True if we should sell, False otherwise
+        """
+        pass
+
+    def reset(self) -> None:
+        """Reset the strategy state."""
         pass
