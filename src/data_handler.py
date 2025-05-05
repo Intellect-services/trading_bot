@@ -1,173 +1,131 @@
-"""Data handler for trading operations."""
+"""Data handler for managing market data."""
 
-from datetime import datetime
-from typing import Any, Dict, List, Optional, cast
+import logging
+from datetime import datetime, timedelta
+from typing import Any, Dict, List, Optional, Union
 
-from src.core.alpaca_client import AlpacaClient
-from src.core.alpaca_types import Asset as AssetProtocol
-from src.core.alpaca_types import BarSet as BarSetProtocol
-from src.core.alpaca_types import Clock as ClockProtocol
-from src.core.alpaca_types import Order as OrderProtocol
-from src.core.alpaca_types import OrderSideEnum, OrderTypeEnum
-from src.core.alpaca_types import Position as PositionProtocol
-from src.core.alpaca_types import TimeInForceEnum
-from src.core.alpaca_types import TradeAccount as TradeAccountProtocol
-from src.core.data_feed import DataFeed
-from src.core.risk_manager import RiskManager
-from src.utils.logger import setup_logger
+import pandas as pd
 
-logger = setup_logger(__name__)
+from src.core.alpaca_service import AlpacaService
+from src.core.alpaca_types import OrderSide, OrderType, TimeFrame, TimeInForce
+from src.utils.config import Config
+
+logger = logging.getLogger(__name__)
 
 
 class DataHandler:
-    """Data handler for trading operations."""
+    """Handler for managing market data."""
 
-    def __init__(
-        self,
-        api_key: str,
-        api_secret: str,
-        symbols: List[str],
-        risk_manager: RiskManager,
-    ) -> None:
-        """Initialize data handler.
+    def __init__(self, config: Config, alpaca_service: AlpacaService):
+        """Initialize the data handler."""
+        self.config = config
+        self.alpaca_service = alpaca_service
+        self.logger = logging.getLogger(__name__)
 
-        Args:
-            api_key: Alpaca API key
-            api_secret: Alpaca API secret
-            symbols: List of symbols to trade
-            risk_manager: Risk manager instance
-        """
-        self.alpaca_client = AlpacaClient(api_key, api_secret, paper=True)
-        self.data_feed = DataFeed(api_key, api_secret, symbols)
-        self.risk_manager = risk_manager
-        self.symbols = symbols
+    def get_position(self, symbol: str) -> Optional[Dict[str, Any]]:
+        """Get position for a symbol."""
+        try:
+            return self.alpaca_service.get_position(symbol)
+        except Exception as e:
+            self.logger.error(f"Error getting position for {symbol}: {e}")
+            return None
 
-    def get_account(self) -> TradeAccountProtocol:
-        """Get account information.
-
-        Returns:
-            TradeAccountProtocol: Account information
-        """
-        return self.alpaca_client.get_account()
-
-    def get_positions(self) -> List[PositionProtocol]:
-        """Get all positions.
-
-        Returns:
-            List[PositionProtocol]: List of positions
-        """
-        return self.alpaca_client.get_all_positions()
-
-    def get_open_position(self, symbol: str) -> PositionProtocol:
-        """Get open position.
-
-        Args:
-            symbol: Symbol to get position for
-
-        Returns:
-            PositionProtocol: Position information
-        """
-        return self.alpaca_client.get_open_position(symbol)
-
-    def get_asset(self, symbol: str) -> AssetProtocol:
-        """Get asset information.
-
-        Args:
-            symbol: Symbol to get asset for
-
-        Returns:
-            AssetProtocol: Asset information
-        """
-        return self.alpaca_client.get_asset(symbol)
-
-    def get_clock(self) -> ClockProtocol:
-        """Get market clock information.
-
-        Returns:
-            ClockProtocol: Market clock information
-        """
-        return self.alpaca_client.get_clock()
+    def get_positions(self) -> List[Dict[str, Any]]:
+        """Get all positions."""
+        try:
+            return self.alpaca_service.get_positions()
+        except Exception as e:
+            self.logger.error(f"Error getting positions: {e}")
+            return []
 
     def get_bars(
         self,
         symbols: List[str],
         timeframe: str,
         start: datetime,
-        end: datetime,
-    ) -> BarSetProtocol:
-        """Get historical market data.
+        end: Optional[datetime] = None,
+        limit: Optional[int] = None,
+    ) -> Optional[pd.DataFrame]:
+        """Get historical bars."""
+        try:
+            bars = self.alpaca_service.get_bars(
+                symbols=symbols,
+                timeframe=TimeFrame(amount=int(timeframe[:-1]), unit=timeframe[-1]),
+                start=start,
+                end=end,
+                limit=limit,
+            )
+            if bars and bars["bars"]:
+                df = pd.DataFrame(bars["bars"])
+                df.set_index("timestamp", inplace=True)
+                return df
+            return None
+        except Exception as e:
+            self.logger.error(f"Error getting bars: {e}")
+            return None
 
-        Args:
-            symbols: List of symbols to get data for
-            timeframe: Timeframe for data
-            start: Start time
-            end: End time
-
-        Returns:
-            BarSetProtocol: Historical market data
-        """
-        return self.alpaca_client.get_bars(symbols, timeframe, start, end)
-
-    def place_order(
+    def submit_order(
         self,
         symbol: str,
         qty: float,
         side: str,
-        type: str = "market",
-        time_in_force: str = "day",
+        type: str,
+        time_in_force: str,
         limit_price: Optional[float] = None,
         stop_price: Optional[float] = None,
-    ) -> OrderProtocol:
-        """Place an order.
+    ) -> Optional[Dict[str, Any]]:
+        """Submit an order."""
+        try:
+            order_data = {
+                "symbol": symbol,
+                "qty": str(qty),
+                "side": OrderSide(side.lower()),
+                "type": OrderType(type.lower()),
+                "time_in_force": TimeInForce(time_in_force.lower()),
+            }
 
-        Args:
-            symbol: Symbol to trade
-            qty: Quantity to trade
-            side: Order side (buy/sell)
-            type: Order type
-            time_in_force: Time in force
-            limit_price: Limit price (for limit orders)
-            stop_price: Stop price (for stop orders)
+            if limit_price:
+                order_data["limit_price"] = str(limit_price)
+            if stop_price:
+                order_data["stop_price"] = str(stop_price)
 
-        Returns:
-            OrderProtocol: Order information
-        """
-        return self.alpaca_client.submit_order(
-            symbol=symbol,
-            qty=qty,
-            side=side,
-            type=type,
-            time_in_force=time_in_force,
-            limit_price=limit_price,
-            stop_price=stop_price,
-        )
+            return self.alpaca_service.submit_order(order_data)
+        except Exception as e:
+            self.logger.error(f"Error submitting order: {e}")
+            return None
 
-    def get_orders(self, status: Optional[str] = None) -> List[OrderProtocol]:
-        """Get orders.
+    def cancel_order(self, order_id: str) -> bool:
+        """Cancel an order."""
+        try:
+            self.alpaca_service.cancel_order(order_id)
+            return True
+        except Exception as e:
+            self.logger.error(f"Error canceling order {order_id}: {e}")
+            return False
 
-        Args:
-            status: Order status to filter by
+    def get_orders(
+        self,
+        status: Optional[str] = None,
+        limit: Optional[int] = None,
+        after: Optional[datetime] = None,
+        until: Optional[datetime] = None,
+    ) -> List[Dict[str, Any]]:
+        """Get orders with optional filters."""
+        try:
+            return self.alpaca_service.get_orders(
+                status=status,
+                limit=limit,
+                after=after,
+                until=until,
+            )
+        except Exception as e:
+            self.logger.error(f"Error getting orders: {e}")
+            return []
 
-        Returns:
-            List[OrderProtocol]: List of orders
-        """
-        return self.alpaca_client.get_orders(status=status)
-
-    def get_order_by_id(self, order_id: str) -> OrderProtocol:
-        """Get order by ID.
-
-        Args:
-            order_id: ID of order to get
-
-        Returns:
-            OrderProtocol: Order information
-        """
-        return self.alpaca_client.get_order_by_id(order_id)
-
-    def cancel_order_by_id(self, order_id: str) -> None:
-        """Cancel an order.
-
-        Args:
-            order_id: ID of order to cancel
-        """
-        self.alpaca_client.cancel_order_by_id(order_id)
+    def get_order(self, order_id: str) -> Optional[Dict[str, Any]]:
+        """Get a specific order by ID."""
+        try:
+            return self.alpaca_service.get_order(order_id)
+        except Exception as e:
+            self.logger.error(f"Error getting order {order_id}: {e}")
+            return None

@@ -1,27 +1,27 @@
-"""Type definitions for Alpaca API responses."""
+"""Type definitions for Alpaca API interactions."""
 
 from datetime import datetime
-from enum import Enum, auto
-from typing import Dict, List, Literal, NamedTuple, Optional, TypedDict, Union
+from enum import Enum
+from typing import Dict, List, Optional, TypedDict, Union
 from uuid import UUID
 
 
-class TimeFrame(NamedTuple):
-    """Time frame for market data."""
+class TimeFrame(TypedDict):
+    """Timeframe for historical data."""
 
     amount: int
-    unit: Literal["minute", "hour", "day"]
+    unit: str
 
 
 class OrderSide(str, Enum):
-    """Order side enumeration."""
+    """Order side enum."""
 
     BUY = "buy"
     SELL = "sell"
 
 
 class OrderType(str, Enum):
-    """Order type enumeration."""
+    """Order type enum."""
 
     MARKET = "market"
     LIMIT = "limit"
@@ -30,7 +30,7 @@ class OrderType(str, Enum):
 
 
 class TimeInForce(str, Enum):
-    """Time in force enumeration."""
+    """Time in force enum."""
 
     DAY = "day"
     GTC = "gtc"
@@ -41,14 +41,14 @@ class TimeInForce(str, Enum):
 
 
 class Sort(str, Enum):
-    """Sort direction enumeration."""
+    """Sort order enum."""
 
     ASC = "asc"
     DESC = "desc"
 
 
 class QueryOrderStatus(str, Enum):
-    """Order status enumeration."""
+    """Order status enum."""
 
     OPEN = "open"
     CLOSED = "closed"
@@ -56,43 +56,65 @@ class QueryOrderStatus(str, Enum):
 
 
 class TradeAccount(TypedDict):
-    """Account information from Alpaca API."""
+    """Trading account data."""
 
     account_number: str
-    buying_power: float
-    cash: float
-    equity: float
-    initial_margin: float
-    maintenance_margin: float
+    cash: str
+    portfolio_value: str
     pattern_day_trader: bool
-    portfolio_value: float
-    status: str
-    trade_suspended_by_user: bool
     trading_blocked: bool
     transfers_blocked: bool
+    account_blocked: bool
+    created_at: datetime
+    trade_suspended_by_user: bool
+    multiplier: str
+    shorting_enabled: bool
+    equity: str
+    last_equity: str
+    initial_margin: str
+    maintenance_margin: str
+    last_maintenance_margin: str
+    long_market_value: str
+    short_market_value: str
+    buying_power: str
+    regt_buying_power: str
+    daytrading_buying_power: str
+    effective_buying_power: str
+    day_trade_count: int
+    balance_asof: datetime
+    crypto_status: str
+    currency: str
+    accrued_fees: str
+    pending_transfer_out: str
+    pending_transfer_in: str
+    crypto_buying_power: str
+    max_withdrawal_amount: str
 
 
 class Position(TypedDict):
-    """Position information from Alpaca API."""
+    """Position data."""
 
     asset_id: UUID
     symbol: str
     exchange: str
     asset_class: str
-    avg_entry_price: float
-    qty: float
+    asset_marginable: bool
+    qty: str
+    avg_entry_price: str
     side: str
-    market_value: float
-    cost_basis: float
-    unrealized_pl: float
-    unrealized_plpc: float
-    current_price: float
-    lastday_price: float
-    change_today: float
+    market_value: str
+    cost_basis: str
+    unrealized_pl: str
+    unrealized_plpc: str
+    unrealized_intraday_pl: str
+    unrealized_intraday_plpc: str
+    current_price: str
+    lastday_price: str
+    change_today: str
 
 
 class Order(TypedDict):
-    """Order information from Alpaca API."""
+    """Order data."""
 
     id: UUID
     client_order_id: str
@@ -119,11 +141,11 @@ class Order(TypedDict):
     filled_avg_price: Optional[float]
     status: str
     extended_hours: bool
-    legs: Optional[List[Dict[str, str]]]
+    legs: Optional[List["Order"]]
 
 
 class Asset(TypedDict):
-    """Asset information from Alpaca API."""
+    """Asset data."""
 
     id: UUID
     class_: str
@@ -136,14 +158,10 @@ class Asset(TypedDict):
     shortable: bool
     easy_to_borrow: bool
     fractionable: bool
-    maintenance_margin_requirement: float
-    min_order_size: float
-    min_trade_increment: float
-    price_increment: float
 
 
 class Clock(TypedDict):
-    """Market clock information from Alpaca API."""
+    """Market clock data."""
 
     timestamp: datetime
     is_open: bool
@@ -152,7 +170,7 @@ class Clock(TypedDict):
 
 
 class Bar(TypedDict):
-    """Bar data from Alpaca API."""
+    """Bar data."""
 
     timestamp: datetime
     open: float
@@ -160,50 +178,53 @@ class Bar(TypedDict):
     low: float
     close: float
     volume: int
-    trade_count: int
-    vwap: float
 
 
 class BarSet(TypedDict):
-    """Bar set data from Alpaca API."""
+    """Set of bars."""
 
     bars: List[Bar]
-    next_page_token: Optional[str]
-    symbol: str
 
 
-class BaseOrderRequest(TypedDict):
-    """Base order request parameters."""
+class MarketOrderRequest(TypedDict):
+    """Market order request."""
 
     symbol: str
     qty: float
     side: OrderSide
+    type: OrderType
     time_in_force: TimeInForce
 
 
-class MarketOrderRequest(BaseOrderRequest):
-    """Market order request parameters."""
+class LimitOrderRequest(TypedDict):
+    """Limit order request."""
 
-    type: Literal["market"]
-
-
-class LimitOrderRequest(BaseOrderRequest):
-    """Limit order request parameters."""
-
-    type: Literal["limit"]
+    symbol: str
+    qty: float
+    side: OrderSide
+    type: OrderType
+    time_in_force: TimeInForce
     limit_price: float
 
 
-class StopOrderRequest(BaseOrderRequest):
-    """Stop order request parameters."""
+class StopOrderRequest(TypedDict):
+    """Stop order request."""
 
-    type: Literal["stop"]
+    symbol: str
+    qty: float
+    side: OrderSide
+    type: OrderType
+    time_in_force: TimeInForce
     stop_price: float
 
 
-class StopLimitOrderRequest(BaseOrderRequest):
-    """Stop limit order request parameters."""
+class StopLimitOrderRequest(TypedDict):
+    """Stop limit order request."""
 
-    type: Literal["stop_limit"]
+    symbol: str
+    qty: float
+    side: OrderSide
+    type: OrderType
+    time_in_force: TimeInForce
     limit_price: float
     stop_price: float

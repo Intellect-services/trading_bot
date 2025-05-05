@@ -8,7 +8,15 @@ from pathlib import Path
 from typing import Any, ClassVar, Dict, List, Optional, Type, TypeVar, Union, cast
 
 from dotenv import load_dotenv
-from pydantic import BaseModel, Field, ValidationError, root_validator, validator
+from pydantic import (
+    BaseModel,
+    Field,
+    ValidationError,
+    ValidationInfo,
+    field_validator,
+    root_validator,
+    validator,
+)
 
 # Configure basic logging
 logging.basicConfig(level=logging.INFO)
@@ -119,118 +127,81 @@ def validate_config(config: Dict[str, Any]) -> bool:
 
 
 class Config(BaseModel):
-    """Configuration for the trading bot."""
+    """Configuration settings for the trading bot."""
 
     # API Configuration
-    ALPACA_API_KEY: str = Field(..., description="Alpaca API key")
-    ALPACA_SECRET_KEY: str = Field(..., description="Alpaca API secret key")
-    ALPACA_PAPER: bool = Field(True, description="Whether to use paper trading")
+    ALPACA_API_KEY: str
+    ALPACA_API_SECRET: str
+    ALPACA_BASE_URL: str = "https://paper-api.alpaca.markets"
+    ALPACA_DATA_URL: str = "https://data.alpaca.markets"
+
+    # Trading Configuration
+    TRADING_ENABLED: bool = True
+    TRADING_MODE: str = "paper"  # paper or live
+    TRADING_SYMBOLS: List[str] = ["AAPL", "MSFT", "GOOGL"]
+    TRADING_TIMEFRAME: str = "1D"  # 1m, 5m, 15m, 1h, 1D
+    TRADING_QUANTITY: float = 1.0
+    TRADING_STOP_LOSS: float = 0.02  # 2%
+    TRADING_TAKE_PROFIT: float = 0.04  # 4%
 
     # Risk Management
-    RISK_PER_TRADE: float = Field(
-        0.02, description="Maximum risk per trade as percentage of portfolio"
+    RISK_MAX_POSITION_SIZE: float = 0.1  # 10% of portfolio
+    RISK_MAX_DAILY_LOSS: float = 0.05  # 5% of portfolio
+    RISK_MAX_DRAWDOWN: float = 0.10  # 10% of portfolio
+    RISK_MAX_LEVERAGE: float = 1.0  # No leverage
+
+    # Strategy Configuration
+    STRATEGY_SYMBOLS: List[str] = ["AAPL", "MSFT", "GOOGL"]
+    STRATEGY_TIMEFRAME: str = "1D"
+    SHORT_WINDOW: int = 20
+    LONG_WINDOW: int = 50
+    LOOKBACK_DAYS: int = 100
+
+    # Logging Configuration
+    LOG_LEVEL: str = "INFO"
+    LOG_FILE: str = "trading_bot.log"
+
+    # Performance Tracking
+    PEAK_EQUITY: float = 0.0
+
+    @field_validator(
+        "TRADING_STOP_LOSS",
+        "TRADING_TAKE_PROFIT",
+        "RISK_MAX_POSITION_SIZE",
+        "RISK_MAX_DAILY_LOSS",
+        "RISK_MAX_DRAWDOWN",
     )
-    RISK_MAX_DRAWDOWN: float = Field(0.10, description="Maximum drawdown before stopping trading")
-    RISK_MAX_LEVERAGE: float = Field(1.0, description="Maximum leverage allowed")
-    RISK_MAX_POSITION_SIZE: float = Field(
-        0.20, description="Maximum position size as percentage of portfolio"
-    )
-
-    # Strategy Settings
-    STRATEGY_SYMBOLS: List[str] = Field(["SPY"], description="List of symbols to trade")
-    STRATEGY_TIMEFRAME: str = Field("1Min", description="Timeframe for strategy")
-    SHORT_WINDOW: int = Field(20, description="Short moving average window")
-    LONG_WINDOW: int = Field(50, description="Long moving average window")
-    LOOKBACK_DAYS: int = Field(10, description="Number of days to look back for historical data")
-
-    # Portfolio Settings
-    INITIAL_CAPITAL: float = Field(100000.0, description="Initial capital for trading")
-    PEAK_EQUITY: float = Field(0.0, description="Peak equity value")
-
-    # Logging
-    LOG_LEVEL: str = Field("INFO", description="Logging level")
-    LOG_FILE: Optional[str] = Field(None, description="Log file path")
-
-    @validator("RISK_PER_TRADE", "RISK_MAX_DRAWDOWN", "RISK_MAX_LEVERAGE", "RISK_MAX_POSITION_SIZE")
     def validate_percentage(cls, v: float) -> float:
-        """Validate that percentage values are between 0 and 1."""
+        """Validate percentage values."""
         if not 0 <= v <= 1:
-            raise ValueError("Percentage values must be between 0 and 1")
+            raise ValueError("Value must be between 0 and 1")
         return v
 
-    @root_validator(pre=True)
-    def validate_windows(cls, values: Dict[str, Any]) -> Dict[str, Any]:
-        """Validate that short window is less than long window."""
-        short_window = values.get("SHORT_WINDOW")
-        long_window = values.get("LONG_WINDOW")
-        if short_window is not None and long_window is not None:
-            if short_window >= long_window:
-                raise ValueError("SHORT_WINDOW must be less than LONG_WINDOW")
-        return values
-
-    @classmethod
-    def from_env(cls: Type[T]) -> T:
-        """Create a Config instance from environment variables."""
-        return cls(
-            ALPACA_API_KEY=os.getenv("ALPACA_API_KEY", ""),
-            ALPACA_SECRET_KEY=os.getenv("ALPACA_SECRET_KEY", ""),
-            ALPACA_PAPER=os.getenv("ALPACA_PAPER", "true").lower() == "true",
-            INITIAL_CAPITAL=float(os.getenv("INITIAL_CAPITAL", "100000.0")),
-            RISK_PER_TRADE=float(os.getenv("RISK_PER_TRADE", "0.02")),
-            RISK_MAX_DRAWDOWN=float(os.getenv("RISK_MAX_DRAWDOWN", "0.10")),
-            RISK_MAX_LEVERAGE=float(os.getenv("RISK_MAX_LEVERAGE", "1.0")),
-            RISK_MAX_POSITION_SIZE=float(os.getenv("RISK_MAX_POSITION_SIZE", "0.20")),
-            STRATEGY_SYMBOLS=os.getenv("STRATEGY_SYMBOLS", "SPY").split(","),
-            STRATEGY_TIMEFRAME=os.getenv("STRATEGY_TIMEFRAME", "1Min"),
-            SHORT_WINDOW=int(os.getenv("SHORT_WINDOW", "20")),
-            LONG_WINDOW=int(os.getenv("LONG_WINDOW", "50")),
-            LOOKBACK_DAYS=int(os.getenv("LOOKBACK_DAYS", "10")),
-            LOG_LEVEL=os.getenv("LOG_LEVEL", "INFO"),
-            LOG_FILE=os.getenv("LOG_FILE", None),
-        )
-
-    @classmethod
-    def from_dict(cls: Type[T], config_dict: Dict[str, Any]) -> T:
-        """Create a Config instance from a dictionary."""
-        return cls(**config_dict)
+    @field_validator("SHORT_WINDOW", "LONG_WINDOW")
+    def validate_windows(cls, v: int, info: ValidationInfo) -> int:
+        """Validate window sizes."""
+        if info.field_name == "LONG_WINDOW":
+            short_window = info.data.get("SHORT_WINDOW")
+            if short_window is not None and v <= short_window:
+                raise ValueError("Long window must be greater than short window")
+        return v
 
     def to_dict(self) -> Dict[str, Any]:
         """Convert config to dictionary."""
-        return self.dict()
-
-    def update(self, **kwargs: Any) -> None:
-        """Update config values."""
-        for key, value in kwargs.items():
-            if hasattr(self, key):
-                setattr(self, key, value)
-            else:
-                raise ValueError(f"Invalid config key: {key}")
-
-    def save_to_file(self, filepath: str) -> None:
-        """Save config to file."""
-        with open(filepath, "w") as f:
-            json.dump(self.to_dict(), f, indent=4)
-
-    @classmethod
-    def load_from_file(cls: Type[T], filepath: str) -> T:
-        """Load config from file."""
-        try:
-            with open(filepath, "r") as f:
-                config_dict = json.load(f)
-            return cls.from_dict(config_dict)
-        except FileNotFoundError:
-            raise ValueError(f"Config file not found: {filepath}")
-        except json.JSONDecodeError:
-            raise ValueError(f"Invalid JSON in config file: {filepath}")
-        except Exception as e:
-            raise ValueError(f"Error loading config file: {e}")
-
-    class Config:
-        """Pydantic config."""
-
-        validate_assignment = True
-        extra = "forbid"
+        return self.model_dump()
 
 
-# Create a global instance
-config = Config.from_env()
+# Create config instance with default values
+config = Config(
+    ALPACA_API_KEY=os.getenv("ALPACA_API_KEY", ""),
+    ALPACA_API_SECRET=os.getenv("ALPACA_API_SECRET", ""),
+    TRADING_SYMBOLS=["AAPL", "MSFT", "GOOGL"],
+    STRATEGY_SYMBOLS=["AAPL", "MSFT", "GOOGL"],
+    STRATEGY_TIMEFRAME="1D",
+    SHORT_WINDOW=20,
+    LONG_WINDOW=50,
+    LOOKBACK_DAYS=100,
+    LOG_LEVEL="INFO",
+    LOG_FILE="trading_bot.log",
+    PEAK_EQUITY=0.0,
+)

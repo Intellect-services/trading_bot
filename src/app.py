@@ -2,6 +2,7 @@
 import logging
 import os
 import secrets
+from datetime import datetime
 from typing import Optional, Union
 
 from authlib.integrations.flask_client import OAuth
@@ -21,12 +22,14 @@ from werkzeug.wrappers.response import Response as WerkzeugResponse
 
 from flask_session import Session
 from src import Config
+from src.core.alpaca_service import AlpacaService
 from src.core.bot import TradingBot
 from src.core.strategy import Strategy
 from src.strategies.moving_average import MovingAverageCrossover
+from src.utils.config import Config
 
 # Configure logging
-logging.basicConfig(level=logging.DEBUG)
+logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
 # Subclass Flask so mypy knows about trading_bot attribute
@@ -50,26 +53,29 @@ Session(app)
 socketio = SocketIO(app)
 oauth = OAuth(app)
 
-# Initialize configuration
+# Configuration data
 config_data = {
-    "ALPACA_API_KEY": os.getenv("ALPACA_API_KEY", ""),
-    "ALPACA_SECRET_KEY": os.getenv("ALPACA_SECRET_KEY", ""),
-    "ALPACA_PAPER": os.getenv("ALPACA_PAPER", "True").lower() == "true",
-    "INITIAL_CAPITAL": float(os.getenv("INITIAL_CAPITAL", "100000")),
-    "RISK_MAX_POSITION_SIZE": float(os.getenv("RISK_MAX_POSITION_SIZE", "0.1")),
-    "RISK_PER_TRADE": float(os.getenv("RISK_PER_TRADE", "0.01")),
-    "RISK_MAX_DRAWDOWN": float(os.getenv("RISK_MAX_DRAWDOWN", "0.10")),
-    "RISK_MAX_LEVERAGE": float(os.getenv("RISK_MAX_LEVERAGE", "1.0")),
-    "STRATEGY_SYMBOLS": ["SPY"],
-    "STRATEGY_TIMEFRAME": "1Min",
+    "ALPACA_API_KEY": "PK4MV55G579F7O3SOAHQ",  # Your API key
+    "ALPACA_API_SECRET": "hrZUciqshp66Klg7SVifglieLV130cjlSEcJqm6H",  # Your API secret
+    "TRADING_MODE": "paper",  # paper or live
+    "TRADING_SYMBOLS": ["AAPL", "MSFT", "GOOGL"],
+    "STRATEGY_SYMBOLS": ["AAPL", "MSFT", "GOOGL"],
+    "STRATEGY_TIMEFRAME": "1D",
     "SHORT_WINDOW": 20,
     "LONG_WINDOW": 50,
-    "LOOKBACK_DAYS": 10,
+    "LOOKBACK_DAYS": 100,
     "LOG_LEVEL": "INFO",
-    "LOG_FILE": None,
+    "LOG_FILE": "trading_bot.log",
     "PEAK_EQUITY": 0.0,
 }
-config = Config.from_dict(config_data)
+
+# Initialize configuration
+config = Config.model_validate(config_data)
+
+# Initialize services
+alpaca_service = AlpacaService(config)
+strategy = MovingAverageCrossover(config)
+trading_bot = TradingBot(config, strategy, alpaca_service)
 
 # OAuth configurations
 google = oauth.register(

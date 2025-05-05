@@ -39,7 +39,7 @@ class TradingBot:
         self.alpaca_service = alpaca_service
 
         # Initialize state
-        self.account: Dict[str, Any] = self.alpaca_service.get_account()
+        self.account = self.alpaca_service.get_account()
         self.equity = float(self.account["equity"])
         self.cash = float(self.account["cash"])
         self.buying_power = float(self.account["buying_power"])
@@ -50,9 +50,9 @@ class TradingBot:
 
         # Trading state
         self.is_trading = True
-        self.positions: Dict[str, Dict[str, Any]] = {}
-        self.orders: Dict[str, Dict[str, Any]] = {}
-        self.market_clock: Dict[str, Any] = {}
+        self.positions: Dict[str, AlpacaPosition] = {}
+        self.orders: Dict[str, Order] = {}
+        self.market_clock: Clock = self.alpaca_service.get_clock()
 
         # Performance tracking
         self.winning_trades = 0
@@ -177,15 +177,20 @@ class TradingBot:
     ) -> None:
         """Submit a new order."""
         try:
-            order = self.alpaca_service.submit_order(
-                symbol=symbol,
-                qty=qty,
-                side=side,
-                type=type,
-                time_in_force=time_in_force,
-                limit_price=limit_price,
-                stop_price=stop_price,
-            )
+            order_data: Dict[str, Any] = {
+                "symbol": symbol,
+                "qty": qty,
+                "side": side,
+                "type": type,
+                "time_in_force": time_in_force,
+            }
+
+            if limit_price:
+                order_data["limit_price"] = limit_price
+            if stop_price:
+                order_data["stop_price"] = stop_price
+
+            order = self.alpaca_service.submit_order(order_data)
             self.orders[order["id"]] = order
             logger.info(f"Order submitted: {order}")
         except Exception as e:
@@ -268,3 +273,24 @@ class TradingBot:
             logger.error(f"Error in trading loop: {e}")
             self._stop_trading()
             raise
+
+    def get_bars(
+        self,
+        symbol: str,
+        timeframe: str,
+        start: datetime,
+        end: Optional[datetime] = None,
+        limit: Optional[int] = None,
+    ) -> Optional[BarSet]:
+        """Get historical bars."""
+        try:
+            return self.alpaca_service.get_bars(
+                symbols=[symbol],
+                timeframe=TimeFrame(amount=int(timeframe[:-1]), unit=timeframe[-1]),
+                start=start,
+                end=end,
+                limit=limit,
+            )
+        except Exception as e:
+            logger.error(f"Error getting bars for {symbol}: {e}")
+            return None
