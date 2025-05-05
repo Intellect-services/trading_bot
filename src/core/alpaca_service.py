@@ -81,15 +81,9 @@ class AlpacaService:
                     "regt_buying_power": str(account.regt_buying_power),
                     "daytrading_buying_power": str(account.daytrading_buying_power),
                     "effective_buying_power": str(account.effective_buying_power),
-                    "day_trade_count": int(account.day_trade_count),
-                    "balance_asof": account.balance_asof,
                     "crypto_status": str(account.crypto_status),
                     "currency": str(account.currency),
                     "accrued_fees": str(account.accrued_fees),
-                    "pending_transfer_out": str(account.pending_transfer_out),
-                    "pending_transfer_in": str(account.pending_transfer_in),
-                    "crypto_buying_power": str(account.crypto_buying_power),
-                    "max_withdrawal_amount": str(account.max_withdrawal_amount),
                 },
             )
         except Exception as e:

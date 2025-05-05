@@ -80,14 +80,9 @@ class TradeAccount(TypedDict):
     regt_buying_power: str
     daytrading_buying_power: str
     effective_buying_power: str
-    day_trade_count: int
-    balance_asof: datetime
     crypto_status: str
     currency: str
     accrued_fees: str
-    pending_transfer_out: str
-    pending_transfer_in: str
-    crypto_buying_power: str
     max_withdrawal_amount: str
 
 
