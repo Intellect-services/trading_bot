@@ -23,7 +23,9 @@ logger = setup_logger(__name__)
 class DataFeed:
     """Data feed for retrieving market data."""
 
-    def __init__(self, api_key: str, api_secret: str, symbols: List[str], cache_dir: str = "data/cache") -> None:
+    def __init__(
+        self, api_key: str, api_secret: str, symbols: List[str], cache_dir: str = "data/cache"
+    ) -> None:
         """Initialize data feed.
 
         Args:
