@@ -9,11 +9,11 @@ import pandas as pd
 
 from src.core.alpaca_client import AlpacaClient
 from src.core.alpaca_types import Asset as AssetProtocol
-from src.core.alpaca_types import Bar as BarProtocol
-from src.core.alpaca_types import BarSet as BarSetProtocol
+from src.core.alpaca_types import Bar
+from src.core.alpaca_types import BarSet
 from src.core.alpaca_types import Clock as ClockProtocol
 from src.core.alpaca_types import Position as PositionProtocol
-from src.core.alpaca_types import TimeFrame as TimeFrameProtocol
+from src.core.alpaca_types import TimeFrame
 from src.core.alpaca_types import TradeAccount as TradeAccountProtocol
 from src.utils.logger import setup_logger
 
@@ -23,22 +23,23 @@ logger = setup_logger(__name__)
 class DataFeed:
     """Data feed for retrieving market data."""
 
-    def __init__(self, api_key: str, api_secret: str, symbols: List[str]) -> None:
+    def __init__(self, api_key: str, api_secret: str, symbols: List[str], cache_dir: str = "data/cache") -> None:
         """Initialize data feed.
 
         Args:
             api_key: Alpaca API key
             api_secret: Alpaca API secret
             symbols: List of symbols to get data for
+            cache_dir: Directory to store cache files
         """
         self.client = AlpacaClient(api_key, api_secret)
         self.symbols = symbols
-        self.timeframe = TimeFrameProtocol(amount=1, unit="minute")
+        self.timeframe = TimeFrame(amount=1, unit="minute")
         self._data: Dict[str, Dict[str, List[Dict[str, Any]]]] = {}
-        self._cache_dir = "data/cache"
-        os.makedirs(self._cache_dir, exist_ok=True)
+        self._cache_dir = cache_dir
+        os.makedirs(cache_dir, exist_ok=True)
 
-    def _get_cache_path(self, symbol: str, timeframe: str) -> str:
+    def _get_cache_path(self, symbol: str, timeframe: TimeFrame) -> str:
         """Get cache file path for a symbol and timeframe.
 
         Args:
@@ -48,9 +49,9 @@ class DataFeed:
         Returns:
             Cache file path
         """
-        return os.path.join(self._cache_dir, f"{symbol}_{timeframe}.json")
+        return os.path.join(self._cache_dir, f"{symbol}_{timeframe.value}.json")
 
-    def _load_cache(self, symbol: str, timeframe: str) -> Optional[List[Dict[str, Any]]]:
+    def _load_cache(self, symbol: str, timeframe: TimeFrame) -> Optional[List[Dict[str, Any]]]:
         """Load data from cache.
 
         Args:
@@ -74,7 +75,7 @@ class DataFeed:
     def _save_cache(
         self,
         symbol: str,
-        timeframe: str,
+        timeframe: TimeFrame,
         data: List[Dict[str, Any]],
     ) -> None:
         """Save data to cache.
@@ -98,6 +99,58 @@ class DataFeed:
             logger.info(f"Saved data to cache: {cache_path}")
         except Exception as e:
             logger.error(f"Error saving cache: {e}")
+
+    def get_bars(
+        self,
+        symbol: str,
+        start: datetime,
+        end: Optional[datetime] = None,
+        limit: Optional[int] = None,
+    ) -> Optional[BarSet]:
+        """Get historical bars for a symbol.
+
+        Args:
+            symbol: Symbol to get data for
+            start: Start time
+            end: End time (optional)
+            limit: Maximum number of bars to return (optional)
+
+        Returns:
+            BarSet if successful, None otherwise
+        """
+        try:
+            # Try to get from cache first
+            cached_data = self._load_cache(symbol, self.timeframe)
+            if cached_data:
+                bars = [Bar(**bar) for bar in cached_data]
+                return BarSet(bars=bars)
+
+            # If not in cache, get from API
+            bars = self.client.get_bars(
+                symbol=symbol,
+                timeframe=self.timeframe.value,
+                start=start,
+                end=end,
+                limit=limit,
+            )
+            if bars:
+                bar_data = [
+                    {
+                        "timestamp": bar.t,
+                        "open": float(bar.o),
+                        "high": float(bar.h),
+                        "low": float(bar.l),
+                        "close": float(bar.c),
+                        "volume": int(bar.v),
+                    }
+                    for bar in bars
+                ]
+                self._save_cache(symbol, self.timeframe, bar_data)
+                return BarSet(bars=[Bar(**bar) for bar in bar_data])
+            return None
+        except Exception as e:
+            logger.error(f"Error getting bars for {symbol}: {e}")
+            return None
 
     def get_historical_data(
         self,

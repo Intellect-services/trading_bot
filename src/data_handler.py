@@ -7,7 +7,7 @@ from typing import Any, Dict, List, Optional, Union
 import pandas as pd
 
 from src.core.alpaca_service import AlpacaService
-from src.core.alpaca_types import OrderSide, OrderType, TimeFrame, TimeInForce
+from src.core.alpaca_types import BarSet, OrderSide, OrderType, TimeFrame, TimeInForce
 from src.utils.config import Config
 
 logger = logging.getLogger(__name__)
@@ -40,28 +40,23 @@ class DataHandler:
 
     def get_bars(
         self,
-        symbols: List[str],
+        symbol: str,
         timeframe: str,
         start: datetime,
         end: Optional[datetime] = None,
         limit: Optional[int] = None,
-    ) -> Optional[pd.DataFrame]:
-        """Get historical bars."""
+    ) -> Optional[BarSet]:
+        """Get historical bars for a symbol."""
         try:
-            bars = self.alpaca_service.get_bars(
-                symbols=symbols,
-                timeframe=TimeFrame(amount=int(timeframe[:-1]), unit=timeframe[-1]),
+            return self.alpaca_service.get_bars(
+                symbol=symbol,
+                timeframe=TimeFrame(timeframe),
                 start=start,
                 end=end,
                 limit=limit,
             )
-            if bars and bars["bars"]:
-                df = pd.DataFrame(bars["bars"])
-                df.set_index("timestamp", inplace=True)
-                return df
-            return None
         except Exception as e:
-            self.logger.error(f"Error getting bars: {e}")
+            logger.error(f"Error getting bars for {symbol}: {e}")
             return None
 
     def submit_order(

@@ -16,7 +16,7 @@ from src.core.alpaca_types import Asset
 from src.core.alpaca_types import Bar as AlpacaBar
 from src.core.alpaca_types import BarSet, Clock, Order, OrderSide, OrderType
 from src.core.alpaca_types import Position as AlpacaPosition
-from src.core.alpaca_types import TimeInForce, TradeAccount
+from src.core.alpaca_types import TimeFrame, TimeInForce, TradeAccount
 from src.core.portfolio import Portfolio
 from src.core.position import Position
 from src.core.risk_manager import RiskManager
@@ -282,11 +282,11 @@ class TradingBot:
         end: Optional[datetime] = None,
         limit: Optional[int] = None,
     ) -> Optional[BarSet]:
-        """Get historical bars."""
+        """Get historical bars for a symbol."""
         try:
             return self.alpaca_service.get_bars(
-                symbols=[symbol],
-                timeframe=TimeFrame(amount=int(timeframe[:-1]), unit=timeframe[-1]),
+                symbol=symbol,
+                timeframe=TimeFrame(timeframe),
                 start=start,
                 end=end,
                 limit=limit,

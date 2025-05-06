@@ -6,11 +6,17 @@ from typing import Dict, List, Optional, TypedDict, Union
 from uuid import UUID
 
 
-class TimeFrame(TypedDict):
+class TimeFrame(str, Enum):
     """Timeframe for historical data."""
 
-    amount: int
-    unit: str
+    MINUTE = "1Min"
+    FIVE_MINUTE = "5Min"
+    FIFTEEN_MINUTE = "15Min"
+    THIRTY_MINUTE = "30Min"
+    HOUR = "1H"
+    DAY = "1D"
+    WEEK = "1W"
+    MONTH = "1M"
 
 
 class OrderSide(str, Enum):
@@ -164,21 +170,46 @@ class Clock(TypedDict):
     next_close: datetime
 
 
-class Bar(TypedDict):
+class Bar:
     """Bar data."""
 
-    timestamp: datetime
-    open: float
-    high: float
-    low: float
-    close: float
-    volume: int
+    def __init__(
+        self,
+        timestamp: datetime,
+        open: float,
+        high: float,
+        low: float,
+        close: float,
+        volume: int,
+    ) -> None:
+        """Initialize bar data.
+
+        Args:
+            timestamp: Bar timestamp
+            open: Opening price
+            high: Highest price
+            low: Lowest price
+            close: Closing price
+            volume: Trading volume
+        """
+        self.timestamp = timestamp
+        self.open = open
+        self.high = high
+        self.low = low
+        self.close = close
+        self.volume = volume
 
 
-class BarSet(TypedDict):
+class BarSet:
     """Set of bars."""
 
-    bars: List[Bar]
+    def __init__(self, bars: List[Bar]) -> None:
+        """Initialize bar set.
+
+        Args:
+            bars: List of bars
+        """
+        self.bars = bars
 
 
 class MarketOrderRequest(TypedDict):

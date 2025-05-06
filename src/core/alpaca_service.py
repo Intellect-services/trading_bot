@@ -251,40 +251,25 @@ class AlpacaService:
 
     def get_bars(
         self,
-        symbols: List[str],
+        symbol: str,
         timeframe: TimeFrame,
         start: datetime,
         end: Optional[datetime] = None,
         limit: Optional[int] = None,
-    ) -> BarSet:
-        """Get historical bars."""
+    ) -> Optional[BarSet]:
+        """Get historical bars for a symbol."""
         try:
             bars = self.client.get_bars(
-                symbols,
-                f"{timeframe.amount}{timeframe.unit[0]}",
+                symbol=symbol,
+                timeframe=timeframe.value,
                 start=start,
                 end=end,
                 limit=limit,
             )
-            return cast(
-                BarSet,
-                {
-                    "bars": [
-                        {
-                            "timestamp": bar.t,
-                            "open": float(bar.o),
-                            "high": float(bar.h),
-                            "low": float(bar.l),
-                            "close": float(bar.c),
-                            "volume": int(bar.v),
-                        }
-                        for bar in bars
-                    ]
-                },
-            )
+            return BarSet(bars=[Bar(**bar) for bar in bars])
         except Exception as e:
-            self.logger.error(f"Failed to get bars: {e}")
-            raise
+            logger.error(f"Error getting bars for {symbol}: {e}")
+            return None
 
     def _convert_order(self, order: Order) -> AlpacaOrder:
         """Convert Alpaca order to our order type."""
