@@ -9,8 +9,7 @@ import pandas as pd
 
 from src.core.alpaca_client import AlpacaClient
 from src.core.alpaca_types import Asset as AssetProtocol
-from src.core.alpaca_types import Bar
-from src.core.alpaca_types import BarSet
+from src.core.alpaca_types import Bar, BarSet
 from src.core.alpaca_types import Clock as ClockProtocol
 from src.core.alpaca_types import Position as PositionProtocol
 from src.core.alpaca_types import TimeFrame
