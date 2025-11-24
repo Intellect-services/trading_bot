@@ -1,281 +1,213 @@
 {% extends "base.html" %} {% block title %}Trading Dashboard{% endblock %} {%
 block content %}
-<div class="row">
-  <div class="col-md-12">
-    <div class="d-flex justify-content-between align-items-center mb-4">
-      <h1>Trading Dashboard</h1>
-      <div class="bot-controls">
-        <button id="startBot" class="btn btn-success me-2">
-          <i class="fas fa-play"></i> Start Bot
-        </button>
-        <button id="stopBot" class="btn btn-danger" disabled>
-          <i class="fas fa-stop"></i> Stop Bot
-        </button>
-      </div>
-    </div>
-
-    {% if session.get('user') %}
-    <div class="row">
-      <!-- Account Overview -->
-      <div class="col-md-3">
-        <div class="card mb-4">
-          <div class="card-header">
-            <h5 class="card-title mb-0">Account Balance</h5>
-          </div>
-          <div class="card-body">
-            <h3 class="text-success" id="accountBalance">$0.00</h3>
-            <p class="text-muted">Available for trading</p>
-          </div>
+<div class="container-fluid">
+  <div class="row">
+    <!-- Bot Status Card -->
+    <div class="col-md-3">
+      <div class="card mb-4">
+        <div class="card-header">
+          <h5 class="card-title mb-0">Bot Status</h5>
         </div>
-      </div>
-
-      <div class="col-md-3">
-        <div class="card mb-4">
-          <div class="card-header">
-            <h5 class="card-title mb-0">Open Positions</h5>
+        <div class="card-body">
+          <div class="d-flex justify-content-between align-items-center mb-3">
+            <span>Status:</span>
+            <span id="bot-status" class="badge bg-secondary">STOPPED</span>
           </div>
-          <div class="card-body">
-            <h3 id="openPositions">0</h3>
-            <p class="text-muted">Active trades</p>
+          <div class="d-flex justify-content-between align-items-center mb-3">
+            <span>Market:</span>
+            <span id="market-status" class="badge bg-secondary">CLOSED</span>
           </div>
-        </div>
-      </div>
-
-      <div class="col-md-3">
-        <div class="card mb-4">
-          <div class="card-header">
-            <h5 class="card-title mb-0">Today's P&L</h5>
+          <div class="d-flex justify-content-between align-items-center mb-3">
+            <span>Last Analysis:</span>
+            <span id="last-analysis">-</span>
           </div>
-          <div class="card-body">
-            <h3 class="text-success" id="dailyPnL">+$0.00</h3>
-            <p class="text-muted">Daily performance</p>
+          <div class="d-flex justify-content-between align-items-center mb-3">
+            <span>Last Signal:</span>
+            <span id="last-signal">-</span>
           </div>
-        </div>
-      </div>
-
-      <div class="col-md-3">
-        <div class="card mb-4">
-          <div class="card-header">
-            <h5 class="card-title mb-0">Bot Status</h5>
-          </div>
-          <div class="card-body">
-            <h3 id="botStatus" class="text-danger">Stopped</h3>
-            <p class="text-muted">Trading status</p>
+          <div class="btn-group w-100">
+            <button id="startBot" class="btn btn-success" onclick="startBot()">
+              Start Bot
+            </button>
+            <button
+              id="stopBot"
+              class="btn btn-danger"
+              onclick="stopBot()"
+              disabled
+            >
+              Stop Bot
+            </button>
           </div>
         </div>
       </div>
     </div>
 
-    <!-- Performance Charts -->
-    <div class="row mb-4">
-      <div class="col-md-6">
-        <div class="card">
-          <div class="card-header">
-            <h5 class="card-title mb-0">Portfolio Value</h5>
-          </div>
-          <div class="card-body">
-            <canvas id="portfolioChart" height="300"></canvas>
+    <!-- Account Overview -->
+    <div class="col-md-9">
+      <div class="card mb-4">
+        <div class="card-header">
+          <h5 class="card-title mb-0">Account Overview</h5>
+        </div>
+        <div class="card-body">
+          <div class="row">
+            <div class="col-md-3">
+              <div class="metric-card">
+                <h6>Account Balance</h6>
+                <h3 id="account-balance">$0.00</h3>
+              </div>
+            </div>
+            <div class="col-md-3">
+              <div class="metric-card">
+                <h6>Buying Power</h6>
+                <h3 id="buying-power">$0.00</h3>
+              </div>
+            </div>
+            <div class="col-md-3">
+              <div class="metric-card">
+                <h6>Equity</h6>
+                <h3 id="equity">$0.00</h3>
+              </div>
+            </div>
+            <div class="col-md-3">
+              <div class="metric-card">
+                <h6>Cash Balance</h6>
+                <h3 id="cash-balance">$0.00</h3>
+              </div>
+            </div>
           </div>
         </div>
       </div>
-      <div class="col-md-6">
-        <div class="card">
-          <div class="card-header">
-            <h5 class="card-title mb-0">Daily Returns</h5>
+    </div>
+  </div>
+
+  <!-- Performance Charts -->
+  <div class="row">
+    <div class="col-md-6">
+      <div class="card mb-4">
+        <div class="card-header">
+          <h5 class="card-title mb-0">Portfolio Value</h5>
+        </div>
+        <div class="card-body">
+          <canvas id="portfolioChart"></canvas>
+        </div>
+      </div>
+    </div>
+    <div class="col-md-6">
+      <div class="card mb-4">
+        <div class="card-header">
+          <h5 class="card-title mb-0">Daily Returns</h5>
+        </div>
+        <div class="card-body">
+          <canvas id="returnsChart"></canvas>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Performance Metrics -->
+  <div class="row">
+    <div class="col-md-4">
+      <div class="card mb-4">
+        <div class="card-header">
+          <h5 class="card-title mb-0">Performance Metrics</h5>
+        </div>
+        <div class="card-body">
+          <div class="row">
+            <div class="col-md-6">
+              <div class="metric-card">
+                <h6>Total P&L</h6>
+                <h3 id="total-pnl">$0.00</h3>
+              </div>
+            </div>
+            <div class="col-md-6">
+              <div class="metric-card">
+                <h6>Daily P&L</h6>
+                <h3 id="daily-pnl">$0.00</h3>
+              </div>
+            </div>
           </div>
-          <div class="card-body">
-            <canvas id="returnsChart" height="300"></canvas>
+          <div class="row mt-3">
+            <div class="col-12">
+              <div class="metric-card">
+                <h6>Win Rate</h6>
+                <h3 id="win-rate">0.00%</h3>
+              </div>
+            </div>
           </div>
         </div>
       </div>
     </div>
 
-    <!-- Trading Activity -->
-    <div class="card">
-      <div
-        class="card-header d-flex justify-content-between align-items-center"
-      >
-        <h5 class="card-title mb-0">Trading Activity</h5>
-        <div class="btn-group">
-          <button class="btn btn-outline-primary btn-sm active">All</button>
-          <button class="btn btn-outline-primary btn-sm">Open</button>
-          <button class="btn btn-outline-primary btn-sm">Closed</button>
+    <!-- Bot Activity Log -->
+    <div class="col-md-8">
+      <div class="card mb-4">
+        <div class="card-header">
+          <h5 class="card-title mb-0">Bot Activity Log</h5>
         </div>
-      </div>
-      <div class="card-body">
-        <div class="table-responsive">
-          <table class="table">
-            <thead>
-              <tr>
-                <th>Symbol</th>
-                <th>Position</th>
-                <th>Entry Price</th>
-                <th>Current Price</th>
-                <th>P&L</th>
-                <th>Status</th>
-                <th>Time</th>
-              </tr>
-            </thead>
-            <tbody id="tradesTable">
-              <tr>
-                <td colspan="7" class="text-center">No active positions</td>
-              </tr>
-            </tbody>
-          </table>
+        <div class="card-body">
+          <div
+            id="activity-log"
+            class="activity-log"
+            style="height: 300px; overflow-y: auto"
+          >
+            <div class="alert alert-info">Waiting for bot activity...</div>
+          </div>
         </div>
       </div>
     </div>
-    {% else %}
-    <div class="text-center">
-      <h2>Welcome to Trading Bot</h2>
-      <p class="lead">Please log in to access your trading dashboard.</p>
-      <a href="{{ url_for('login') }}" class="btn btn-primary btn-lg">Login</a>
+  </div>
+
+  <!-- Open Positions -->
+  <div class="row">
+    <div class="col-12">
+      <div class="card mb-4">
+        <div class="card-header">
+          <h5 class="card-title mb-0">Open Positions</h5>
+        </div>
+        <div class="card-body">
+          <div class="table-responsive">
+            <table id="positionsTable" class="table table-hover">
+              <thead>
+                <tr>
+                  <th>Symbol</th>
+                  <th>Quantity</th>
+                  <th>Current Price</th>
+                  <th>Market Value</th>
+                  <th>Unrealized P&L</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td colspan="5" class="text-center">No open positions</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </div>
     </div>
-    {% endif %}
   </div>
 </div>
-{% endblock %} {% block extra_js %}
-<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
-<script>
-  // Initialize charts
-  const portfolioCtx = document
-    .getElementById("portfolioChart")
-    .getContext("2d");
-  const returnsCtx = document.getElementById("returnsChart").getContext("2d");
-
-  const portfolioChart = new Chart(portfolioCtx, {
-    type: "line",
-    data: {
-      labels: [],
-      datasets: [
-        {
-          label: "Portfolio Value",
-          data: [],
-          borderColor: "#1a73e8",
-          tension: 0.1,
-        },
-      ],
-    },
-    options: {
-      responsive: true,
-      maintainAspectRatio: false,
-      plugins: {
-        legend: {
-          display: false,
-        },
-      },
-    },
-  });
-
-  const returnsChart = new Chart(returnsCtx, {
-    type: "bar",
-    data: {
-      labels: [],
-      datasets: [
-        {
-          label: "Daily Returns",
-          data: [],
-          backgroundColor: "#1a73e8",
-        },
-      ],
-    },
-    options: {
-      responsive: true,
-      maintainAspectRatio: false,
-      plugins: {
-        legend: {
-          display: false,
-        },
-      },
-    },
-  });
-
-  // Bot control functionality
-  document.getElementById("startBot").addEventListener("click", async () => {
-    try {
-      const response = await fetch("/api/bot/start", { method: "POST" });
-      if (response.ok) {
-        document.getElementById("startBot").disabled = true;
-        document.getElementById("stopBot").disabled = false;
-        document.getElementById("botStatus").textContent = "Running";
-        document.getElementById("botStatus").classList.remove("text-danger");
-        document.getElementById("botStatus").classList.add("text-success");
-      }
-    } catch (error) {
-      console.error("Error starting bot:", error);
-    }
-  });
-
-  document.getElementById("stopBot").addEventListener("click", async () => {
-    try {
-      const response = await fetch("/api/bot/stop", { method: "POST" });
-      if (response.ok) {
-        document.getElementById("startBot").disabled = false;
-        document.getElementById("stopBot").disabled = true;
-        document.getElementById("botStatus").textContent = "Stopped";
-        document.getElementById("botStatus").classList.remove("text-success");
-        document.getElementById("botStatus").classList.add("text-danger");
-      }
-    } catch (error) {
-      console.error("Error stopping bot:", error);
-    }
-  });
-
-  // Function to update dashboard data
-  async function updateDashboard() {
-    try {
-      const response = await fetch("/api/dashboard/data");
-      const data = await response.json();
-
-      // Update account information
-      document.getElementById(
-        "accountBalance"
-      ).textContent = `$${data.balance.toFixed(2)}`;
-      document.getElementById("openPositions").textContent = data.openPositions;
-      document.getElementById("dailyPnL").textContent = `${
-        data.dailyPnL >= 0 ? "+" : ""
-      }$${data.dailyPnL.toFixed(2)}`;
-
-      // Update charts
-      portfolioChart.data.labels = data.portfolioHistory.labels;
-      portfolioChart.data.datasets[0].data = data.portfolioHistory.values;
-      portfolioChart.update();
-
-      returnsChart.data.labels = data.returnsHistory.labels;
-      returnsChart.data.datasets[0].data = data.returnsHistory.values;
-      returnsChart.update();
-
-      // Update trades table
-      const tradesTable = document.getElementById("tradesTable");
-      if (data.trades.length === 0) {
-        tradesTable.innerHTML =
-          '<tr><td colspan="7" class="text-center">No active positions</td></tr>';
-      } else {
-        tradesTable.innerHTML = data.trades
-          .map(
-            (trade) => `
-          <tr>
-            <td>${trade.symbol}</td>
-            <td>${trade.position}</td>
-            <td>$${trade.entryPrice.toFixed(2)}</td>
-            <td>$${trade.currentPrice.toFixed(2)}</td>
-            <td class="${trade.pnl >= 0 ? "text-success" : "text-danger"}">
-              ${trade.pnl >= 0 ? "+" : ""}$${trade.pnl.toFixed(2)}
-            </td>
-            <td>${trade.status}</td>
-            <td>${new Date(trade.time).toLocaleString()}</td>
-          </tr>
-        `
-          )
-          .join("");
-      }
-    } catch (error) {
-      console.error("Error updating dashboard:", error);
-    }
+{% endblock %} {% block styles %}
+<style>
+  .activity-log {
+    background-color: #f8f9fa;
+    border-radius: 4px;
+    padding: 10px;
   }
-
-  // Update dashboard every 5 seconds
-  setInterval(updateDashboard, 5000);
-  updateDashboard(); // Initial update
-</script>
+  .metric-card {
+    text-align: center;
+    padding: 15px;
+    background-color: #f8f9fa;
+    border-radius: 4px;
+  }
+  .metric-card h6 {
+    color: #6c757d;
+    margin-bottom: 5px;
+  }
+  .metric-card h3 {
+    margin: 0;
+    color: #212529;
+  }
+</style>
 {% endblock %}

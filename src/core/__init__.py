@@ -2,33 +2,32 @@
 Core trading bot components.
 """
 
-from typing import Any, Optional, Type
+import contextlib
+from typing import Any, Optional
 
 from .data_feed import DataFeed
 from .portfolio import Portfolio
 from .risk_manager import RiskManager
 from .strategy import Strategy
 
-AlpacaService: Optional[Type[Any]] = None
-TradingBot: Optional[Type[Any]] = None
+AlpacaService: type[Any] | None = None
+TradingBot: type[Any] | None = None
 
-try:
+with contextlib.suppress(ImportError):
     from .alpaca_service import AlpacaService
-except ImportError:
-    pass
 
 try:
     from .bot import TradingBot
 except ImportError:
-    pass
+    TradingBot = None
 
 __all__ = [
-    "Strategy",
-    "RiskManager",
-    "TradingBot",
-    "Portfolio",
-    "DataFeed",
     "AlpacaService",
+    "DataFeed",
+    "Portfolio",
+    "RiskManager",
+    "Strategy",
+    "TradingBot",
 ]
 
 # Core package initialization

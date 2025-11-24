@@ -21,6 +21,7 @@ wheels/
 *.egg
 
 # Virtual Environment
+.venv/
 venv/
 env/
 ENV/
@@ -47,4 +48,4 @@ logs/
 # Environment variables
 .env
 .env.local
-Thumbs.db 
+Thumbs.db

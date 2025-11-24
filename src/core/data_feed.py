@@ -3,16 +3,15 @@
 import json
 import os
 from datetime import datetime, timedelta
-from typing import Any, Dict, List, Optional, cast
+from typing import Any
 
 import pandas as pd
 
-from src.core.alpaca_client import AlpacaClient
+from src.core.alpaca_service import AlpacaService
 from src.core.alpaca_types import Asset as AssetProtocol
 from src.core.alpaca_types import Bar, BarSet
 from src.core.alpaca_types import Clock as ClockProtocol
 from src.core.alpaca_types import Position as PositionProtocol
-from src.core.alpaca_types import TimeFrame
 from src.core.alpaca_types import TradeAccount as TradeAccountProtocol
 from src.utils.logger import setup_logger
 
@@ -23,7 +22,11 @@ class DataFeed:
     """Data feed for retrieving market data."""
 
     def __init__(
-        self, api_key: str, api_secret: str, symbols: List[str], cache_dir: str = "data/cache"
+        self,
+        api_key: str,
+        api_secret: str,
+        symbols: list[str],
+        cache_dir: str = "data/cache",
     ) -> None:
         """Initialize data feed.
 
@@ -33,14 +36,14 @@ class DataFeed:
             symbols: List of symbols to get data for
             cache_dir: Directory to store cache files
         """
-        self.client = AlpacaClient(api_key, api_secret)
+        self.client = AlpacaService(api_key=api_key, secret_key=api_secret, trading_mode="paper")
         self.symbols = symbols
-        self.timeframe = TimeFrame(amount=1, unit="minute")
-        self._data: Dict[str, Dict[str, List[Dict[str, Any]]]] = {}
+        self.timeframe = "1Min"
+        self._data: dict[str, dict[str, list[dict[str, Any]]]] = {}
         self._cache_dir = cache_dir
         os.makedirs(cache_dir, exist_ok=True)
 
-    def _get_cache_path(self, symbol: str, timeframe: TimeFrame) -> str:
+    def _get_cache_path(self, symbol: str, timeframe: str) -> str:
         """Get cache file path for a symbol and timeframe.
 
         Args:
@@ -50,9 +53,9 @@ class DataFeed:
         Returns:
             Cache file path
         """
-        return os.path.join(self._cache_dir, f"{symbol}_{timeframe.value}.json")
+        return os.path.join(self._cache_dir, f"{symbol}_{timeframe}.json")
 
-    def _load_cache(self, symbol: str, timeframe: TimeFrame) -> Optional[List[Dict[str, Any]]]:
+    def _load_cache(self, symbol: str, timeframe: str) -> list[dict[str, Any]] | None:
         """Load data from cache.
 
         Args:
@@ -65,7 +68,7 @@ class DataFeed:
         try:
             cache_path = self._get_cache_path(symbol, timeframe)
             if os.path.exists(cache_path):
-                with open(cache_path, "r") as f:
+                with open(cache_path) as f:
                     data = json.load(f)
                     return [dict(item) for item in data]  # Ensure we return a list of dicts
             return None
@@ -76,8 +79,8 @@ class DataFeed:
     def _save_cache(
         self,
         symbol: str,
-        timeframe: TimeFrame,
-        data: List[Dict[str, Any]],
+        timeframe: str,
+        data: list[dict[str, Any]],
     ) -> None:
         """Save data to cache.
 
@@ -90,7 +93,7 @@ class DataFeed:
             cache_path = self._get_cache_path(symbol, timeframe)
             cache_data = [
                 {
-                    str(k): str(v) if isinstance(v, (pd.Timestamp, datetime)) else v
+                    str(k): str(v) if isinstance(v, pd.Timestamp | datetime) else v
                     for k, v in d.items()
                 }
                 for d in data
@@ -105,9 +108,9 @@ class DataFeed:
         self,
         symbol: str,
         start: datetime,
-        end: Optional[datetime] = None,
-        limit: Optional[int] = None,
-    ) -> Optional[BarSet]:
+        end: datetime | None = None,
+        limit: int | None = None,
+    ) -> BarSet | None:
         """Get historical bars for a symbol.
 
         Args:
@@ -123,31 +126,54 @@ class DataFeed:
             # Try to get from cache first
             cached_data = self._load_cache(symbol, self.timeframe)
             if cached_data:
-                bars = [Bar(**bar) for bar in cached_data]
-                return BarSet(bars=bars)
+                cached_bars = [
+                    Bar(
+                        timestamp=datetime.fromisoformat(str(bar["timestamp"])),
+                        open=float(bar["open"]),
+                        high=float(bar["high"]),
+                        low=float(bar["low"]),
+                        close=float(bar["close"]),
+                        volume=int(float(bar["volume"])),
+                    )
+                    for bar in cached_data
+                ]
+                return BarSet(bars=cached_bars)
 
             # If not in cache, get from API
-            bars = self.client.get_bars(
+            raw_bars = self.client.get_bars(
                 symbol=symbol,
-                timeframe=self.timeframe.value,
+                timeframe=self.timeframe,
                 start=start,
                 end=end,
                 limit=limit,
             )
-            if bars:
+            if raw_bars:
+                symbol_bars = raw_bars.get(symbol, [])
                 bar_data = [
                     {
-                        "timestamp": bar.t,
-                        "open": float(bar.o),
-                        "high": float(bar.h),
-                        "low": float(bar.l),
-                        "close": float(bar.c),
-                        "volume": int(bar.v),
+                        "timestamp": bar["timestamp"],
+                        "open": float(bar["open"]),
+                        "high": float(bar["high"]),
+                        "low": float(bar["low"]),
+                        "close": float(bar["close"]),
+                        "volume": float(bar["volume"]),
                     }
-                    for bar in bars
+                    for bar in symbol_bars
                 ]
                 self._save_cache(symbol, self.timeframe, bar_data)
-                return BarSet(bars=[Bar(**bar) for bar in bar_data])
+                return BarSet(
+                    bars=[
+                        Bar(
+                            timestamp=datetime.fromisoformat(str(bar["timestamp"])),
+                            open=float(bar["open"]),
+                            high=float(bar["high"]),
+                            low=float(bar["low"]),
+                            close=float(bar["close"]),
+                            volume=int(float(bar["volume"])),
+                        )
+                        for bar in bar_data
+                    ]
+                )
             return None
         except Exception as e:
             logger.error(f"Error getting bars for {symbol}: {e}")
@@ -156,9 +182,9 @@ class DataFeed:
     def get_historical_data(
         self,
         symbol: str,
-        start: Optional[datetime] = None,
-        end: Optional[datetime] = None,
-        limit: Optional[int] = None,
+        start: datetime | None = None,
+        end: datetime | None = None,
+        limit: int | None = None,
     ) -> pd.DataFrame:
         """Get historical market data.
 
@@ -179,7 +205,7 @@ class DataFeed:
                 start = end - timedelta(days=1)
 
             # Get bars from Alpaca
-            bars = self.client.get_bars(
+            raw_bars = self.client.get_bars(
                 symbol=symbol,
                 timeframe=self.timeframe,
                 start=start,
@@ -188,19 +214,18 @@ class DataFeed:
             )
 
             # Convert bars to DataFrame
+            symbol_bars = raw_bars.get(symbol, []) if raw_bars else []
             df = pd.DataFrame(
                 [
                     {
-                        "timestamp": bar.timestamp,
-                        "open": bar.open,
-                        "high": bar.high,
-                        "low": bar.low,
-                        "close": bar.close,
-                        "volume": bar.volume,
-                        "trade_count": bar.trade_count,
-                        "vwap": bar.vwap,
+                        "timestamp": bar["timestamp"],
+                        "open": float(bar["open"]),
+                        "high": float(bar["high"]),
+                        "low": float(bar["low"]),
+                        "close": float(bar["close"]),
+                        "volume": float(bar["volume"]),
                     }
-                    for bar in bars.bars[symbol]
+                    for bar in symbol_bars
                 ]
             )
 
@@ -217,7 +242,7 @@ class DataFeed:
     def get_latest_data(
         self,
         symbol: str,
-        limit: Optional[int] = None,
+        limit: int | None = None,
     ) -> pd.DataFrame:
         """Get latest market data.
 
@@ -245,16 +270,14 @@ class DataFeed:
             df = pd.DataFrame(
                 [
                     {
-                        "timestamp": bar.timestamp,
-                        "open": bar.open,
-                        "high": bar.high,
-                        "low": bar.low,
-                        "close": bar.close,
-                        "volume": bar.volume,
-                        "trade_count": bar.trade_count,
-                        "vwap": bar.vwap,
+                        "timestamp": bar["timestamp"],
+                        "open": bar["open"],
+                        "high": bar["high"],
+                        "low": bar["low"],
+                        "close": bar["close"],
+                        "volume": bar["volume"],
                     }
-                    for bar in bars.bars[symbol]
+                    for bar in bars[symbol]
                 ]
             )
 
@@ -269,47 +292,82 @@ class DataFeed:
             return pd.DataFrame()
 
     def get_account(self) -> TradeAccountProtocol:
-        """Get account information.
+        """Get account information."""
+        account_dict = self.client.get_account()
+        # Convert dict to TradeAccountProtocol-like object
+        from src.core.alpaca_types import TradeAccount
 
-        Returns:
-            TradeAccountProtocol: Account information
-        """
-        return self.client.get_account()
+        return TradeAccount(
+            account_number=str(account_dict.get("account_number", "")),
+            status=str(account_dict.get("status", "")),
+            currency=str(account_dict.get("currency", "USD")),
+            cash=float(account_dict.get("cash", 0.0)),
+            portfolio_value=float(account_dict.get("portfolio_value", 0.0)),
+            buying_power=float(account_dict.get("buying_power", 0.0)),
+            equity=float(account_dict.get("equity", 0.0)),
+        )
 
-    def get_positions(self) -> List[PositionProtocol]:
-        """Get current positions.
+    def get_positions(self) -> list[PositionProtocol]:
+        """Get all positions."""
+        try:
+            positions = self.client.get_all_positions()
+            return [
+                PositionProtocol(
+                    symbol=pos.get("symbol", ""),
+                    size=float(pos.get("qty", 0.0)),
+                    avg_price=float(pos.get("avg_entry_price", 0.0)),
+                    current_price=float(pos.get("current_price", 0.0)),
+                    side=pos.get("side", ""),
+                    stop_loss=0.0,
+                    take_profit=0.0,
+                )
+                for pos in positions
+            ]
+        except Exception as e:
+            logger.error(f"Failed to get positions: {e}")
+            raise
 
-        Returns:
-            List[PositionProtocol]: List of positions
-        """
-        return self.client.get_all_positions()
-
-    def get_open_position(self, symbol: str) -> PositionProtocol:
-        """Get open position.
-
-        Args:
-            symbol: Symbol to get position for
-
-        Returns:
-            PositionProtocol: Position information
-        """
-        return self.client.get_open_position(symbol)
+    def get_open_position(self, symbol: str) -> PositionProtocol | None:
+        """Get open position for a symbol."""
+        try:
+            position = self.client.get_open_position(symbol)
+            if not position:
+                return None
+            return PositionProtocol(
+                symbol=position.get("symbol", ""),
+                size=float(position.get("qty", 0.0)),
+                avg_price=float(position.get("avg_entry_price", 0.0)),
+                current_price=float(position.get("current_price", 0.0)),
+                side=position.get("side", ""),
+                stop_loss=0.0,
+                take_profit=0.0,
+            )
+        except Exception as e:
+            logger.error(f"Failed to get open position: {e}")
+            raise
 
     def get_asset(self, symbol: str) -> AssetProtocol:
-        """Get asset information.
+        """Get asset information."""
+        asset_dict = self.client.get_asset(symbol)
+        from src.core.alpaca_types import Asset
 
-        Args:
-            symbol: Symbol to get asset for
-
-        Returns:
-            AssetProtocol: Asset information
-        """
-        return self.client.get_asset(symbol)
+        return Asset(
+            symbol=asset_dict.get("symbol", ""),
+            name=asset_dict.get("name", ""),
+            exchange=asset_dict.get("exchange", ""),
+            class_=asset_dict.get("class", ""),
+            status=asset_dict.get("status", ""),
+            tradable=asset_dict.get("tradable", False),
+        )
 
     def get_clock(self) -> ClockProtocol:
-        """Get market clock information.
+        """Get market clock."""
+        clock_dict = self.client.get_clock()
+        from src.core.alpaca_types import Clock
 
-        Returns:
-            ClockProtocol: Market clock information
-        """
-        return self.client.get_clock()
+        return Clock(
+            timestamp=pd.to_datetime(clock_dict.get("timestamp", datetime.utcnow())),
+            is_open=bool(clock_dict.get("is_open", False)),
+            next_open=pd.to_datetime(clock_dict.get("next_open", datetime.utcnow())),
+            next_close=pd.to_datetime(clock_dict.get("next_close", datetime.utcnow())),
+        )

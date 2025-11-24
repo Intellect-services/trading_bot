@@ -1,14 +1,14 @@
 """Backtesting engine module."""
 
-import logging
-from datetime import datetime, timedelta
-from typing import Any, Dict, List, Optional, TypedDict, Union, cast
+from collections import defaultdict
+from collections.abc import Iterable
+from datetime import datetime
+from typing import Any, TypedDict, cast
 
 import numpy as np
 import pandas as pd
 from pandas import Series
 
-from src.core.portfolio import OrderDict, Portfolio, PositionDict
 from src.core.strategy import Strategy
 from src.utils.logger import setup_logger
 
@@ -18,7 +18,7 @@ logger = setup_logger(__name__)
 class BacktestResult(TypedDict):
     """Type definition for backtest result."""
 
-    trades: List[Dict[str, Any]]
+    trades: list[dict[str, Any]]
     total_return: float
     sharpe_ratio: float
     max_drawdown: float
@@ -57,17 +57,17 @@ class BacktestEngine:
         self.commission = commission
         self.slippage = slippage
         self.portfolio_value = initial_capital
-        self.positions: Dict[str, float] = {}
-        self.trades: List[Dict[str, Any]] = []
-        self.metrics: Dict[str, float] = {}
-        self.equity_curve: List[float] = [initial_capital]
+        self.positions: dict[str, float] = {}
+        self.trades: list[dict[str, Any]] = []
+        self.metrics: dict[str, float] = {}
+        self.equity_curve: list[float] = [initial_capital]
 
     def run(
         self,
         data: pd.DataFrame,
-        start_date: Optional[datetime] = None,
-        end_date: Optional[datetime] = None,
-    ) -> Dict[str, Any]:
+        start_date: datetime | None = None,
+        end_date: datetime | None = None,
+    ) -> dict[str, Any]:
         """Run the backtest."""
         if start_date is not None:
             data = data[data.index >= start_date]
@@ -80,17 +80,13 @@ class BacktestEngine:
         self.metrics = {}
         self.equity_curve = [self.initial_capital]
 
+        raw_signals = self.strategy.generate_signals(data)
+        signals_by_time = self._normalize_signals(data, raw_signals)
+
         for timestamp, row in data.iterrows():
-            # Update strategy state
-            self.strategy.update_state(row, cast(datetime, timestamp))
-
-            # Generate signals
-            signals = self.strategy.generate_signals()
-
-            # Execute trades based on signals
-            self._execute_trades(signals, row, cast(datetime, timestamp))
-
-            # Update portfolio value
+            current_time = cast("datetime", timestamp)
+            for signal in signals_by_time.get(current_time, []):
+                self._execute_signal(signal, row, current_time)
             self._update_portfolio_value(row)
 
         # Calculate final metrics
@@ -104,47 +100,59 @@ class BacktestEngine:
             "metrics": self.metrics,
         }
 
-    def _execute_trades(
-        self, signals: Dict[str, float], current_bar: Series[float], current_time: datetime
+    def _execute_signal(
+        self,
+        signal: dict[str, Any],
+        current_bar: Series,
+        current_time: datetime,
     ) -> None:
-        """Execute trades based on signals."""
-        for symbol, signal in signals.items():
-            if signal == 0.0:
-                continue
+        """Execute a single normalized signal."""
+        symbol = signal["symbol"]
+        action = signal["action"]
+        price = signal.get("price")
+        if price is None:
+            price = self._extract_price(current_bar, symbol)
+        if price <= 0:
+            logger.warning("Skipping signal for %s due to invalid price %s", symbol, price)
+            return
 
-            # Calculate position size
-            price = float(current_bar[symbol])
-            position_value = self.portfolio_value * abs(signal)
-            shares = position_value / price
+        raw_shares = float(signal.get("shares", 0.0))
+        if raw_shares > 0:
+            shares = raw_shares
+        else:
+            size_fraction = abs(float(signal.get("size", signal.get("strength", 0.1))))
+            size_fraction = min(max(size_fraction, 0.0), 1.0)
+            position_value = self.portfolio_value * size_fraction
+            shares = position_value / price if price else 0.0
 
-            # Apply slippage
-            execution_price = price * (1 + self.slippage * (1 if signal > 0 else -1))
+        if shares <= 0:
+            return
 
-            # Calculate commission
-            commission = execution_price * shares * self.commission
+        side_multiplier = 1 if action == "buy" else -1
 
-            # Record trade
-            self.trades.append(
-                {
-                    "timestamp": current_time.isoformat(),
-                    "symbol": symbol,
-                    "signal": signal,
-                    "price": execution_price,
-                    "shares": shares,
-                    "commission": commission,
-                    "value": position_value,
-                }
-            )
+        execution_price = price * (1 + self.slippage * side_multiplier)
+        commission = execution_price * shares * self.commission
 
-            # Update positions
-            self.positions[symbol] = shares if signal > 0 else -shares
+        self.trades.append(
+            {
+                "timestamp": current_time.isoformat(),
+                "symbol": symbol,
+                "side": action,
+                "shares": shares,
+                "price": execution_price,
+                "commission": commission,
+                "value": shares * execution_price,
+            }
+        )
+
+        self.positions[symbol] = side_multiplier * shares
 
     def _update_portfolio_value(self, current_bar: Series[float]) -> None:
         """Update portfolio value based on current prices."""
         portfolio_value = self.initial_capital
 
         for symbol, shares in self.positions.items():
-            price = float(current_bar[symbol])
+            price = self._extract_price(current_bar, symbol)
             portfolio_value += shares * price
 
         self.portfolio_value = portfolio_value
@@ -377,4 +385,105 @@ class BacktestEngine:
             return float(min(losing_trades)) if losing_trades else 0.0
         except Exception as e:
             logger.error("Error calculating max loss: %s", str(e))
+            return 0.0
+
+    def _normalize_signals(
+        self,
+        data: pd.DataFrame,
+        raw_signals: Any,
+    ) -> defaultdict[datetime, list[dict[str, Any]]]:
+        """Normalize raw strategy signals into a dictionary keyed by timestamp."""
+        normalized: defaultdict[datetime, list[dict[str, Any]]] = defaultdict(list)
+        signals_iterable: list[dict[str, Any]] = []
+
+        if isinstance(raw_signals, pd.DataFrame):
+            raw_records = raw_signals.to_dict("records")
+            signals_iterable = [
+                {str(key): value for key, value in record.items()} for record in raw_records
+            ]
+        elif isinstance(raw_signals, dict):
+            signals_iterable = [{str(key): value for key, value in raw_signals.items()}]
+        elif isinstance(raw_signals, Iterable):
+            for item in raw_signals:
+                try:
+                    converted = {str(key): value for key, value in dict(item).items()}
+                    signals_iterable.append(converted)
+                except TypeError:
+                    continue
+        else:
+            return normalized
+
+        for signal in signals_iterable:
+            symbol = str(signal.get("symbol") or signal.get("ticker") or "UNKNOWN").upper()
+            action = str(signal.get("action") or signal.get("side") or "hold").lower()
+            if action not in {"buy", "sell"}:
+                continue
+
+            timestamp_raw = signal.get("timestamp")
+            if timestamp_raw is None:
+                timestamp = data.index[-1]
+            else:
+                timestamp = pd.to_datetime(timestamp_raw, errors="coerce")
+                if pd.isna(timestamp):
+                    timestamp = data.index[-1]
+
+            aligned_timestamp = self._align_timestamp(data.index, timestamp)
+            size = float(signal.get("size", signal.get("strength", 0.1)))
+            shares = float(signal.get("shares", 0.0))
+            price = signal.get("price")
+            if price is not None:
+                price = float(price)
+
+            normalized[aligned_timestamp].append(
+                {
+                    "symbol": symbol,
+                    "action": action,
+                    "size": size,
+                    "shares": shares,
+                    "price": price,
+                }
+            )
+
+        return normalized
+
+    def _align_timestamp(self, index: pd.Index, timestamp: pd.Timestamp) -> pd.Timestamp:
+        """Align arbitrary timestamp to the closest index entry."""
+        try:
+            loc = index.get_indexer([timestamp], method="nearest")[0]
+            if loc == -1:
+                return cast("pd.Timestamp", index[-1])
+            return cast("pd.Timestamp", index[loc])
+        except Exception:
+            return cast("pd.Timestamp", index[-1])
+
+    def _extract_price(self, row: Series, symbol: str) -> float:
+        """Extract a price for the given symbol from the row."""
+        candidates = [
+            symbol,
+            f"{symbol}_close",
+            "close",
+            "Close",
+        ]
+        for candidate in candidates:
+            value = row.get(candidate, None)  # pandas Series provides .get
+            if value is None:
+                continue
+            try:
+                return float(value)
+            except (TypeError, ValueError):
+                continue
+        if isinstance(row.index, pd.MultiIndex):
+            for idx in row.index:
+                if not isinstance(idx, tuple) or symbol not in idx:
+                    continue
+                value = row.get(idx, None)
+                if value is None:
+                    continue
+                try:
+                    return float(value)
+                except (TypeError, ValueError):
+                    continue
+        try:
+            return float(row.iloc[0])
+        except (TypeError, ValueError, IndexError):
             return 0.0

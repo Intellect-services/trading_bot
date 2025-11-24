@@ -1,0 +1,35 @@
+.skeleton {
+    background: linear-gradient(90deg,
+            rgba(255, 255, 255, 0.05) 0%,
+            rgba(255, 255, 255, 0.1) 50%,
+            rgba(255, 255, 255, 0.05) 100%);
+    background-size: 200% 100%;
+    animation: shimmer 1.5s infinite;
+    border-radius: var(--radius-md);
+}
+
+.skeleton-icon {
+    width: 48px;
+    height: 48px;
+    border-radius: 12px;
+}
+
+.skeleton-text {
+    height: 14px;
+    border-radius: 4px;
+}
+
+.skeleton-title {
+    height: 28px;
+    border-radius: 6px;
+}
+
+@keyframes shimmer {
+    0% {
+        background-position: -200% 0;
+    }
+
+    100% {
+        background-position: 200% 0;
+    }
+}

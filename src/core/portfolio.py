@@ -1,11 +1,7 @@
 """Portfolio management module."""
 
-import logging
 from datetime import datetime
-from typing import Any, Dict, List, Optional, TypedDict, Union
-
-import numpy as np
-import pandas as pd
+from typing import Any, TypedDict
 
 from src.utils.logger import setup_logger
 
@@ -45,8 +41,10 @@ class Portfolio:
         self.current_balance = float(initial_capital)
         self.max_position_size = 0.1  # Maximum position size as fraction of portfolio
         self.commission = 0.001  # 0.1% commission
-        self.positions: Dict[str, PositionDict] = {}
-        self.trades: List[OrderDict] = []
+        self.positions: dict[str, PositionDict] = {}
+        self.trades: list[OrderDict] = []
+        # Backwards compatibility with older code paths referencing trade_history
+        self.trade_history = self.trades
         self.peak_value = float(initial_capital)
         logger.info("Portfolio initialized with %.2f capital", initial_capital)
 
@@ -58,7 +56,7 @@ class Portfolio:
         """
         try:
             total_value = self.current_balance
-            for symbol, position in self.positions.items():
+            for _symbol, position in self.positions.items():
                 total_value += position["size"] * position["current_price"]
             return total_value
         except Exception as e:
@@ -73,7 +71,7 @@ class Portfolio:
         """
         return self.current_balance
 
-    def get_position(self, symbol: str) -> Optional[PositionDict]:
+    def get_position(self, symbol: str) -> PositionDict | None:
         """Get position for a symbol.
 
         Args:
@@ -84,7 +82,7 @@ class Portfolio:
         """
         return self.positions.get(symbol)
 
-    def get_all_positions(self) -> Dict[str, PositionDict]:
+    def get_all_positions(self) -> dict[str, PositionDict]:
         """Get all positions.
 
         Returns:
@@ -132,7 +130,8 @@ class Portfolio:
                 "timestamp": datetime.now(),
             }
 
-            if side.lower() == "buy":
+            side_lower = side.lower()
+            if side_lower == "buy":
                 cost = qty * price
                 if cost > self.current_balance:
                     logger.warning("Insufficient funds for buy order")
@@ -141,8 +140,10 @@ class Portfolio:
                 self.current_balance -= cost
                 if symbol in self.positions:
                     position = self.positions[symbol]
-                    new_size = position["size"] + qty
-                    new_cost = position["cost"] + cost
+                    previous_size = position["size"]
+                    previous_cost = position["cost"]
+                    new_size = previous_size + qty
+                    new_cost = previous_cost + cost
                     position["size"] = new_size
                     position["cost"] = new_cost
                     position["avg_price"] = new_cost / new_size
@@ -156,37 +157,44 @@ class Portfolio:
                         "entry_price": price,
                     }
 
-            elif side.lower() == "sell":
+            elif side_lower == "sell":
                 if symbol not in self.positions:
                     logger.warning("No position to sell")
                     return order
 
                 position = self.positions[symbol]
-                if position["size"] < qty:
+                previous_size = position["size"]
+                if previous_size < qty:
                     logger.warning("Insufficient shares for sell order")
                     return order
 
                 proceeds = qty * price
                 self.current_balance += proceeds
 
-                new_size = position["size"] - qty
+                new_size = previous_size - qty
                 if new_size == 0:
                     del self.positions[symbol]
                 else:
+                    previous_cost = position["cost"]
                     position["size"] = new_size
-                    position["cost"] = position["cost"] * (new_size / position["size"])
-                    position["avg_price"] = position["cost"] / new_size
+                    cost_ratio = new_size / previous_size if previous_size else 0.0
+                    position["cost"] = previous_cost * cost_ratio
+                    position["avg_price"] = position["cost"] / new_size if new_size else 0.0
                     position["current_price"] = price
+
+            else:
+                logger.warning("Unsupported order side: %s", side)
+                return order
 
             self.trades.append(order)
             self.peak_value = max(self.peak_value, self.get_value())
-            logger.info(f"Executed {side} order: {order}")
+            logger.info("Executed %s order: %s", side, order)
             return order
         except Exception as e:
             logger.error(f"Error executing order: {e}")
             return order
 
-    def update_prices(self, prices: Dict[str, float]) -> None:
+    def update_prices(self, prices: dict[str, float]) -> None:
         """Update current prices for positions.
 
         Args:
@@ -200,7 +208,7 @@ class Portfolio:
         except Exception as e:
             logger.error(f"Error updating prices: {e}")
 
-    def get_summary(self) -> Dict[str, Any]:
+    def get_summary(self) -> dict[str, Any]:
         """Get portfolio summary.
 
         Returns:
@@ -315,7 +323,7 @@ class Portfolio:
             logger.error(f"Error calculating position value: {e}")
             return 0.0
 
-    def calculate_portfolio_value(self, current_prices: Dict[str, float]) -> float:
+    def calculate_portfolio_value(self, current_prices: dict[str, float]) -> float:
         """Calculate total portfolio value.
 
         Args:
@@ -333,7 +341,7 @@ class Portfolio:
             logger.error(f"Error calculating portfolio value: {e}")
             return self.current_balance
 
-    def calculate_total_returns(self, current_prices: Dict[str, float]) -> float:
+    def calculate_total_returns(self, current_prices: dict[str, float]) -> float:
         """Calculate total returns.
 
         Args:
@@ -348,3 +356,7 @@ class Portfolio:
         except Exception as e:
             logger.error(f"Error calculating total returns: {e}")
             return 0.0
+
+    def get_trade_history(self) -> list[OrderDict]:
+        """Return a copy of recorded trades."""
+        return list(self.trades)

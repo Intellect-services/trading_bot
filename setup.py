@@ -7,7 +7,7 @@ setup(
     install_requires=[
         "flask",
         "flask-socketio",
-        "alpaca-py",
+        "alpaca-trade-api",
         "pandas",
         "python-dotenv",
     ],

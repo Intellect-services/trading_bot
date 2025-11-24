@@ -1,0 +1,70 @@
+version: '3.8'
+
+services:
+  # PostgreSQL Database
+  db:
+    image: postgres:15-alpine
+    container_name: intellecttrader_db
+    environment:
+      POSTGRES_DB: intellecttrader
+      POSTGRES_USER: trader
+      POSTGRES_PASSWORD: ${DB_PASSWORD:-changeme}
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    ports:
+      - "5432:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U trader"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - intellecttrader_network
+
+  # Backend Application
+  app:
+    build: .
+    container_name: intellecttrader_app
+    environment:
+      - DATABASE_URL=postgresql://trader:${DB_PASSWORD:-changeme}@db:5432/intellecttrader
+      - ALPACA_API_KEY=${ALPACA_API_KEY}
+      - ALPACA_API_SECRET=${ALPACA_API_SECRET}
+      - TRADING_MODE=${TRADING_MODE:-paper}
+      - SECRET_KEY=${SECRET_KEY:-your-secret-key-change-in-production}
+      - SMTP_HOST=${SMTP_HOST:-}
+      - SMTP_PORT=${SMTP_PORT:-587}
+      - SMTP_USER=${SMTP_USER:-}
+      - SMTP_PASSWORD=${SMTP_PASSWORD:-}
+      - ALERT_EMAIL=${ALERT_EMAIL:-}
+    ports:
+      - "5000:5000"
+    depends_on:
+      db:
+        condition: service_healthy
+    volumes:
+      - ./logs:/app/logs
+      - ./flask_session:/app/flask_session
+    networks:
+      - intellecttrader_network
+    restart: unless-stopped
+
+  # Frontend (Optional - if serving from Docker)
+  # frontend:
+  #   build:
+  #     context: ./src/frontend
+  #     dockerfile: Dockerfile
+  #   container_name: intellecttrader_frontend
+  #   ports:
+  #     - "5173:5173"
+  #   depends_on:
+  #     - app
+  #   networks:
+  #     - intellecttrader_network
+
+volumes:
+  postgres_data:
+    driver: local
+
+networks:
+  intellecttrader_network:
+    driver: bridge

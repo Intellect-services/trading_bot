@@ -35,4 +35,4 @@ safety check --full-report
 echo "Checking for outdated packages..."
 pip list --outdated
 
-echo "All CI checks passed successfully!" 
+echo "All CI checks passed successfully!"

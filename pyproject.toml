@@ -1,42 +1,85 @@
 [build-system]
-requires = ["setuptools>=42", "wheel"]
+requires = ["setuptools>=78.1.1", "wheel>=0.41.2"]
 build-backend = "setuptools.build_meta"
 
 [project]
 name = "trading_bot"
 version = "0.1.0"
-description = "A trading bot for algorithmic trading"
+description = "A trading bot for automated trading strategies"
 requires-python = ">=3.10"
 dependencies = [
-    "alpaca-py>=0.13.1",
-    "flask==2.2.5",
-    "flask-socketio==5.3.6",
-    "python-dotenv==0.19.0",
-    "pandas==1.5.3",
-    "numpy==1.24.3",
-    "aiohttp==3.8.1",
-    "requests==2.31.0",
-    "websockets==10.4",
-    "pytz==2023.3",
-    "python-dateutil==2.8.2",
-    "authlib>=1.5.2",
+    "alpaca-trade-api>=2.3.0",
+    "flask>=2.3.3",
+    "pandas>=2.0.0",
+    "numpy>=1.24.0",
+    "python-dotenv>=1.0.0",
+    "requests>=2.32.2",
+    "urllib3>=1.26.18",
+    "werkzeug>=3.0.6",
+    "aiohttp>=3.10.11",
+    "cryptography>=42.0.8",
+    "setuptools>=78.1.1",
 ]
 
 [project.optional-dependencies]
 dev = [
-    "pytest==7.4.3",
-    "pytest-cov==4.1.0",
-    "black==23.3.0",
-    "flake8==6.1.0",
-    "mypy==1.5.1",
-    "safety==1.10.3",
-    "bandit==1.7.5",
+    "pytest>=7.4.0",
+    "pytest-cov>=4.1.0",
+    "black>=24.3.0",
+    "flake8>=6.1.0",
+    "mypy>=1.5.0",
+    "isort>=5.12.0",
+    "bandit>=1.7.7",
+    "safety>=2.2.0",
+    "sphinx>=7.1.0",
+    "sphinx-rtd-theme>=1.3.0",
+    "websockets>=11.0.3",
+    "types-requests>=2.31.0.2",
+    "types-urllib3>=1.26.25.14",
 ]
 
 [tool.setuptools]
-packages = ["src"]
+package-dir = {"" = "src"}
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 python_files = ["test_*.py"]
-addopts = "--cov=src --cov-report=xml" 
+addopts = "--cov=src --cov-report=term-missing"
+
+[tool.black]
+line-length = 100
+target-version = ["py310"]
+include = '\.pyi?$'
+
+[tool.isort]
+profile = "black"
+line_length = 100
+multi_line_output = 3
+include_trailing_comma = true
+force_grid_wrap = 0
+use_parentheses = true
+ensure_newline_before_comments = true
+
+[tool.mypy]
+python_version = "3.10"
+warn_return_any = true
+warn_unused_configs = true
+# Gradual typing: Allow untyped definitions but warn about them
+disallow_untyped_defs = false
+disallow_incomplete_defs = false
+check_untyped_defs = true
+disallow_untyped_decorators = false
+no_implicit_optional = true
+warn_redundant_casts = true
+warn_unused_ignores = true
+warn_no_return = true
+warn_unreachable = true
+strict_optional = true
+
+[tool.bandit]
+exclude_dirs = [".git", "__pycache__", "build", "dist"]
+skips = ["B101", "B105", "B311"]
+targets = ["src"]
+
+[tool.safety]
+ignore = []

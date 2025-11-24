@@ -6,6 +6,6 @@ from .config import Config
 from .helpers import calculate_position_size, format_price
 from .logger import setup_logger
 
-__all__ = ["Config", "setup_logger", "calculate_position_size", "format_price"]
+__all__ = ["Config", "calculate_position_size", "format_price", "setup_logger"]
 
 # Utils package initialization

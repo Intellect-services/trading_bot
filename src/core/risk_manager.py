@@ -2,23 +2,19 @@
 
 import logging
 from dataclasses import dataclass
-from decimal import Decimal
-from typing import Any, Dict, Optional, Union
-
-import pandas as pd
-
-from ..utils.config import Config
-from ..utils.logger import setup_logger
+from typing import TypedDict
 
 logger = logging.getLogger(__name__)
 
 
-@dataclass
-class Position:
-    """Position details."""
-
+class Position(TypedDict):
+    symbol: str
     size: float
     avg_price: float
+    current_price: float
+    side: str
+    stop_loss: float | None
+    take_profit: float | None
 
 
 @dataclass
@@ -47,6 +43,7 @@ class RiskManager:
         take_profit_pct: float = 0.04,
         max_drawdown: float = 0.2,
         max_leverage: float = 2.0,
+        trailing_stop_pct: float = 0.01,
     ) -> None:
         """Initialize the risk manager.
 
@@ -58,6 +55,7 @@ class RiskManager:
             take_profit_pct: Take profit percentage (default: 4%)
             max_drawdown: Maximum drawdown allowed (default: 20%)
             max_leverage: Maximum leverage allowed (default: 2.0)
+            trailing_stop_pct: Trailing stop percentage (default: 1%)
         """
         self.initial_capital = initial_capital
         self._risk_per_trade = risk_per_trade
@@ -66,11 +64,12 @@ class RiskManager:
         self.take_profit_pct = take_profit_pct
         self._max_drawdown = max_drawdown
         self._max_leverage = max_leverage
+        self.trailing_stop_pct = trailing_stop_pct
 
         # Track positions and their risk metrics
-        self.positions: Dict[str, Dict[str, float]] = {}
-        self.highest_prices: Dict[str, float] = {}
-        self.lowest_prices: Dict[str, float] = {}
+        self.positions: dict[str, dict[str, float]] = {}
+        self.highest_prices: dict[str, float] = {}
+        self.lowest_prices: dict[str, float] = {}
 
     @property
     def risk_per_trade(self) -> float:
@@ -120,36 +119,18 @@ class RiskManager:
             raise ValueError("Maximum leverage must be at least 1")
         self._max_leverage = value
 
-    def calculate_position_size(self, price: float, symbol: str) -> float:
-        """Calculate the position size for a trade.
+    def calculate_position_size(self, price: float, risk_amount: float) -> float:
+        """Calculate position size based on risk amount and price."""
+        if price <= 0:
+            raise ValueError("Price must be positive")
+        if risk_amount <= 0:
+            raise ValueError("Risk amount must be positive")
 
-        Args:
-            price: Current price of the asset
-            symbol: Asset symbol
+        position_size = risk_amount / price
+        max_size = self.initial_capital * self.max_position_size / price
+        return min(position_size, max_size)
 
-        Returns:
-            Position size in units
-        """
-        try:
-            # Calculate maximum position value based on capital
-            max_position_value = self.initial_capital * self.max_position_size
-
-            # Calculate position size based on risk per trade
-            risk_amount = self.initial_capital * self.risk_per_trade
-            stop_loss_amount = price * self.stop_loss_pct
-            position_size = risk_amount / stop_loss_amount
-
-            # Ensure position size doesn't exceed maximum
-            position_value = position_size * price
-            if position_value > max_position_value:
-                position_size = max_position_value / price
-
-            return position_size
-        except Exception as e:
-            logger.error(f"Failed to calculate position size: {e}")
-            raise
-
-    def get_stop_loss(self, symbol: str) -> Optional[float]:
+    def get_stop_loss(self, symbol: str) -> float | None:
         """Get the stop loss price for a position.
 
         Args:
@@ -168,7 +149,7 @@ class RiskManager:
             logger.error(f"Failed to get stop loss: {e}")
             raise
 
-    def get_take_profit(self, symbol: str) -> Optional[float]:
+    def get_take_profit(self, symbol: str) -> float | None:
         """Get the take profit price for a position.
 
         Args:
@@ -192,8 +173,8 @@ class RiskManager:
         symbol: str,
         price: float,
         quantity: float,
-        stop_loss: Optional[float] = None,
-        take_profit: Optional[float] = None,
+        stop_loss: float | None = None,
+        take_profit: float | None = None,
     ) -> None:
         """Update position information.
 
@@ -240,126 +221,67 @@ class RiskManager:
     def apply_risk_management(
         self,
         price: float,
-        position: Optional[Union[Position, Dict[str, float]]],
-        account_value: float,
+        position: Position | dict[str, float] | None = None,
+        account_value: float = 0.0,
     ) -> bool:
-        """Apply risk management rules to a position.
-
-        Args:
-            price: Current price
-            position: Position details
-            account_value: Account value
-
-        Returns:
-            bool: True if position meets risk criteria
-
-        Raises:
-            ValueError: If price or account_value is not positive
-        """
-        if price <= 0:
-            raise ValueError("Price must be positive")
-        if account_value <= 0:
-            raise ValueError("Account value must be positive")
-
+        """Apply risk management rules to a position."""
         if position is None:
             return True
 
-        # Convert dictionary position to Position object if needed
-        if isinstance(position, dict):
-            position = Position(
-                size=float(position["size"]), avg_price=float(position["avg_price"])
-            )
-
-        position_value = position.size * price
-        if position_value / account_value > self.max_position_size:
-            logger.warning(
-                "Position size exceeds maximum: %.2f%%",
-                (position_value / account_value) * 100,
-            )
+        # Check position size
+        position_value = abs(position["size"] * price)
+        if position_value > self.max_position_size * account_value:
             return False
 
-        if not self.check_leverage(account_value, position_value):
-            logger.warning(
-                "Position leverage exceeds maximum: %.2f",
-                position_value / account_value,
-            )
+        # Check stop loss
+        stop_loss = position.get("stop_loss")
+        if stop_loss is not None and price <= stop_loss:
+            loss_pct = ((stop_loss - price) / stop_loss) * 100
+            logger.warning(f"Position loss exceeds stop loss: {loss_pct:.2f}%")
             return False
 
-        loss_pct = (price - position.avg_price) / position.avg_price
-        if loss_pct < -self.stop_loss_pct:
-            logger.warning(
-                "Position loss exceeds stop loss: %.2f%%",
-                loss_pct * 100,
-            )
+        # Check take profit
+        take_profit = position.get("take_profit")
+        if take_profit is not None and price >= take_profit:
+            profit_pct = ((price - take_profit) / take_profit) * 100
+            logger.warning(f"Position profit exceeds take profit: {profit_pct:.2f}%")
             return False
 
         return True
 
     def calculate_stop_loss(self, price: float, quantity: float) -> float:
-        """Calculate stop loss price.
-
-        Args:
-            price: Current price
-            quantity: Position quantity
-
-        Returns:
-            float: Stop loss price
-
-        Raises:
-            ValueError: If price is not positive
-        """
+        """Calculate stop loss price based on position direction."""
         if price <= 0:
             raise ValueError("Price must be positive")
 
-        if quantity > 0:
+        if quantity > 0:  # Long position
             return price * (1 - self.stop_loss_pct)
-        else:
-            return price * (1 + self.stop_loss_pct)
+        # Short position
+        return price * (1 + self.stop_loss_pct)
 
     def calculate_take_profit(self, price: float, quantity: float) -> float:
-        """Calculate take profit price.
-
-        Args:
-            price: Current price
-            quantity: Position quantity
-
-        Returns:
-            float: Take profit price
-
-        Raises:
-            ValueError: If price is not positive
-        """
+        """Calculate take profit price based on position direction."""
         if price <= 0:
             raise ValueError("Price must be positive")
 
-        if quantity > 0:
+        if quantity > 0:  # Long position
             return price * (1 + self.take_profit_pct)
-        else:
-            return price * (1 - self.take_profit_pct)
+        # Short position
+        return price * (1 - self.take_profit_pct)
 
-    def check_leverage(self, portfolio_value: float, position_value: float) -> bool:
-        """Check if leverage is within limits.
+    def check_leverage(self, leverage: float, account_value: float) -> bool:
+        """Check if leverage is within acceptable limits."""
+        if account_value <= 0:
+            raise ValueError("Account value must be positive")
 
-        Args:
-            portfolio_value: Current portfolio value
-            position_value: Position value
-
-        Returns:
-            bool: True if leverage is within limits
-
-        Raises:
-            ValueError: If portfolio_value or position_value is not positive
-        """
-        if portfolio_value <= 0:
-            raise ValueError("Portfolio value must be positive")
-        if position_value < 0:
-            raise ValueError("Position value cannot be negative")
-
-        leverage = position_value / portfolio_value
         return leverage <= self.max_leverage
 
     def validate_trade(
-        self, symbol: str, quantity: float, price: float, portfolio_value: float
+        self,
+        symbol: str,  # noqa: ARG002
+        quantity: float,
+        price: float,
+        portfolio_value: float,
     ) -> bool:
         """Validate if trade meets risk management criteria.
 
@@ -402,60 +324,27 @@ class RiskManager:
             logger.error("Error validating trade: %s", str(e))
             return False
 
-    def update_trailing_stops(
-        self, symbol: str, current_price: float, position_type: str = "long"
-    ) -> Optional[float]:
-        """Update trailing stops for a position.
-
-        Args:
-            symbol: Trading symbol
-            current_price: Current price
-            position_type: Position type (long/short)
-
-        Returns:
-            Optional[float]: New stop price if triggered, None otherwise
-
-        Raises:
-            ValueError: If current_price is not positive or position_type is invalid
-        """
-        if current_price <= 0:
-            raise ValueError("Current price must be positive")
-        if position_type not in ["long", "short"]:
-            raise ValueError("Position type must be 'long' or 'short'")
-
-        try:
-            if position_type == "long":
-                if symbol not in self.highest_prices:
-                    self.highest_prices[symbol] = current_price
-                elif current_price > self.highest_prices[symbol]:
-                    self.highest_prices[symbol] = current_price
-
-                profit_pct = (current_price - self.highest_prices[symbol]) / self.highest_prices[
-                    symbol
-                ]
-                if profit_pct >= self.risk_per_trade:
-                    stop_price = self.highest_prices[symbol] * (1 - self.risk_per_trade)
-                    if current_price <= stop_price:
-                        return stop_price
-            else:
-                if symbol not in self.lowest_prices:
-                    self.lowest_prices[symbol] = current_price
-                elif current_price < self.lowest_prices[symbol]:
-                    self.lowest_prices[symbol] = current_price
-
-                profit_pct = (self.lowest_prices[symbol] - current_price) / self.lowest_prices[
-                    symbol
-                ]
-                if profit_pct >= self.risk_per_trade:
-                    stop_price = self.lowest_prices[symbol] * (1 + self.risk_per_trade)
-                    if current_price >= stop_price:
-                        return stop_price
-
-            return None
-
-        except Exception as e:
-            logger.error("Error updating trailing stops: %s", str(e))
-            return None
+    def update_trailing_stops(self, positions: dict[str, Position]) -> None:
+        """Update trailing stops for open positions."""
+        for symbol, position in positions.items():
+            try:
+                current_price = float(position["current_price"])
+                float(position["avg_price"])
+                stop_price = position["stop_loss"]
+                if stop_price is None:
+                    continue
+                # Calculate new stop price based on trailing percentage
+                if position["side"] == "long":
+                    new_stop = current_price * (1 - self.trailing_stop_pct)
+                    if new_stop > stop_price:
+                        self.update_stop_loss(position, current_price)
+                else:  # short position
+                    new_stop = current_price * (1 + self.trailing_stop_pct)
+                    if new_stop < stop_price:
+                        self.update_stop_loss(position, current_price)
+            except (ValueError, AttributeError) as e:
+                logger.error(f"Error updating trailing stop for {symbol}: {e}")
+                continue
 
     def reset_trailing_stop(self, symbol: str) -> None:
         """Reset trailing stop for a symbol.
@@ -465,3 +354,17 @@ class RiskManager:
         """
         self.highest_prices.pop(symbol, None)
         self.lowest_prices.pop(symbol, None)
+
+    def update_stop_loss(self, position: Position, current_price: float) -> None:
+        """Update trailing stop loss for a position."""
+        stop_loss = position["stop_loss"]
+        if stop_loss is None:
+            return
+        if position["side"] == "long":
+            new_stop = current_price * (1 - self.trailing_stop_pct)
+            if new_stop > stop_loss:
+                position["stop_loss"] = new_stop
+        else:  # short position
+            new_stop = current_price * (1 + self.trailing_stop_pct)
+            if new_stop < stop_loss:
+                position["stop_loss"] = new_stop

@@ -1,0 +1,46 @@
+name: Deploy to Production
+
+on:
+  workflow_dispatch:
+    inputs:
+      confirm:
+        description: 'Type "deploy" to confirm production deployment'
+        required: true
+        default: ''
+
+jobs:
+  deploy:
+    if: github.event.inputs.confirm == 'deploy'
+    runs-on: ubuntu-latest
+    environment:
+      name: production
+      url: https://intellectscout.com
+    steps:
+      - uses: actions/checkout@v3
+
+      - name: Set up Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: "3.10"
+
+      - name: Run tests
+        run: |
+          pip install -r requirements.txt
+          pytest --cov=src --cov-fail-under=80
+
+      - name: Install Railway CLI
+        run: |
+          curl -fsSL https://railway.app/install.sh | sh
+
+      - name: Deploy to Railway Production
+        env:
+          RAILWAY_TOKEN: ${{ secrets.RAILWAY_TOKEN }}
+        run: |
+          railway link ${{ secrets.RAILWAY_PRODUCTION_PROJECT_ID }}
+          railway up --service backend
+          railway up --service frontend
+
+      - name: Run smoke tests
+        run: |
+          # Add smoke tests here
+          curl -f https://intellectscout.com/api/health || exit 1

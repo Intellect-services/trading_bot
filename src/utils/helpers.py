@@ -1,14 +1,13 @@
 """Helper functions for trading calculations and formatting."""
 
 from decimal import Decimal
-from typing import Optional, Union
 
 
 def calculate_position_size(
     portfolio_value: float,
     risk_per_trade: float,
     entry_price: float,
-    stop_loss: Optional[float] = None,
+    stop_loss: float | None = None,
     leverage: float = 1.0,
 ) -> float:
     """
@@ -28,10 +27,7 @@ def calculate_position_size(
         # Calculate position size based on stop loss
         risk_amount = portfolio_value * risk_per_trade
         price_difference = abs(entry_price - stop_loss)
-        if price_difference > 0:
-            position_size = (risk_amount / price_difference) * leverage
-        else:
-            position_size = 0
+        position_size = risk_amount / price_difference * leverage if price_difference > 0 else 0
     else:
         # Use a default position size based on risk percentage
         position_size = (portfolio_value * risk_per_trade * leverage) / entry_price
@@ -40,7 +36,7 @@ def calculate_position_size(
 
 
 def format_price(
-    price: Union[float, Decimal],
+    price: float | Decimal,
     decimals: int = 8,
     include_currency: bool = False,
     currency_symbol: str = "$",

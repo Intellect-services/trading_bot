@@ -1,0 +1,79 @@
+site_name: IntellectScout Trading Bot
+site_description: Production-ready trading bot with automated strategies and real-time monitoring
+site_url: https://betintellect-com.github.io/trading_bot
+repo_url: https://github.com/betintellect-com/trading_bot
+repo_name: betintellect-com/trading_bot
+
+theme:
+  name: material
+  palette:
+    - scheme: default
+      primary: indigo
+      accent: indigo
+      toggle:
+        icon: material/brightness-7
+        name: Switch to dark mode
+    - scheme: slate
+      primary: indigo
+      accent: indigo
+      toggle:
+        icon: material/brightness-4
+        name: Switch to light mode
+  features:
+    - navigation.tabs
+    - navigation.sections
+    - navigation.expand
+    - navigation.top
+    - search.suggest
+    - search.highlight
+    - content.code.annotate
+    - content.code.copy
+
+markdown_extensions:
+  - pymdownx.highlight:
+      anchor_linenums: true
+  - pymdownx.inlinehilite
+  - pymdownx.snippets
+  - pymdownx.superfences:
+      custom_fences:
+        - name: mermaid
+          class: mermaid
+          format: !!python/name:pymdownx.superfences.fence_code_format
+  - admonition
+  - pymdownx.details
+  - pymdownx.tabbed:
+      alternate_style: true
+  - tables
+  - attr_list
+  - md_in_html
+
+nav:
+  - Home: index.md
+  - Getting Started:
+    - Installation: getting-started/installation.md
+    - Configuration: getting-started/configuration.md
+    - Quick Start: getting-started/quick-start.md
+  - User Guide:
+    - Authentication: user-guide/authentication.md
+    - Trading Setup: user-guide/trading-setup.md
+    - Bot Control: user-guide/bot-control.md
+    - Account Management: user-guide/account-management.md
+  - API Reference:
+    - Overview: api-reference/overview.md
+    - Endpoints: api-reference/endpoints.md
+    - Models: api-reference/models.md
+    - Authentication: api-reference/authentication.md
+  - Development:
+    - Setup: development/setup.md
+    - Testing: development/testing.md
+    - Contributing: development/contributing.md
+    - Architecture: development/architecture.md
+  - Deployment:
+    - Local: deployment/local.md
+    - Staging: deployment/staging.md
+    - Production: deployment/production.md
+
+plugins:
+  - search
+  - git-revision-date-localized:
+      enable_creation_date: true

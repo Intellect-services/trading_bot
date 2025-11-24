@@ -1,0 +1,153 @@
+.bot-status-badge {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+    padding: 0.75rem 1rem;
+    border-radius: var(--radius-lg);
+    background: rgba(255, 255, 255, 0.05);
+    border: 2px solid;
+    position: relative;
+    overflow: hidden;
+    transition: all 0.3s ease;
+}
+
+.bot-status-badge.badge-large {
+    padding: 1.25rem 1.5rem;
+    gap: 1rem;
+}
+
+.bot-status-badge.badge-small {
+    padding: 0.5rem 0.75rem;
+    gap: 0.5rem;
+}
+
+.status-icon {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+}
+
+.status-content {
+    display: flex;
+    flex-direction: column;
+    gap: 0.25rem;
+}
+
+.status-label {
+    font-weight: 700;
+    font-size: 0.875rem;
+    letter-spacing: 0.5px;
+    line-height: 1;
+}
+
+.badge-large .status-label {
+    font-size: 1.125rem;
+}
+
+.status-description {
+    font-size: 0.75rem;
+    opacity: 0.8;
+    font-weight: 400;
+}
+
+/* Status-specific styles */
+.status-running {
+    border-color: #10b981;
+    background: rgba(16, 185, 129, 0.1);
+    color: #10b981;
+}
+
+.status-stopped {
+    border-color: #ef4444;
+    background: rgba(239, 68, 68, 0.1);
+    color: #ef4444;
+}
+
+.status-starting {
+    border-color: #f59e0b;
+    background: rgba(245, 158, 11, 0.1);
+    color: #f59e0b;
+}
+
+.status-stopping {
+    border-color: #6b7280;
+    background: rgba(107, 114, 128, 0.1);
+    color: #6b7280;
+}
+
+.status-paused {
+    border-color: #f97316;
+    background: rgba(249, 115, 22, 0.1);
+    color: #f97316;
+}
+
+.status-error {
+    border-color: #dc2626;
+    background: rgba(220, 38, 38, 0.1);
+    color: #dc2626;
+}
+
+.status-unknown {
+    border-color: #9ca3af;
+    background: rgba(156, 163, 175, 0.1);
+    color: #9ca3af;
+}
+
+/* Pulse animation */
+.status-pulse {
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    width: 100%;
+    height: 100%;
+    border-radius: inherit;
+    animation: pulse 2s ease-in-out infinite;
+    pointer-events: none;
+}
+
+.status-running .status-pulse {
+    background: radial-gradient(circle, rgba(16, 185, 129, 0.3) 0%, transparent 70%);
+}
+
+.status-starting .status-pulse,
+.status-stopping .status-pulse {
+    background: radial-gradient(circle, rgba(245, 158, 11, 0.3) 0%, transparent 70%);
+}
+
+@keyframes pulse {
+
+    0%,
+    100% {
+        opacity: 0.5;
+        transform: translate(-50%, -50%) scale(1);
+    }
+
+    50% {
+        opacity: 0;
+        transform: translate(-50%, -50%) scale(1.5);
+    }
+}
+
+/* Icon rotation for loading states */
+.status-starting .status-icon,
+.status-stopping .status-icon {
+    animation: rotate 2s linear infinite;
+}
+
+@keyframes rotate {
+    from {
+        transform: rotate(0deg);
+    }
+
+    to {
+        transform: rotate(360deg);
+    }
+}
+
+/* Hover effect */
+.bot-status-badge:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 8px 16px rgba(0, 0, 0, 0.2);
+}

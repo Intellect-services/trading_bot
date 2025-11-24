@@ -1,13 +1,11 @@
 """Moving average crossover strategy implementation."""
 
 import logging
-from typing import Any, Dict, List, Optional
+from typing import Any
 
-import numpy as np
 import pandas as pd
 
 from src.core.strategy import Strategy
-from src.utils.config import Config
 
 # Configure logging
 logging.basicConfig(level=logging.INFO)
@@ -29,10 +27,10 @@ class MovingAverageCrossover(Strategy):
         self.long_window = long_window
 
         # State variables
-        self.short_ma: Optional[float] = None
-        self.long_ma: Optional[float] = None
-        self.current_price: Optional[float] = None
-        self.position_side: Optional[str] = None
+        self.short_ma: float | None = None
+        self.long_ma: float | None = None
+        self.current_price: float | None = None
+        self.position_side: str | None = None
 
     def calculate_position_size(self, price: float, risk_amount: float) -> float:
         """Calculate the position size based on the current price and risk amount.
@@ -54,7 +52,7 @@ class MovingAverageCrossover(Strategy):
 
         return risk_amount / risk_per_share
 
-    def should_open_position(self, price: float) -> bool:
+    def should_open_position(self, price: float) -> bool:  # noqa: ARG002
         """Check if a new position should be opened.
 
         Args:
@@ -78,7 +76,7 @@ class MovingAverageCrossover(Strategy):
 
         return False
 
-    def should_close_position(self, price: float) -> bool:
+    def should_close_position(self, price: float) -> bool:  # noqa: ARG002
         """Check if an existing position should be closed.
 
         Args:
@@ -102,7 +100,7 @@ class MovingAverageCrossover(Strategy):
 
         return False
 
-    def get_stop_loss(self, price: float) -> Optional[float]:
+    def get_stop_loss(self, price: float) -> float | None:
         """Calculate the stop loss price for a position.
 
         Args:
@@ -119,10 +117,9 @@ class MovingAverageCrossover(Strategy):
 
         if self.position_side == "long":
             return price * (1 - stop_loss_pct)
-        else:
-            return price * (1 + stop_loss_pct)
+        return price * (1 + stop_loss_pct)
 
-    def get_take_profit(self, price: float) -> Optional[float]:
+    def get_take_profit(self, price: float) -> float | None:
         """Calculate the take profit price for a position.
 
         Args:
@@ -139,10 +136,9 @@ class MovingAverageCrossover(Strategy):
 
         if self.position_side == "long":
             return price * (1 + take_profit_pct)
-        else:
-            return price * (1 - take_profit_pct)
+        return price * (1 - take_profit_pct)
 
-    def generate_signals(self, bars: pd.DataFrame) -> List[Dict[str, Any]]:
+    def generate_signals(self, bars: pd.DataFrame) -> list[dict[str, Any]]:
         """Generate trading signals from price data.
 
         Args:

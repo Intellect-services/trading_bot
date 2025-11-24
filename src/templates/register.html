@@ -1,0 +1,521 @@
+{% extends "base.html" %} {% block title %}Register{% endblock %} {% block extra_css %}
+<style>
+  /* Hide base navbar on register page */
+  .navbar {
+    display: none;
+  }
+</style>
+{% endblock %} {% block content %}
+<!-- Minimalistic Sticky Header -->
+<header class="auth-header">
+  <div class="auth-header-content">
+    <a href="{{ url_for('index') }}" class="auth-logo">
+      <i class="fas fa-chart-line"></i>
+      <span>Trading Bot</span>
+    </a>
+  </div>
+</header>
+
+<div class="login-page">
+  <div class="login-container">
+    <div class="login-box">
+      <div class="login-box-header">
+        <i class="fas fa-user-plus"></i>
+        <h1>Create Account</h1>
+      </div>
+
+      <div class="login-body">
+        <p class="login-subtitle">
+          Join Trading Bot and start your trading journey
+        </p>
+
+        <form class="login-form" id="registerForm">
+          <div class="form-floating mb-3">
+            <input
+              type="text"
+              class="form-control"
+              id="name"
+              name="name"
+              placeholder="Full Name"
+              required
+            />
+            <label for="name">Full Name</label>
+          </div>
+          <div class="form-floating mb-3">
+            <input
+              type="email"
+              class="form-control"
+              id="email"
+              name="email"
+              placeholder="name@example.com"
+              required
+            />
+            <label for="email">Email address</label>
+          </div>
+          <div class="form-floating mb-4">
+            <input
+              type="password"
+              class="form-control"
+              id="password"
+              name="password"
+              placeholder="Password"
+              required
+              minlength="6"
+            />
+            <label for="password">Password</label>
+          </div>
+          <div id="errorMessage" class="alert alert-danger" style="display: none;"></div>
+          <div id="successMessage" class="alert alert-success" style="display: none;"></div>
+          <button type="submit" class="btn btn-primary w-100">
+            <i class="fas fa-user-plus me-2"></i>Create Account
+          </button>
+        </form>
+
+        <div class="divider">
+          <span>or continue with</span>
+        </div>
+
+        <div class="social-login">
+          <a
+            href="{{ url_for('auth', provider='google') }}"
+            class="social-btn google"
+            title="Google"
+          >
+            <i class="fab fa-google"></i>
+            <span>Google</span>
+          </a>
+          <a
+            href="{{ url_for('auth', provider='github') }}"
+            class="social-btn github"
+            title="GitHub"
+          >
+            <i class="fab fa-github"></i>
+            <span>GitHub</span>
+          </a>
+          <a
+            href="{{ url_for('auth', provider='linkedin') }}"
+            class="social-btn linkedin"
+            title="LinkedIn"
+          >
+            <i class="fab fa-linkedin"></i>
+            <span>LinkedIn</span>
+          </a>
+        </div>
+
+        <div class="register-link">
+          <p>Already have an account? <a href="{{ url_for('login') }}">Sign in</a></p>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Minimalistic Footer -->
+<footer class="auth-footer">
+  <p>© 2024 Trading Bot. All rights reserved.</p>
+</footer>
+
+<style>
+  :root {
+    --violet-primary: #667eea;
+    --violet-secondary: #764ba2;
+    --violet-dark: #4c51bf;
+    --violet-light: #a78bfa;
+    --violet-bg-start: #667eea;
+    --violet-bg-end: #764ba2;
+    --header-bg: #1a1a2e;
+    --footer-bg: #2d2d44;
+    --white: #ffffff;
+    --gray: #424242;
+    --light-gray: #e0e0e0;
+    --text-light: rgba(255, 255, 255, 0.9);
+  }
+
+  body {
+    margin: 0;
+    padding: 0;
+    min-height: 100vh;
+    display: flex;
+    flex-direction: column;
+    background: linear-gradient(
+      135deg,
+      var(--violet-bg-start) 0%,
+      var(--violet-secondary) 50%,
+      var(--violet-bg-end) 100%
+    );
+    background-attachment: fixed;
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Oxygen,
+      Ubuntu, Cantarell, "Open Sans", "Helvetica Neue", sans-serif;
+    position: relative;
+  }
+
+  /* Sticky Header */
+  .auth-header {
+    position: sticky;
+    top: 0;
+    left: 0;
+    right: 0;
+    background: var(--header-bg);
+    backdrop-filter: blur(10px);
+    box-shadow: 0 2px 10px rgba(0, 0, 0, 0.3);
+    z-index: 1000;
+    padding: 1rem 2rem;
+  }
+
+  .auth-header-content {
+    max-width: 1200px;
+    margin: 0 auto;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+  }
+
+  .auth-logo {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+    color: var(--white);
+    text-decoration: none;
+    font-weight: 600;
+    font-size: 1.25rem;
+    transition: opacity 0.2s ease;
+  }
+
+  .auth-logo:hover {
+    opacity: 0.8;
+    text-decoration: none;
+    color: var(--white);
+  }
+
+  .auth-logo i {
+    font-size: 1.5rem;
+    color: var(--violet-light);
+  }
+
+  /* Register Page */
+  .login-page {
+    flex: 1;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 3rem 2rem;
+    padding-bottom: 5rem;
+  }
+
+  .login-container {
+    width: 100%;
+    max-width: 420px;
+  }
+
+  .login-box {
+    background: rgba(255, 255, 255, 0.98);
+    border-radius: 20px;
+    box-shadow: 0 10px 40px rgba(0, 0, 0, 0.2);
+    overflow: hidden;
+    backdrop-filter: blur(10px);
+  }
+
+  .login-box-header {
+    background: linear-gradient(
+      135deg,
+      var(--violet-primary) 0%,
+      var(--violet-secondary) 100%
+    );
+    padding: 2rem 1.5rem;
+    text-align: center;
+    color: var(--white);
+  }
+
+  .login-box-header i {
+    font-size: 2.5rem;
+    margin-bottom: 0.75rem;
+    display: block;
+    opacity: 0.95;
+  }
+
+  .login-box-header h1 {
+    font-size: 1.75rem;
+    font-weight: 600;
+    margin: 0;
+    text-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+  }
+
+  .login-body {
+    padding: 2rem 1.5rem;
+  }
+
+  .login-subtitle {
+    text-align: center;
+    margin-bottom: 1.5rem;
+    color: var(--gray);
+    font-size: 0.95rem;
+    line-height: 1.5;
+  }
+
+  .form-floating {
+    position: relative;
+  }
+
+  .form-floating label {
+    color: var(--gray);
+    font-weight: 500;
+  }
+
+  .form-control {
+    border-radius: 10px;
+    border: 2px solid var(--light-gray);
+    padding: 0.875rem;
+    height: auto;
+    transition: all 0.2s ease;
+  }
+
+  .form-control:focus {
+    border-color: var(--violet-primary);
+    box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.1);
+    outline: none;
+  }
+
+  .btn-primary {
+    background: linear-gradient(
+      135deg,
+      var(--violet-primary) 0%,
+      var(--violet-secondary) 100%
+    );
+    border: none;
+    padding: 0.875rem;
+    font-weight: 600;
+    border-radius: 10px;
+    transition: all 0.2s ease;
+    color: var(--white);
+    box-shadow: 0 4px 12px rgba(102, 126, 234, 0.3);
+  }
+
+  .btn-primary:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 6px 16px rgba(102, 126, 234, 0.4);
+    background: linear-gradient(
+      135deg,
+      var(--violet-dark) 0%,
+      var(--violet-primary) 100%
+    );
+  }
+
+  .divider {
+    display: flex;
+    align-items: center;
+    text-align: center;
+    margin: 1.5rem 0;
+  }
+
+  .divider::before,
+  .divider::after {
+    content: "";
+    flex: 1;
+    border-bottom: 1px solid var(--light-gray);
+  }
+
+  .divider span {
+    padding: 0 1rem;
+    color: var(--gray);
+    font-size: 0.875rem;
+    font-weight: 500;
+  }
+
+  .social-login {
+    display: flex;
+    flex-direction: column;
+    gap: 0.75rem;
+  }
+
+  .social-btn {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 0.75rem;
+    padding: 0.875rem;
+    border-radius: 10px;
+    text-decoration: none;
+    transition: all 0.2s ease;
+    font-weight: 500;
+    border: 2px solid var(--light-gray);
+  }
+
+  .social-btn i {
+    font-size: 1.1rem;
+  }
+
+  .social-btn span {
+    font-size: 0.9rem;
+  }
+
+  .social-btn.google {
+    background-color: var(--white);
+    color: var(--gray);
+  }
+
+  .social-btn.google:hover {
+    background-color: #f1f1f1;
+    color: #db4437;
+    border-color: #db4437;
+    transform: translateY(-2px);
+  }
+
+  .social-btn.github {
+    background-color: #24292e;
+    color: var(--white);
+    border-color: #24292e;
+  }
+
+  .social-btn.github:hover {
+    background-color: #1b1f23;
+    transform: translateY(-2px);
+  }
+
+  .social-btn.linkedin {
+    background-color: #0077b5;
+    color: var(--white);
+    border-color: #0077b5;
+  }
+
+  .social-btn.linkedin:hover {
+    background-color: #005885;
+    transform: translateY(-2px);
+  }
+
+  .register-link {
+    margin-top: 1.5rem;
+    text-align: center;
+    padding-top: 1.5rem;
+    border-top: 1px solid var(--light-gray);
+  }
+
+  .register-link p {
+    margin: 0;
+    color: var(--gray);
+    font-size: 0.9rem;
+  }
+
+  .register-link a {
+    color: var(--violet-primary);
+    text-decoration: none;
+    font-weight: 600;
+    transition: color 0.2s ease;
+  }
+
+  .register-link a:hover {
+    color: var(--violet-secondary);
+    text-decoration: underline;
+  }
+
+  .alert {
+    border-radius: 8px;
+    padding: 0.75rem 1rem;
+    margin-bottom: 1rem;
+    font-size: 0.875rem;
+  }
+
+  .alert-danger {
+    background-color: #fee;
+    color: #c33;
+    border: 1px solid #fcc;
+  }
+
+  .alert-success {
+    background-color: #efe;
+    color: #3c3;
+    border: 1px solid #cfc;
+  }
+
+  /* Footer */
+  .auth-footer {
+    position: fixed;
+    bottom: 0;
+    left: 0;
+    right: 0;
+    background: var(--footer-bg);
+    padding: 1rem 2rem;
+    text-align: center;
+    backdrop-filter: blur(10px);
+    box-shadow: 0 -2px 10px rgba(0, 0, 0, 0.2);
+    z-index: 999;
+  }
+
+  .auth-footer p {
+    margin: 0;
+    color: var(--text-light);
+    font-size: 0.875rem;
+    font-weight: 400;
+  }
+
+  /* Responsive */
+  @media (max-width: 768px) {
+    .auth-header {
+      padding: 0.875rem 1rem;
+    }
+
+    .auth-logo {
+      font-size: 1.1rem;
+    }
+
+    .login-page {
+      padding: 2rem 1rem;
+      padding-bottom: 5rem;
+    }
+
+    .login-box {
+      border-radius: 16px;
+    }
+
+    .login-box-header {
+      padding: 1.5rem 1rem;
+    }
+
+    .login-body {
+      padding: 1.5rem 1rem;
+    }
+  }
+</style>
+
+<script>
+  document.getElementById('registerForm').addEventListener('submit', async function(e) {
+    e.preventDefault();
+
+    const errorDiv = document.getElementById('errorMessage');
+    const successDiv = document.getElementById('successMessage');
+    errorDiv.style.display = 'none';
+    successDiv.style.display = 'none';
+
+    const formData = {
+      name: document.getElementById('name').value,
+      email: document.getElementById('email').value,
+      password: document.getElementById('password').value
+    };
+
+    try {
+      const response = await fetch('/api/register', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(formData)
+      });
+
+      const data = await response.json();
+
+      if (response.ok && data.status === 'success') {
+        successDiv.textContent = 'Registration successful! Redirecting...';
+        successDiv.style.display = 'block';
+        setTimeout(() => {
+          window.location.href = '/';
+        }, 1500);
+      } else {
+        errorDiv.textContent = data.message || 'Registration failed. Please try again.';
+        errorDiv.style.display = 'block';
+      }
+    } catch (error) {
+      errorDiv.textContent = 'An error occurred. Please try again.';
+      errorDiv.style.display = 'block';
+    }
+  });
+</script>
+{% endblock %}

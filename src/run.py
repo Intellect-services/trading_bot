@@ -1,6 +1,6 @@
 import os
 
-from app import app, socketio
+from src.app import app, socketio
 
 if __name__ == "__main__":
     # Get configuration from environment variables

@@ -1,14 +1,16 @@
 """Main entry point for the trading bot."""
 
 import logging
-import os
-from datetime import datetime
-from typing import Any, Dict, Optional
+import sys
+from typing import TYPE_CHECKING
 
-from .core.alpaca_service import AlpacaService
-from .core.trading_bot import TradingBot
-from .utils.config import Config
-from .utils.logger import setup_logger
+from src.core.alpaca_service import AlpacaService
+from src.core.bot import TradingBot
+from src.strategies.moving_average import MovingAverageCrossover
+from src.utils.config import Config
+
+if TYPE_CHECKING:
+    from src.core.strategy import Strategy
 
 # Configure logging
 logging.basicConfig(level=logging.DEBUG)
@@ -16,33 +18,29 @@ logger = logging.getLogger(__name__)
 
 
 def main() -> None:
-    """Main function to run the trading bot."""
+    """Main entry point for the trading bot."""
     try:
         # Load configuration
-        config_data = {
-            "RISK_MAX_POSITION_SIZE": 0.1,
-            "RISK_STOP_LOSS_PCT": 0.02,
-            "RISK_MAX_DRAWDOWN": 0.1,
-            "RISK_MAX_LEVERAGE": 2.0,
-            "RISK_PER_TRADE": 0.01,
-            "INITIAL_BALANCE": 10000.0,
-            "ALPACA_API_KEY": os.getenv("ALPACA_API_KEY", ""),
-            "ALPACA_SECRET_KEY": os.getenv("ALPACA_API_SECRET", ""),
-            "ALPACA_PAPER": True,
-        }
-        config = Config.from_dict(config_data)
+        config = Config()
 
-        # Initialize services
-        alpaca_service = AlpacaService(config_data)
-        trading_bot = TradingBot(alpaca_service)
+        # Initialize Alpaca service
+        alpaca_service = AlpacaService(
+            api_key=config.alpaca_api_key_id,
+            secret_key=config.alpaca_api_secret_key,
+            trading_mode=config.trading_mode,
+        )
 
-        # Start bot
-        logger.info("Starting trading bot...")
-        trading_bot.start()
+        # Initialize strategy
+        strategy: Strategy = MovingAverageCrossover(
+            short_window=config.short_window, long_window=config.long_window
+        )
 
+        # Create and run bot
+        bot = TradingBot(config=config, strategy=strategy, alpaca_service=alpaca_service)
+        bot.start()
     except Exception as e:
-        logger.error(f"Error running bot: {e}")
-        raise
+        logger.error(f"Error in main: {e}")
+        sys.exit(1)
 
 
 if __name__ == "__main__":

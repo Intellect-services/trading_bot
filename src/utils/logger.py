@@ -3,12 +3,11 @@
 import logging
 import os
 import sys
-from datetime import datetime
-from typing import Any, Dict, Optional
+from typing import Any
 
 
 def setup_logger(
-    name: str, level: Optional[int] = None, log_file: Optional[str] = None
+    name: str, level: int | None = None, log_file: str | None = None
 ) -> logging.Logger:
     """Set up a logger with the specified name and level.
 
@@ -53,7 +52,7 @@ def setup_logger(
 class BotLogger:
     """Specialized logger for the trading bot."""
 
-    def __init__(self, name: str, log_file: Optional[str] = None) -> None:
+    def __init__(self, name: str, log_file: str | None = None) -> None:
         """Initialize the bot logger.
 
         Args:
@@ -115,7 +114,7 @@ class BotLogger:
             market_value,
         )
 
-    def log_error(self, message: str, error: Optional[Exception] = None) -> None:
+    def log_error(self, message: str, error: Exception | None = None) -> None:
         """Log error messages.
 
         Args:

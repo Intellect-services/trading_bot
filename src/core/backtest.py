@@ -1,8 +1,7 @@
 """Backtesting engine for trading strategies."""
 
-import logging
-from datetime import datetime, timedelta
-from typing import Any, Dict, List, Optional, Union, cast
+from datetime import datetime
+from typing import Any
 
 import numpy as np
 import pandas as pd
@@ -30,8 +29,8 @@ class Backtest:
     def run(
         self,
         data: pd.DataFrame,
-        start_date: Optional[datetime] = None,
-        end_date: Optional[datetime] = None,
+        start_date: datetime | None = None,
+        end_date: datetime | None = None,
     ) -> BacktestResult:
         """Run backtest on historical data.
 
@@ -52,7 +51,7 @@ class Backtest:
                 data = data[(data.index >= start_date) & (data.index <= end_date)]
 
             # Initialize portfolio
-            portfolio: Dict[str, Any] = {
+            portfolio: dict[str, Any] = {
                 "cash": self.initial_capital,
                 "positions": {},
                 "trades": [],
@@ -90,10 +89,10 @@ class Backtest:
 
     def _execute_trades(
         self,
-        signals: Dict[str, float],
+        signals: dict[str, float],
         current_bar: Series[float],
         current_time: datetime,
-        portfolio: Dict[str, Any],
+        portfolio: dict[str, Any],
     ) -> None:
         """Execute trades based on strategy signals.
 
@@ -133,32 +132,31 @@ class Backtest:
                             }
                         )
 
-                elif signal < 0:  # Sell signal
-                    if symbol in portfolio["positions"]:
-                        position = portfolio["positions"][symbol]
-                        price = float(current_bar["close"])
+                elif signal < 0 and symbol in portfolio["positions"]:  # Sell signal
+                    position = portfolio["positions"][symbol]
+                    price = float(current_bar["close"])
 
-                        # Execute sell
-                        portfolio["cash"] += position["shares"] * price
-                        del portfolio["positions"][symbol]
+                    # Execute sell
+                    portfolio["cash"] += position["shares"] * price
+                    del portfolio["positions"][symbol]
 
-                        # Record trade
-                        portfolio["trades"].append(
-                            {
-                                "symbol": symbol,
-                                "side": "sell",
-                                "shares": position["shares"],
-                                "price": price,
-                                "timestamp": current_time,
-                            }
-                        )
+                    # Record trade
+                    portfolio["trades"].append(
+                        {
+                            "symbol": symbol,
+                            "side": "sell",
+                            "shares": position["shares"],
+                            "price": price,
+                            "timestamp": current_time,
+                        }
+                    )
 
         except Exception as e:
             logger.error("Error executing trades: %s", str(e))
             raise
 
     def _update_portfolio_value(
-        self, portfolio: Dict[str, Any], current_bar: Series[float]
+        self, portfolio: dict[str, Any], current_bar: Series[float]
     ) -> None:
         """Update portfolio value based on current prices.
 
@@ -172,7 +170,7 @@ class Backtest:
         try:
             total_value = portfolio["cash"]
 
-            for symbol, position in portfolio["positions"].items():
+            for _symbol, position in portfolio["positions"].items():
                 price = float(current_bar["close"])
                 total_value += position["shares"] * price
 
@@ -181,7 +179,7 @@ class Backtest:
             logger.error("Error updating portfolio value: %s", str(e))
             raise
 
-    def _calculate_metrics(self, portfolio: Dict[str, Any], data: pd.DataFrame) -> BacktestMetrics:
+    def _calculate_metrics(self, portfolio: dict[str, Any], data: pd.DataFrame) -> BacktestMetrics:
         """Calculate backtest performance metrics.
 
         Args:
@@ -197,7 +195,7 @@ class Backtest:
         try:
             # Calculate returns
             returns = []
-            for i in range(1, len(data)):
+            for _i in range(1, len(data)):
                 prev_value = portfolio["total_value"]
                 current_value = portfolio["total_value"]
                 returns.append((current_value - prev_value) / prev_value)
@@ -219,7 +217,7 @@ class Backtest:
             logger.error("Error calculating metrics: %s", str(e))
             raise
 
-    def _calculate_max_drawdown(self, returns: List[float]) -> float:
+    def _calculate_max_drawdown(self, returns: list[float]) -> float:
         """Calculate maximum drawdown.
 
         Args:

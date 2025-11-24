@@ -1,8 +1,9 @@
 """Type definitions for the trading bot."""
 
+from collections.abc import Callable
 from dataclasses import dataclass
 from datetime import datetime
-from typing import Any, Callable, Dict, List, Optional, TypedDict, Union
+from typing import Any, TypedDict
 
 from flask import Response
 
@@ -11,24 +12,24 @@ RouteDecorator = Callable[..., Response]
 SocketIODecorator = Callable[..., None]
 
 # Type aliases for bot metrics and status
-BotMetrics = Dict[str, Union[float, int, str, datetime, None]]
-BotStatusDict = Dict[str, Union[BotMetrics, bool, str, None]]
+BotMetrics = dict[str, float | int | str | datetime | None]
+BotStatusDict = dict[str, BotMetrics | bool | str | None]
 
 # Type aliases for configuration
-ConfigDict = Dict[str, Any]
+ConfigDict = dict[str, Any]
 
 # Type aliases for trading data
-PositionDict = Dict[str, Union[str, float, int]]
-OrderDict = Dict[str, Union[str, float, int, datetime]]
-AccountDict = Dict[str, Union[str, float, int, bool]]
+PositionDict = dict[str, str | float | int]
+OrderDict = dict[str, str | float | int | datetime]
+AccountDict = dict[str, str | float | int | bool]
 
 # Type aliases for strategy
-StrategyConfig = Dict[str, Any]
-StrategyState = Dict[str, Any]
+StrategyConfig = dict[str, Any]
+StrategyState = dict[str, Any]
 
 # Type aliases for backtesting
-BacktestResult = Dict[str, Union[float, int, str, Dict[str, float]]]
-BacktestMetrics = Dict[str, float]
+BacktestResult = dict[str, float | int | str | dict[str, float]]
+BacktestMetrics = dict[str, float]
 
 
 class TradeAccount(TypedDict):
@@ -47,10 +48,10 @@ class TradeAccount(TypedDict):
 
 
 class PortfolioHistory(TypedDict):
-    timestamp: List[datetime]
-    equity: List[float]
-    profit_loss: List[float]
-    profit_loss_pct: List[float]
+    timestamp: list[datetime]
+    equity: list[float]
+    profit_loss: list[float]
+    profit_loss_pct: list[float]
     base_value: float
     timeframe: str
 
@@ -77,8 +78,8 @@ class PriceBar:
     low: float
     close: float
     volume: float
-    trade_count: Optional[int] = None
-    vwap: Optional[float] = None
+    trade_count: int | None = None
+    vwap: float | None = None
 
 
 @dataclass
@@ -106,12 +107,12 @@ class Order:
     type: str
     status: str
     created_at: datetime
-    filled_at: Optional[datetime] = None
-    filled_quantity: Optional[float] = None
-    filled_price: Optional[float] = None
-    filled_avg_price: Optional[float] = None
-    limit_price: Optional[float] = None
-    stop_price: Optional[float] = None
-    trail_price: Optional[float] = None
-    trail_percent: Optional[float] = None
-    hwm: Optional[float] = None
+    filled_at: datetime | None = None
+    filled_quantity: float | None = None
+    filled_price: float | None = None
+    filled_avg_price: float | None = None
+    limit_price: float | None = None
+    stop_price: float | None = None
+    trail_price: float | None = None
+    trail_percent: float | None = None
+    hwm: float | None = None

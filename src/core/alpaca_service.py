@@ -1,303 +1,580 @@
-"""Alpaca service for managing trading operations."""
+"""Alpaca trading service built on top of the REST API."""
 
 import logging
-from datetime import datetime, timedelta
-from typing import Any, Dict, List, Optional, Union, cast
-from uuid import UUID
+from datetime import datetime, timedelta, timezone
+from typing import Any, cast
 
-import alpaca_trade_api as tradeapi
 import pandas as pd
-from alpaca_trade_api.entity import Account, Asset, Bar, Clock, Order, Position
-from alpaca_trade_api.rest import REST
+import requests
 
-from src.core.alpaca_types import Asset as AlpacaAsset
-from src.core.alpaca_types import Bar as AlpacaBar
-from src.core.alpaca_types import BarSet
-from src.core.alpaca_types import Clock as AlpacaClock
-from src.core.alpaca_types import LimitOrderRequest, MarketOrderRequest
-from src.core.alpaca_types import Order as AlpacaOrder
-from src.core.alpaca_types import OrderSide, OrderType
-from src.core.alpaca_types import Position as AlpacaPosition
-from src.core.alpaca_types import (
-    QueryOrderStatus,
-    Sort,
-    StopLimitOrderRequest,
-    StopOrderRequest,
-    TimeFrame,
-    TimeInForce,
-    TradeAccount,
-)
+from src.core.alpaca_types import OrderSide, OrderType, TimeInForce
 from src.utils.config import Config
 
-logger = logging.getLogger(__name__)
+TRADING_BASE_URLS = {
+    "paper": "https://paper-api.alpaca.markets",
+    "live": "https://api.alpaca.markets",
+}
 
 
 class AlpacaService:
-    """Service for interacting with Alpaca API."""
+    """Lightweight wrapper around the Alpaca REST and data APIs."""
 
-    def __init__(self, config: Config) -> None:
-        """Initialize the Alpaca service.
+    def __init__(
+        self,
+        api_key: str | None = None,
+        secret_key: str | None = None,
+        trading_mode: str = "paper",
+        config: Config | None = None,
+        timeout: int = 30,
+    ) -> None:
+        self.logger = logging.getLogger(__name__)
+        self.logger.setLevel(logging.DEBUG)
+
+        if api_key and secret_key:
+            self.api_key = api_key
+            self.secret_key = secret_key
+            self.trading_mode = trading_mode
+        elif config and config.alpaca_api_key_id and config.alpaca_api_secret_key:
+            self.api_key = config.alpaca_api_key_id
+            self.secret_key = config.alpaca_api_secret_key
+            self.trading_mode = config.trading_mode
+        else:
+            raise ValueError(
+                "Alpaca credentials must be provided either directly or via Config object",
+            )
+
+        base_url = TRADING_BASE_URLS.get(self.trading_mode, TRADING_BASE_URLS["paper"])
+        self.base_url = f"{base_url.rstrip('/')}/v2"
+        self.data_url = "https://data.alpaca.markets/v2"
+        self.timeout = timeout
+
+        self.session = requests.Session()
+        self.session.headers.update(
+            {
+                "APCA-API-KEY-ID": self.api_key,
+                "APCA-API-SECRET-KEY": self.secret_key,
+                "Content-Type": "application/json",
+                "Accept": "application/json",
+            }
+        )
+
+        try:
+            self._request("GET", "/account")
+            self.logger.info("Connected to Alpaca trading API (%s)", self.trading_mode)
+        except Exception as exc:
+            self.logger.error("Unable to verify Alpaca credentials: %s", exc)
+            raise
+
+    @classmethod
+    def from_user_credentials(cls, user_id: int) -> "AlpacaService":
+        """Create AlpacaService instance from user's stored credentials.
 
         Args:
-            config: Configuration object containing API credentials and settings
+            user_id: User ID to load credentials for.
+
+        Returns:
+            AlpacaService instance.
+
+        Raises:
+            ValueError: If user has no credentials configured.
         """
-        self.config = config
-        self.client = tradeapi.REST(
-            key_id=config.ALPACA_API_KEY,
-            secret_key=config.ALPACA_API_SECRET,
-            base_url="https://paper-api.alpaca.markets"
-            if config.TRADING_MODE == "paper"
-            else "https://api.alpaca.markets",
-        )
-        self.logger = logging.getLogger(__name__)
-        logger.info("AlpacaService initialized")
+        from src.models.user_credentials import UserCredentials
 
-    def get_account(self) -> TradeAccount:
+        credentials = UserCredentials.get_by_user_id(user_id)
+        if not credentials or not credentials.has_credentials():
+            raise ValueError(f"User {user_id} has no Alpaca credentials configured")
+
+        api_key = credentials.get_api_key()
+        secret_key = credentials.get_secret_key()
+        trading_mode = credentials.trading_mode
+
+        return cls(api_key=api_key, secret_key=secret_key, trading_mode=trading_mode)
+
+    def get_account(self) -> dict[str, Any]:
         """Get the trading account information."""
-        try:
-            account = self.client.get_account()
-            return cast(
-                TradeAccount,
-                {
-                    "account_number": str(account.account_number),
-                    "cash": str(account.cash),
-                    "portfolio_value": str(account.portfolio_value),
-                    "pattern_day_trader": bool(account.pattern_day_trader),
-                    "trading_blocked": bool(account.trading_blocked),
-                    "transfers_blocked": bool(account.transfers_blocked),
-                    "account_blocked": bool(account.account_blocked),
-                    "created_at": account.created_at,
-                    "trade_suspended_by_user": bool(account.trade_suspended_by_user),
-                    "multiplier": str(account.multiplier),
-                    "shorting_enabled": bool(account.shorting_enabled),
-                    "equity": str(account.equity),
-                    "last_equity": str(account.last_equity),
-                    "initial_margin": str(account.initial_margin),
-                    "maintenance_margin": str(account.maintenance_margin),
-                    "last_maintenance_margin": str(account.last_maintenance_margin),
-                    "long_market_value": str(account.long_market_value),
-                    "short_market_value": str(account.short_market_value),
-                    "buying_power": str(account.buying_power),
-                    "regt_buying_power": str(account.regt_buying_power),
-                    "daytrading_buying_power": str(account.daytrading_buying_power),
-                    "effective_buying_power": str(account.effective_buying_power),
-                    "crypto_status": str(account.crypto_status),
-                    "currency": str(account.currency),
-                    "accrued_fees": str(account.accrued_fees),
-                },
-            )
-        except Exception as e:
-            self.logger.error(f"Failed to get account: {e}")
-            raise
+        account = self._request("GET", "/account")
+        return {
+            "id": account.get("id"),
+            "status": account.get("status"),
+            "currency": account.get("currency"),
+            "cash": float(account.get("cash", 0.0)),
+            "portfolio_value": float(account.get("portfolio_value", 0.0)),
+            "buying_power": float(account.get("buying_power", 0.0)),
+            "initial_margin": float(account.get("initial_margin", 0.0)),
+            "maintenance_margin": float(account.get("maintenance_margin", 0.0)),
+            "daytrading_buying_power": float(account.get("daytrading_buying_power", 0.0)),
+            "equity": float(account.get("equity", 0.0)),
+            "last_equity": float(account.get("last_equity", 0.0)),
+            "multiplier": float(account.get("multiplier", 0.0)),
+            "shorting_enabled": account.get("shorting_enabled", False),
+            "pattern_day_trader": account.get("pattern_day_trader", False),
+            "trading_blocked": account.get("trading_blocked", False),
+            "transfers_blocked": account.get("transfers_blocked", False),
+            "account_blocked": account.get("account_blocked", False),
+            "created_at": account.get("created_at"),
+            "trade_suspended_by_user": account.get("trade_suspended_by_user", False),
+        }
 
-    def get_positions(self) -> List[AlpacaPosition]:
-        """Get all positions."""
-        try:
-            positions = self.client.list_positions()
-            return [
-                {
-                    "asset_id": UUID(str(pos.asset_id)),
-                    "symbol": str(pos.symbol),
-                    "exchange": str(pos.exchange),
-                    "asset_class": str(pos.asset_class),
-                    "asset_marginable": bool(pos.asset_marginable),
-                    "qty": str(pos.qty),
-                    "avg_entry_price": str(pos.avg_entry_price),
-                    "side": str(pos.side),
-                    "market_value": str(pos.market_value),
-                    "cost_basis": str(pos.cost_basis),
-                    "unrealized_pl": str(pos.unrealized_pl),
-                    "unrealized_plpc": str(pos.unrealized_plpc),
-                    "unrealized_intraday_pl": str(pos.unrealized_intraday_pl),
-                    "unrealized_intraday_plpc": str(pos.unrealized_intraday_plpc),
-                    "current_price": str(pos.current_price),
-                    "lastday_price": str(pos.lastday_price),
-                    "change_today": str(pos.change_today),
-                }
-                for pos in positions
-            ]
-        except Exception as e:
-            self.logger.error(f"Failed to get positions: {e}")
-            return []
-
-    def get_position(self, symbol: str) -> Optional[AlpacaPosition]:
-        """Get a specific position by symbol."""
-        try:
-            position = self.client.get_position(symbol)
-            return {
-                "asset_id": UUID(str(position.asset_id)),
-                "symbol": str(position.symbol),
-                "exchange": str(position.exchange),
-                "asset_class": str(position.asset_class),
-                "asset_marginable": bool(position.asset_marginable),
-                "qty": str(position.qty),
-                "avg_entry_price": str(position.avg_entry_price),
-                "side": str(position.side),
-                "market_value": str(position.market_value),
-                "cost_basis": str(position.cost_basis),
-                "unrealized_pl": str(position.unrealized_pl),
-                "unrealized_plpc": str(position.unrealized_plpc),
-                "unrealized_intraday_pl": str(position.unrealized_intraday_pl),
-                "unrealized_intraday_plpc": str(position.unrealized_intraday_plpc),
-                "current_price": str(position.current_price),
-                "lastday_price": str(position.lastday_price),
-                "change_today": str(position.change_today),
+    def get_positions(self) -> list[dict]:
+        """Get current positions."""
+        positions = self._request("GET", "/positions")
+        return [
+            {
+                "symbol": pos.get("symbol"),
+                "qty": float(pos.get("qty", 0.0)),
+                "avg_entry_price": float(pos.get("avg_entry_price", 0.0)),
+                "market_value": float(pos.get("market_value", 0.0)),
+                "unrealized_pl": float(pos.get("unrealized_pl", 0.0)),
+                "current_price": float(pos.get("current_price", 0.0)),
+                "lastday_price": float(pos.get("lastday_price", 0.0)),
+                "change_today": float(pos.get("change_today", 0.0)),
             }
-        except Exception as e:
-            self.logger.error(f"Failed to get position for {symbol}: {e}")
-            return None
+            for pos in positions
+        ]
 
-    def get_asset(self, symbol: str) -> Optional[AlpacaAsset]:
-        """Get asset information."""
-        try:
-            asset = self.client.get_asset(symbol)
-            return {
-                "id": UUID(str(asset.id)) if hasattr(asset, "id") else UUID(int=0),
-                "class_": str(asset.class_) if hasattr(asset, "class_") else "",
-                "exchange": str(asset.exchange) if hasattr(asset, "exchange") else "",
-                "symbol": str(asset.symbol) if hasattr(asset, "symbol") else "",
-                "name": str(asset.name) if hasattr(asset, "name") else "",
-                "status": str(asset.status) if hasattr(asset, "status") else "",
-                "tradable": bool(asset.tradable) if hasattr(asset, "tradable") else False,
-                "marginable": bool(asset.marginable) if hasattr(asset, "marginable") else False,
-                "shortable": bool(asset.shortable) if hasattr(asset, "shortable") else False,
-                "easy_to_borrow": bool(asset.easy_to_borrow)
-                if hasattr(asset, "easy_to_borrow")
-                else False,
-                "fractionable": bool(asset.fractionable)
-                if hasattr(asset, "fractionable")
-                else False,
-            }
-        except Exception as e:
-            self.logger.error(f"Failed to get asset {symbol}: {e}")
-            return None
+    def get_latest_price(self, symbol: str) -> float:
+        """Get the latest price for a symbol."""
+        trade = self._request("GET", f"/stocks/{symbol}/trades/latest", use_data_api=True)
+        price = trade.get("trade", {}).get("p")
+        if price is None:
+            raise ValueError(f"No latest trade available for {symbol}")
+        return float(price)
 
-    def get_clock(self) -> AlpacaClock:
-        """Get market clock information."""
-        try:
-            clock = self.client.get_clock()
-            return {
-                "timestamp": clock.timestamp if hasattr(clock, "timestamp") else datetime.now(),
-                "is_open": bool(clock.is_open) if hasattr(clock, "is_open") else False,
-                "next_open": clock.next_open if hasattr(clock, "next_open") else datetime.now(),
-                "next_close": clock.next_close if hasattr(clock, "next_close") else datetime.now(),
-            }
-        except Exception as e:
-            self.logger.error(f"Failed to get clock: {e}")
-            raise
-
-    def submit_order(self, order_data: Dict[str, Any]) -> AlpacaOrder:
+    def submit_order(
+        self,
+        symbol: str,
+        qty: int | float,
+        side: str | OrderSide,
+        type: str | OrderType = "market",
+        time_in_force: str | TimeInForce = "day",
+        limit_price: float | None = None,
+        stop_price: float | None = None,
+    ) -> dict:
         """Submit a new order."""
-        try:
-            order_params = {
-                "symbol": order_data["symbol"],
-                "qty": order_data["qty"],
-                "side": order_data["side"],
-                "type": order_data["type"],
-                "time_in_force": order_data["time_in_force"],
-            }
+        payload = {
+            "symbol": symbol,
+            "qty": int(qty),
+            "side": side.value if isinstance(side, OrderSide) else side,
+            "type": type.value if isinstance(type, OrderType) else type,
+            "time_in_force": (
+                time_in_force.value if isinstance(time_in_force, TimeInForce) else time_in_force
+            ),
+        }
+        if limit_price is not None:
+            payload["limit_price"] = float(limit_price)
+        if stop_price is not None:
+            payload["stop_price"] = float(stop_price)
 
-            if "limit_price" in order_data:
-                order_params["limit_price"] = order_data["limit_price"]
-            if "stop_price" in order_data:
-                order_params["stop_price"] = order_data["stop_price"]
+        return cast("dict[str, Any]", self._request("POST", "/orders", body=payload))
 
-            order = self.client.submit_order(**order_params)
-            return self._convert_order(order)
-        except Exception as e:
-            self.logger.error(f"Failed to submit order: {e}")
-            raise
+    def cancel_order(self, order_id: str) -> bool:
+        """Cancel an existing order."""
+        self._request("DELETE", f"/orders/{order_id}")
+        return True
+
+    def get_clock(self) -> dict[str, Any]:
+        """Get the market clock."""
+        clock = self._request("GET", "/clock")
+        return {
+            "timestamp": clock.get("timestamp"),
+            "is_open": clock.get("is_open", False),
+            "next_open": clock.get("next_open"),
+            "next_close": clock.get("next_close"),
+        }
 
     def get_orders(
         self,
-        status: Optional[QueryOrderStatus] = None,
-        limit: Optional[int] = None,
-        after: Optional[datetime] = None,
-        until: Optional[datetime] = None,
-        direction: Optional[Sort] = None,
-        nested: bool = False,
-    ) -> List[AlpacaOrder]:
-        """Get orders with optional filters."""
+        status: str | None = None,
+        limit: int | None = None,
+        after: str | None = None,
+        until: str | None = None,
+        direction: str | None = None,
+    ) -> list[dict[str, Any]]:
+        """Get orders."""
+        params: dict[str, Any] = {}
+        if status:
+            params["status"] = status
+        if limit:
+            params["limit"] = limit
+        if after:
+            params["after"] = after
+        if until:
+            params["until"] = until
+        if direction:
+            params["direction"] = direction
+
+        orders = self._request("GET", "/orders", params=params or None)
+        return [
+            {
+                "id": order.get("id"),
+                "client_order_id": order.get("client_order_id"),
+                "created_at": order.get("created_at"),
+                "updated_at": order.get("updated_at"),
+                "submitted_at": order.get("submitted_at"),
+                "filled_at": order.get("filled_at"),
+                "expired_at": order.get("expired_at"),
+                "canceled_at": order.get("canceled_at"),
+                "failed_at": order.get("failed_at"),
+                "asset_id": order.get("asset_id"),
+                "symbol": order.get("symbol"),
+                "asset_class": order.get("asset_class"),
+                "qty": float(order.get("qty", 0.0)),
+                "filled_qty": float(order.get("filled_qty", 0.0)),
+                "type": order.get("type"),
+                "side": order.get("side"),
+                "time_in_force": order.get("time_in_force"),
+                "limit_price": float(order.get("limit_price", 0.0))
+                if order.get("limit_price") is not None
+                else None,
+                "stop_price": float(order.get("stop_price", 0.0))
+                if order.get("stop_price") is not None
+                else None,
+                "status": order.get("status"),
+            }
+            for order in orders
+        ]
+
+    def get_historical_bars(
+        self,
+        symbol: str,
+        timeframe: str = "1D",
+        start: datetime | None = None,
+        end: datetime | None = None,
+        limit: int = 100,
+    ) -> pd.DataFrame | None:
+        """Get historical price data for a symbol."""
         try:
-            orders = self.client.list_orders(
-                status=status.value if status else None,
-                limit=limit,
-                after=after,
-                until=until,
-                direction=direction.value if direction else None,
-                nested=nested,
+            # Ensure dates are not in the future and properly formatted
+            now = datetime.now()
+            if end is None or end > now:
+                end = now.replace(hour=0, minute=0, second=0, microsecond=0)  # Start of current day
+            if start is None:
+                start = end - timedelta(days=30)
+
+            # Ensure start date is not before 2015 (Alpaca's data limit)
+            min_date = datetime(2015, 1, 1)
+            if start < min_date:
+                start = min_date
+
+            # Format dates for API request
+            start_str = start.strftime("%Y-%m-%d")
+            end_str = end.strftime("%Y-%m-%d")
+
+            self.logger.debug(
+                f"Fetching historical bars for {symbol} from {start_str} to {end_str}"
             )
-            return [self._convert_order(order) for order in orders]
-        except Exception as e:
-            self.logger.error(f"Failed to get orders: {e}")
-            return []
 
-    def get_order(self, order_id: str) -> Optional[AlpacaOrder]:
-        """Get a specific order by ID."""
-        try:
-            order = self.client.get_order(order_id)
-            return self._convert_order(order)
+            timeframe_map = {
+                "1m": "1Min",
+                "5m": "5Min",
+                "15m": "15Min",
+                "30m": "30Min",
+                "1h": "1Hour",
+                "1D": "1Day",
+                "1W": "1Week",
+                "1M": "1Month",
+            }
+            alpaca_timeframe = timeframe_map.get(timeframe, "1Day")
+
+            params = {
+                "timeframe": alpaca_timeframe,
+                "start": start_str,
+                "end": end_str,
+                "limit": limit,
+            }
+            response = self._request(
+                "GET",
+                f"/stocks/{symbol}/bars",
+                params=params,
+                use_data_api=True,
+            )
+            bars = response.get("bars", [])
+            if not bars:
+                return None
+
+            bars_df = pd.DataFrame(bars)
+            bars_df.rename(
+                columns={
+                    "t": "timestamp",
+                    "o": "open",
+                    "h": "high",
+                    "l": "low",
+                    "c": "close",
+                    "v": "volume",
+                },
+                inplace=True,
+            )
+            bars_df["timestamp"] = pd.to_datetime(bars_df["timestamp"], errors="coerce")
+            bars_df.set_index("timestamp", inplace=True)
+            return bars_df
+
         except Exception as e:
-            self.logger.error(f"Failed to get order {order_id}: {e}")
+            self.logger.error("Error getting historical bars for %s: %s", symbol, e)
             return None
-
-    def cancel_order(self, order_id: str) -> None:
-        """Cancel an order."""
-        try:
-            self.client.cancel_order(order_id)
-        except Exception as e:
-            self.logger.error(f"Failed to cancel order {order_id}: {e}")
-            raise
 
     def get_bars(
         self,
         symbol: str,
-        timeframe: TimeFrame,
+        timeframe: str,
         start: datetime,
-        end: Optional[datetime] = None,
-        limit: Optional[int] = None,
-    ) -> Optional[BarSet]:
-        """Get historical bars for a symbol."""
+        end: datetime | None = None,
+        limit: int | None = None,
+    ) -> dict[str, list[dict[str, float | str]]]:
+        """Get historical bars in the format expected by data_feed.py.
+
+        This is a compatibility method for the old AlpacaClient interface.
+
+        Args:
+            symbol: Stock symbol
+            timeframe: Timeframe (e.g., '1Min', '5Min', '1Day')
+            start: Start datetime
+            end: End datetime (optional)
+            limit: Maximum number of bars (optional)
+
+        Returns:
+            Dictionary with symbol as key and list of bar dictionaries as value
+        """
         try:
-            bars = self.client.get_bars(
-                symbol=symbol,
-                timeframe=timeframe.value,
-                start=start,
-                end=end,
-                limit=limit,
-            )
-            return BarSet(bars=[Bar(**bar) for bar in bars])
+            timeframe_map = {
+                "1Min": "1Min",
+                "5Min": "5Min",
+                "15Min": "15Min",
+                "30Min": "30Min",
+                "1Hour": "1Hour",
+                "1H": "1Hour",
+                "1D": "1Day",
+                "1Day": "1Day",
+                "1W": "1Week",
+                "1Week": "1Week",
+                "1M": "1Month",
+                "1Month": "1Month",
+            }
+            alpaca_timeframe = timeframe_map.get(timeframe, "1Day")
+            if timeframe not in timeframe_map:
+                self.logger.warning(f"Unknown timeframe '{timeframe}', using '1Day' as default")
+            elif timeframe != alpaca_timeframe:
+                self.logger.debug(f"Mapped timeframe '{timeframe}' to '{alpaca_timeframe}'")
+
+            if end is None:
+                end = datetime.now(timezone.utc)
+            start_str = start.astimezone(timezone.utc).isoformat()
+            end_str = end.astimezone(timezone.utc).isoformat()
+
+            params = {
+                "timeframe": alpaca_timeframe,
+                "start": start_str,
+                "end": end_str,
+                "limit": limit or 100,
+            }
+
+            # Try data API first
+            response = None
+            data_api_error = None
+            try:
+                response = self._request(
+                    "GET",
+                    f"/stocks/{symbol}/bars",
+                    params=params,
+                    use_data_api=True,
+                )
+            except Exception as e:
+                data_api_error = e
+                self.logger.warning(
+                    f"Data API failed for {symbol}: {e}. "
+                    "This may indicate that data API access is not available for your account."
+                )
+
+            # Check if response has error message
+            if response and isinstance(response, dict):
+                if "message" in response:
+                    error_msg = response.get("message", "")
+                    self.logger.error(f"API returned error message for {symbol}: {error_msg}")
+                    if "subscription" in error_msg.lower() or "access" in error_msg.lower():
+                        self.logger.error(
+                            f"Data API subscription may be required for {symbol}. "
+                            "Paper trading accounts may have limited data API access."
+                        )
+                    return {symbol: []}
+
+            if not response:
+                if data_api_error:
+                    # If we got an error, don't try fallback - the issue is likely account-related
+                    self.logger.error(
+                        f"Cannot fetch data for {symbol}. "
+                        "Please check if your Alpaca account has data API access enabled."
+                    )
+                else:
+                    self.logger.warning(f"Empty response from Alpaca API for {symbol}")
+                return {symbol: []}
+
+            # Handle different response formats
+            bars = response.get("bars", [])
+            if not bars and isinstance(response, list):
+                # Some endpoints return a list directly
+                bars = response
+
+            if not bars:
+                # Log the full response for debugging
+                self.logger.warning(
+                    f"No bars returned for {symbol} (timeframe: {alpaca_timeframe}, "
+                    f"start: {start_str}, end: {end_str}). "
+                    f"Response structure: {list(response.keys()) if isinstance(response, dict) else type(response)}"
+                )
+                return {symbol: []}
+
+            self.logger.info(f"Retrieved {len(bars)} bars for {symbol}")
+            return {
+                symbol: [
+                    {
+                        "open": float(bar.get("o", 0.0)),
+                        "high": float(bar.get("h", 0.0)),
+                        "low": float(bar.get("l", 0.0)),
+                        "close": float(bar.get("c", 0.0)),
+                        "volume": float(bar.get("v", 0.0)),
+                        "timestamp": bar.get("t"),
+                    }
+                    for bar in bars
+                ]
+            }
         except Exception as e:
-            logger.error(f"Error getting bars for {symbol}: {e}")
+            self.logger.error(f"Error getting bars for {symbol}: {e}", exc_info=True)
+            return {symbol: []}
+
+    def get_all_positions(self) -> list[dict[str, Any]]:
+        """Get all positions in the format expected by data_feed.py.
+
+        This is a compatibility method for the old AlpacaClient interface.
+
+        Returns:
+            List of position dictionaries
+        """
+        return self.get_positions()
+
+    def get_open_position(self, symbol: str) -> dict[str, Any] | None:
+        """Get open position for a symbol.
+
+        Args:
+            symbol: Stock symbol
+
+        Returns:
+            Position dictionary or None if not found
+        """
+        try:
+            positions = self.get_positions()
+            for pos in positions:
+                if pos.get("symbol") == symbol:
+                    return pos
+            return None
+        except Exception as e:
+            self.logger.error(f"Error getting open position for {symbol}: {e!s}")
             return None
 
-    def _convert_order(self, order: Order) -> AlpacaOrder:
-        """Convert Alpaca order to our order type."""
+    def get_asset(self, symbol: str) -> dict[str, Any]:
+        """Get asset information.
+
+        Args:
+            symbol: Stock symbol
+
+        Returns:
+            Asset information dictionary
+        """
+        asset = self._request("GET", f"/assets/{symbol}")
         return {
-            "id": UUID(str(order.id)),
-            "client_order_id": str(order.client_order_id),
-            "created_at": order.created_at,
-            "updated_at": order.updated_at,
-            "submitted_at": order.submitted_at,
-            "filled_at": order.filled_at,
-            "expired_at": order.expired_at,
-            "canceled_at": order.canceled_at,
-            "failed_at": order.failed_at,
-            "replaced_at": order.replaced_at,
-            "replaced_by": UUID(str(order.replaced_by)) if order.replaced_by else None,
-            "replaces": UUID(str(order.replaces)) if order.replaces else None,
-            "asset_id": UUID(str(order.asset_id)) if order.asset_id else None,
-            "symbol": str(order.symbol),
-            "asset_class": str(order.asset_class),
-            "qty": float(order.qty),
-            "filled_qty": float(order.filled_qty),
-            "type": OrderType(order.type),
-            "side": OrderSide(order.side),
-            "time_in_force": TimeInForce(order.time_in_force),
-            "limit_price": float(order.limit_price) if order.limit_price else None,
-            "stop_price": float(order.stop_price) if order.stop_price else None,
-            "filled_avg_price": float(order.filled_avg_price) if order.filled_avg_price else None,
-            "status": str(order.status),
-            "extended_hours": bool(order.extended_hours),
-            "legs": None,  # We don't handle legs in this implementation
+            "symbol": asset.get("symbol"),
+            "name": asset.get("name"),
+            "exchange": asset.get("exchange"),
+            "class": asset.get("class"),
+            "status": asset.get("status"),
+            "tradable": asset.get("tradable", False),
+            "marginable": asset.get("marginable", False),
+            "shortable": asset.get("shortable", False),
+            "easy_to_borrow": asset.get("easy_to_borrow", False),
+            "fractionable": asset.get("fractionable", False),
         }
+
+    def get_market_clock(self) -> dict[str, Any]:
+        """Get market clock information.
+
+        Returns:
+            Market clock dictionary
+        """
+        return self.get_clock()
+
+    def test_credentials(self) -> bool:
+        """Test if the Alpaca credentials are valid.
+
+        Returns:
+            True if credentials are valid, False otherwise
+        """
+        try:
+            self._request("GET", "/account")
+            return True
+        except Exception as exc:
+            self.logger.error("Error testing credentials: %s", exc)
+            return False
+
+    def cancel_order_by_id(self, order_id: str) -> bool:
+        """Compatibility wrapper for bot_service."""
+        return self.cancel_order(order_id)
+
+    def get_order_by_id(self, order_id: str) -> dict[str, Any]:
+        """Fetch a single order."""
+        return cast("dict[str, Any]", self._request("GET", f"/orders/{order_id}"))
+
+    def get_order(self, order_id: str) -> dict[str, Any]:
+        """Alias for compatibility with older code paths."""
+        return self.get_order_by_id(order_id)
+
+    def _request(
+        self,
+        method: str,
+        path: str,
+        *,
+        params: dict[str, Any] | None = None,
+        body: dict[str, Any] | None = None,
+        use_data_api: bool = False,
+    ) -> Any:
+        """Perform an HTTP request against the Alpaca APIs."""
+        base = self.data_url if use_data_api else self.base_url
+        url = f"{base}{path}"
+
+        self.logger.debug(f"Making {method} request to {url} with params: {params}")
+
+        response = self.session.request(
+            method,
+            url,
+            params=params,
+            json=body,
+            timeout=self.timeout,
+        )
+
+        if response.status_code >= 400:
+            error_text = response.text
+            self.logger.error(
+                "Alpaca API error [%s] %s: %s",
+                response.status_code,
+                url,
+                error_text,
+            )
+            # Try to parse error message from response
+            try:
+                error_json = response.json()
+                error_message = error_json.get("message", error_text)
+                self.logger.error(f"API error message: {error_message}")
+            except ValueError:
+                pass
+            response.raise_for_status()
+
+        if not response.content:
+            self.logger.debug(f"Empty response from {url}")
+            return {}
+
+        try:
+            result = response.json()
+            self.logger.debug(
+                f"Response from {url}: {type(result)} with keys: {list(result.keys()) if isinstance(result, dict) else 'not a dict'}"
+            )
+            return result
+        except ValueError as e:
+            self.logger.warning(f"Failed to parse JSON response from {url}: {e}")
+            return {}

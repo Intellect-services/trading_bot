@@ -2,7 +2,7 @@
 
 from datetime import datetime
 from enum import Enum
-from typing import Dict, List, Optional, TypedDict, Union
+from typing import TypedDict
 from uuid import UUID
 
 
@@ -61,57 +61,62 @@ class QueryOrderStatus(str, Enum):
     ALL = "all"
 
 
-class TradeAccount(TypedDict):
+class TradeAccount(TypedDict, total=False):
     """Trading account data."""
 
     account_number: str
-    cash: str
-    portfolio_value: str
+    status: str
+    cash: float
+    portfolio_value: float
     pattern_day_trader: bool
     trading_blocked: bool
     transfers_blocked: bool
     account_blocked: bool
     created_at: datetime
     trade_suspended_by_user: bool
-    multiplier: str
+    multiplier: float
     shorting_enabled: bool
-    equity: str
-    last_equity: str
-    initial_margin: str
-    maintenance_margin: str
-    last_maintenance_margin: str
-    long_market_value: str
-    short_market_value: str
-    buying_power: str
-    regt_buying_power: str
-    daytrading_buying_power: str
-    effective_buying_power: str
+    equity: float
+    last_equity: float
+    initial_margin: float
+    maintenance_margin: float
+    last_maintenance_margin: float
+    long_market_value: float
+    short_market_value: float
+    buying_power: float
+    regt_buying_power: float
+    daytrading_buying_power: float
+    effective_buying_power: float
     crypto_status: str
     currency: str
-    accrued_fees: str
-    max_withdrawal_amount: str
+    accrued_fees: float
+    max_withdrawal_amount: float
+    is_portfolio_margin: bool
+    pending_transfer_in: float
+    pending_transfer_out: float
 
 
-class Position(TypedDict):
-    """Position data."""
+class Position(TypedDict, total=False):
+    """Position data used internally by the bot."""
 
-    asset_id: UUID
     symbol: str
-    exchange: str
-    asset_class: str
-    asset_marginable: bool
-    qty: str
-    avg_entry_price: str
+    qty: float
+    avg_entry_price: float
     side: str
-    market_value: str
-    cost_basis: str
-    unrealized_pl: str
-    unrealized_plpc: str
-    unrealized_intraday_pl: str
-    unrealized_intraday_plpc: str
-    current_price: str
-    lastday_price: str
-    change_today: str
+    market_value: float
+    cost_basis: float
+    unrealized_pl: float
+    unrealized_plpc: float
+    unrealized_intraday_pl: float
+    unrealized_intraday_plpc: float
+    current_price: float
+    lastday_price: float
+    change_today: float
+    size: float
+    avg_price: float
+    pnl: float
+    stop_loss: float
+    take_profit: float
 
 
 class Order(TypedDict):
@@ -120,16 +125,16 @@ class Order(TypedDict):
     id: UUID
     client_order_id: str
     created_at: datetime
-    updated_at: Optional[datetime]
-    submitted_at: Optional[datetime]
-    filled_at: Optional[datetime]
-    expired_at: Optional[datetime]
-    canceled_at: Optional[datetime]
-    failed_at: Optional[datetime]
-    replaced_at: Optional[datetime]
-    replaced_by: Optional[UUID]
-    replaces: Optional[UUID]
-    asset_id: Optional[UUID]
+    updated_at: datetime | None
+    submitted_at: datetime | None
+    filled_at: datetime | None
+    expired_at: datetime | None
+    canceled_at: datetime | None
+    failed_at: datetime | None
+    replaced_at: datetime | None
+    replaced_by: UUID | None
+    replaces: UUID | None
+    asset_id: UUID | None
     symbol: str
     asset_class: str
     qty: float
@@ -137,22 +142,21 @@ class Order(TypedDict):
     type: OrderType
     side: OrderSide
     time_in_force: TimeInForce
-    limit_price: Optional[float]
-    stop_price: Optional[float]
-    filled_avg_price: Optional[float]
+    limit_price: float | None
+    stop_price: float | None
+    filled_avg_price: float | None
     status: str
     extended_hours: bool
-    legs: Optional[List["Order"]]
+    legs: list["Order"] | None
 
 
-class Asset(TypedDict):
+class Asset(TypedDict, total=False):
     """Asset data."""
 
-    id: UUID
-    class_: str
-    exchange: str
     symbol: str
     name: str
+    exchange: str
+    class_: str
     status: str
     tradable: bool
     marginable: bool
@@ -161,7 +165,7 @@ class Asset(TypedDict):
     fractionable: bool
 
 
-class Clock(TypedDict):
+class Clock(TypedDict, total=False):
     """Market clock data."""
 
     timestamp: datetime
@@ -203,7 +207,7 @@ class Bar:
 class BarSet:
     """Set of bars."""
 
-    def __init__(self, bars: List[Bar]) -> None:
+    def __init__(self, bars: list[Bar]) -> None:
         """Initialize bar set.
 
         Args:

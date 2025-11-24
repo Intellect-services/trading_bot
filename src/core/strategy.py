@@ -2,12 +2,9 @@
 
 import logging
 from abc import ABC, abstractmethod
-from typing import Any, Dict, List, Optional
+from typing import Any
 
-import numpy as np
 import pandas as pd
-
-from src.utils.config import Config
 
 # Configure logging
 logging.basicConfig(level=logging.INFO)
@@ -17,9 +14,8 @@ logger = logging.getLogger(__name__)
 class Strategy(ABC):
     """Base class for trading strategies."""
 
-    def __init__(self) -> None:
+    def __init__(self) -> None:  # noqa: B027
         """Initialize the strategy."""
-        pass
 
     @abstractmethod
     def calculate_position_size(self, price: float, risk_amount: float) -> float:
@@ -32,7 +28,6 @@ class Strategy(ABC):
         Returns:
             Position size in units/shares
         """
-        pass
 
     @abstractmethod
     def should_open_position(self, price: float) -> bool:
@@ -44,7 +39,6 @@ class Strategy(ABC):
         Returns:
             True if a position should be opened, False otherwise
         """
-        pass
 
     @abstractmethod
     def should_close_position(self, price: float) -> bool:
@@ -56,10 +50,9 @@ class Strategy(ABC):
         Returns:
             True if the position should be closed, False otherwise
         """
-        pass
 
     @abstractmethod
-    def get_stop_loss(self, price: float) -> Optional[float]:
+    def get_stop_loss(self, price: float) -> float | None:
         """Calculate the stop loss price for a position.
 
         Args:
@@ -68,10 +61,9 @@ class Strategy(ABC):
         Returns:
             Stop loss price or None if no stop loss
         """
-        pass
 
     @abstractmethod
-    def get_take_profit(self, price: float) -> Optional[float]:
+    def get_take_profit(self, price: float) -> float | None:
         """Calculate the take profit price for a position.
 
         Args:
@@ -80,10 +72,9 @@ class Strategy(ABC):
         Returns:
             Take profit price or None if no take profit
         """
-        pass
 
     @abstractmethod
-    def generate_signals(self, bars: pd.DataFrame) -> List[Dict[str, Any]]:
+    def generate_signals(self, bars: pd.DataFrame) -> list[dict[str, Any]]:
         """Generate trading signals from price data.
 
         Args:
@@ -95,4 +86,3 @@ class Strategy(ABC):
             - price: Current price
             - timestamp: Signal timestamp
         """
-        pass

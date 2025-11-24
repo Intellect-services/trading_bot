@@ -1,13 +1,11 @@
 #!/usr/bin/env python3
 """Script to verify CI workflow locally."""
 
-import os
 import subprocess
 import sys
-from typing import List, Tuple
 
 
-def run_command(command: List[str]) -> Tuple[int, str]:
+def run_command(command: list[str]) -> tuple[int, str]:
     """Run a shell command and return its output."""
     try:
         result = subprocess.run(command, check=False, capture_output=True, text=True)

@@ -67,4 +67,4 @@ echo -e "${YELLOW}Running bandit...${NC}"
 bandit -r src/
 check_status "Bandit check"
 
-echo -e "${GREEN}Workflow verification complete!${NC}" 
+echo -e "${GREEN}Workflow verification complete!${NC}"

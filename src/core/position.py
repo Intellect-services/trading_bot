@@ -1,7 +1,7 @@
 """Position module for managing trading positions."""
 
 from datetime import datetime
-from typing import Any, Dict
+from typing import Any
 
 
 class Position:
@@ -25,7 +25,7 @@ class Position:
         """Return string representation of position."""
         return f"Position({self.symbol}, size={self.size}, entry_price={self.entry_price})"
 
-    def to_dict(self) -> Dict[str, Any]:
+    def to_dict(self) -> dict[str, Any]:
         """Convert position to dictionary.
 
         Returns:

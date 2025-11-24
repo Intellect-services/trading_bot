@@ -1,12 +1,12 @@
 """Backtesting metrics module."""
 
-from typing import Any, Dict, List
+from typing import Any
 
 import numpy as np
 import pandas as pd
 
 
-def calculate_metrics(trades: List[Dict[str, Any]], initial_capital: float) -> Dict[str, float]:
+def calculate_metrics(trades: list[dict[str, Any]], initial_capital: float) -> dict[str, float]:
     """Calculate performance metrics from trade history.
 
     Args:
@@ -55,7 +55,7 @@ def calculate_metrics(trades: List[Dict[str, Any]], initial_capital: float) -> D
     }
 
 
-def format_metrics(metrics: Dict[str, float]) -> Dict[str, str]:
+def format_metrics(metrics: dict[str, float]) -> dict[str, str]:
     """Format metrics for display"""
     formatted = {}
     for key, value in metrics.items():
