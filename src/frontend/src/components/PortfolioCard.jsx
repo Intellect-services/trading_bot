@@ -1,6 +1,6 @@
 import React from 'react';
 import { motion } from 'framer-motion';
-import { TrendingUp, TrendingDown, DollarSign, Wallet } from 'lucide-react';
+import { TrendingUp, TrendingDown, DollarSign, Wallet, CircleDollarSign } from 'lucide-react';
 
 const PortfolioCard = ({ data }) => {
     const portfolioValue = data?.portfolio_value || 0;
@@ -17,7 +17,9 @@ const PortfolioCard = ({ data }) => {
         {
             label: 'Total Balance',
             value: portfolioValue,
-            icon: DollarSign,
+            icon: CircleDollarSign,
+            iconColor: '#6366f1',
+            iconBg: 'rgba(99, 102, 241, 0.15)',
             gradient: 'var(--gradient-primary)',
             highlight: true
         },
@@ -26,6 +28,8 @@ const PortfolioCard = ({ data }) => {
             value: dailyChange,
             percent: dailyChangePercent,
             icon: isPositive ? TrendingUp : TrendingDown,
+            iconColor: isPositive ? '#10b981' : '#ef4444',
+            iconBg: isPositive ? 'rgba(16, 185, 129, 0.15)' : 'rgba(239, 68, 68, 0.15)',
             gradient: isPositive ? 'var(--gradient-success)' : 'var(--gradient-danger)',
             isChange: true
         },
@@ -33,12 +37,16 @@ const PortfolioCard = ({ data }) => {
             label: 'Buying Power',
             value: buyingPower,
             icon: Wallet,
+            iconColor: '#8b5cf6',
+            iconBg: 'rgba(139, 92, 246, 0.15)',
             gradient: 'var(--gradient-secondary)'
         },
         {
             label: 'Cash',
             value: cash,
             icon: DollarSign,
+            iconColor: '#06b6d4',
+            iconBg: 'rgba(6, 182, 212, 0.15)',
             gradient: 'linear-gradient(135deg, #a8edea 0%, #fed6e3 100%)'
         }
     ];
@@ -79,31 +87,29 @@ const PortfolioCard = ({ data }) => {
                         }} />
 
                         <div style={{ position: 'relative', zIndex: 1 }}>
-                            {/* Icon */}
+                            {/* Icon and Label */}
                             <div style={{
-                                width: '48px',
-                                height: '48px',
-                                borderRadius: '12px',
-                                background: stat.gradient,
                                 display: 'flex',
                                 alignItems: 'center',
-                                justifyContent: 'center',
-                                marginBottom: '1rem',
-                                boxShadow: '0 4px 12px rgba(0, 0, 0, 0.2)'
+                                gap: '0.75rem',
+                                marginBottom: '1rem'
                             }}>
-                                <Icon size={24} color="white" />
+                                <Icon
+                                    size={20}
+                                    style={{
+                                        color: stat.iconColor || '#6366f1',
+                                        strokeWidth: 2
+                                    }}
+                                />
+                                <p style={{
+                                    fontSize: '0.875rem',
+                                    color: 'var(--text-secondary)',
+                                    fontWeight: '500',
+                                    margin: 0
+                                }}>
+                                    {stat.label}
+                                </p>
                             </div>
-
-                            {/* Label */}
-                            <p style={{
-                                fontSize: '0.875rem',
-                                color: 'var(--text-muted)',
-                                marginBottom: '0.5rem',
-                                fontWeight: '500',
-                                letterSpacing: '0.025em'
-                            }}>
-                                {stat.label}
-                            </p>
 
                             {/* Value */}
                             <div style={{ display: 'flex', alignItems: 'baseline', gap: '0.5rem' }}>

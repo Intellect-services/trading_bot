@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Play, Pause, Square, RefreshCw, TrendingUp, Clock as ClockIcon } from 'lucide-react';
+import { Play, Square, RefreshCw, Clock as ClockIcon } from 'lucide-react';
 import BotStatusBadge from './BotStatusBadge';
 import { api } from '../services/api';
 import './BotControlPanel.css';
@@ -7,10 +7,10 @@ import './BotControlPanel.css';
 const BotControlPanel = () => {
     const [botStatus, setBotStatus] = useState('stopped');
     const [marketStatus, setMarketStatus] = useState('closed');
-    const [stats, setStats] = useState({
-        activeStrategies: 0,
-        openPositions: 0,
-        todayOrders: 0
+    const [marketInfo, setMarketInfo] = useState({
+        next_open: null,
+        next_close: null,
+        current_time: null
     });
     const [loading, setLoading] = useState(false);
     const [lastUpdate, setLastUpdate] = useState(null);
@@ -20,6 +20,50 @@ const BotControlPanel = () => {
         const interval = setInterval(fetchStatus, 3000);
         return () => clearInterval(interval);
     }, []);
+
+    const formatNextOpenTime = (nextOpen) => {
+        if (!nextOpen) return null;
+
+        try {
+            const nextOpenDate = new Date(nextOpen);
+            const now = new Date();
+            const diffMs = nextOpenDate - now;
+
+            if (diffMs <= 0) return 'Market opens soon';
+
+            const days = Math.floor(diffMs / (1000 * 60 * 60 * 24));
+            const hours = Math.floor((diffMs % (1000 * 60 * 60 * 24)) / (1000 * 60 * 60));
+            const minutes = Math.floor((diffMs % (1000 * 60 * 60)) / (1000 * 60));
+
+            // Format in CET timezone
+            const dateStr = nextOpenDate.toLocaleDateString('en-US', {
+                weekday: 'short',
+                month: 'short',
+                day: 'numeric',
+                timeZone: 'Europe/Berlin'
+            });
+
+            const timeStr = nextOpenDate.toLocaleTimeString('en-US', {
+                hour: '2-digit',
+                minute: '2-digit',
+                hour12: false,
+                timeZone: 'Europe/Berlin'
+            });
+
+            let countdownStr = '';
+            if (days > 0) {
+                countdownStr = `${days}D ${hours}H`;
+            } else if (hours > 0) {
+                countdownStr = `${hours}H ${minutes}M`;
+            } else {
+                countdownStr = `${minutes}M`;
+            }
+
+            return { date: dateStr, time: timeStr, countdown: countdownStr };
+        } catch (e) {
+            return { date: nextOpen, time: '', countdown: '' };
+        }
+    };
 
     const fetchStatus = async () => {
         try {
@@ -33,12 +77,19 @@ const BotControlPanel = () => {
                 setBotStatus('stopped');
             }
 
-            // Update stats
-            setStats({
-                activeStrategies: data.strategies_loaded || 0,
-                openPositions: data.open_positions || 0,
-                todayOrders: data.today_orders || 0
-            });
+            // Update market status
+            if (data.market_status) {
+                setMarketStatus(data.market_status);
+            }
+
+            // Update market info
+            if (data.next_open || data.next_close || data.current_time) {
+                setMarketInfo({
+                    next_open: data.next_open,
+                    next_close: data.next_close,
+                    current_time: data.current_time
+                });
+            }
 
             setLastUpdate(new Date());
         } catch (error) {
@@ -96,90 +147,106 @@ const BotControlPanel = () => {
 
     return (
         <div className="bot-control-panel glass-card">
-            {/* Status Section */}
-            <div className="control-section status-section">
-                <BotStatusBadge status={botStatus} size="large" />
+            {/* Main Content */}
+            <div className="control-main-content">
+                {/* Status and Market Info */}
+                <div className="status-group">
+                    <BotStatusBadge status={botStatus} size="large" />
 
-                <div className="market-status">
-                    <ClockIcon size={16} />
-                    <span className="market-label">Market:</span>
-                    <span className={`market-value ${marketStatus}`}>
-                        {marketStatus.toUpperCase()}
-                    </span>
-                </div>
-            </div>
+                    <div className="market-info-group">
+                        <div className="market-status">
+                            <ClockIcon size={18} />
+                            <span className="market-label">Market:</span>
+                            <span className={`market-value ${marketStatus}`}>
+                                {marketStatus.toUpperCase()}
+                            </span>
+                        </div>
 
-            {/* Quick Stats */}
-            <div className="control-section stats-section">
-                <div className="stat-item">
-                    <div className="stat-icon">📊</div>
-                    <div className="stat-content">
-                        <span className="stat-value">{stats.activeStrategies}</span>
-                        <span className="stat-label">Strategies</span>
+                        {marketStatus === 'closed' && marketInfo.next_open && (() => {
+                            const timing = formatNextOpenTime(marketInfo.next_open);
+                            if (typeof timing === 'string') {
+                                return (
+                                    <div className="market-timing">
+                                        <span className="timing-label">Opens:</span>
+                                        <span className="timing-value">{timing}</span>
+                                    </div>
+                                );
+                            }
+                            return (
+                                <div className="market-timing">
+                                    <span className="timing-label">Opens:</span>
+                                    <span className="timing-date-time">{timing.date} {timing.time} CET</span>
+                                    <span className="timing-countdown">{timing.countdown}</span>
+                                </div>
+                            );
+                        })()}
+
+                        {marketStatus === 'open' && marketInfo.next_close && (() => {
+                            const timing = formatNextOpenTime(marketInfo.next_close);
+                            if (typeof timing === 'string') {
+                                return (
+                                    <div className="market-timing">
+                                        <span className="timing-label">Closes:</span>
+                                        <span className="timing-value">{timing}</span>
+                                    </div>
+                                );
+                            }
+                            return (
+                                <div className="market-timing">
+                                    <span className="timing-label">Closes:</span>
+                                    <span className="timing-date-time">{timing.date} {timing.time} CET</span>
+                                    <span className="timing-countdown">{timing.countdown}</span>
+                                </div>
+                            );
+                        })()}
                     </div>
                 </div>
-                <div className="stat-item">
-                    <div className="stat-icon">💼</div>
-                    <div className="stat-content">
-                        <span className="stat-value">{stats.openPositions}</span>
-                        <span className="stat-label">Positions</span>
-                    </div>
-                </div>
-                <div className="stat-item">
-                    <div className="stat-icon">📈</div>
-                    <div className="stat-content">
-                        <span className="stat-value">{stats.todayOrders}</span>
-                        <span className="stat-label">Orders</span>
-                    </div>
-                </div>
-            </div>
 
-            {/* Control Buttons */}
-            <div className="control-section actions-section">
-                {botStatus === 'stopped' && (
-                    <button
-                        className="btn-control btn-start"
-                        onClick={handleStart}
-                        disabled={loading}
-                    >
-                        <Play size={20} fill="currentColor" />
-                        Start Bot
-                    </button>
-                )}
+                {/* Control Buttons */}
+                <div className="control-actions">
+                    {botStatus === 'stopped' && (
+                        <button
+                            className="btn-control btn-start"
+                            onClick={handleStart}
+                            disabled={loading}
+                        >
+                            <Play size={20} fill="currentColor" />
+                            <span>Start Bot</span>
+                        </button>
+                    )}
 
-                {botStatus === 'running' && (
-                    <>
+                    {botStatus === 'running' && (
                         <button
                             className="btn-control btn-stop"
                             onClick={handleStop}
                             disabled={loading}
                         >
                             <Square size={20} fill="currentColor" />
-                            Stop Bot
+                            <span>Stop Bot</span>
                         </button>
-                    </>
-                )}
+                    )}
 
-                {botStatus === 'error' && (
-                    <button
-                        className="btn-control btn-restart"
-                        onClick={handleRestart}
-                        disabled={loading}
-                    >
-                        <RefreshCw size={20} />
-                        Restart Bot
-                    </button>
-                )}
+                    {botStatus === 'error' && (
+                        <button
+                            className="btn-control btn-restart"
+                            onClick={handleRestart}
+                            disabled={loading}
+                        >
+                            <RefreshCw size={20} />
+                            <span>Restart Bot</span>
+                        </button>
+                    )}
 
-                {(botStatus === 'starting' || botStatus === 'stopping') && (
-                    <button className="btn-control btn-loading" disabled>
-                        <RefreshCw size={20} className="spin" />
-                        {botStatus === 'starting' ? 'Starting...' : 'Stopping...'}
-                    </button>
-                )}
+                    {(botStatus === 'starting' || botStatus === 'stopping') && (
+                        <button className="btn-control btn-loading" disabled>
+                            <RefreshCw size={20} className="spin" />
+                            <span>{botStatus === 'starting' ? 'Starting...' : 'Stopping...'}</span>
+                        </button>
+                    )}
+                </div>
             </div>
 
-            {/* Last Update */}
+            {/* Footer */}
             {lastUpdate && (
                 <div className="control-footer">
                     <span className="last-update-text">

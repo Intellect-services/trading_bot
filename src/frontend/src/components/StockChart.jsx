@@ -49,15 +49,17 @@ const StockChart = ({ data }) => {
         if (active && payload && payload.length) {
             return (
                 <div style={{
-                    background: 'rgba(10, 10, 15, 0.9)',
+                    background: 'rgba(10, 10, 15, 0.95)',
                     border: '1px solid var(--glass-border)',
-                    padding: '1rem',
+                    padding: '0.75rem 1rem',
                     borderRadius: 'var(--radius-md)',
                     boxShadow: '0 4px 20px rgba(0,0,0,0.5)'
                 }}>
-                    <p style={{ color: 'var(--text-secondary)', fontSize: '0.875rem', marginBottom: '0.25rem' }}>{label}</p>
-                    <p style={{ color: 'var(--accent-primary)', fontWeight: '600', fontSize: '1.125rem' }}>
-                        ${payload[0].value.toLocaleString()}
+                    <p style={{ color: 'var(--text-secondary)', fontSize: '0.75rem', marginBottom: '0.25rem' }}>
+                        {new Date(label).toLocaleString()}
+                    </p>
+                    <p style={{ color: 'var(--accent-primary)', fontWeight: '600', fontSize: '1rem' }}>
+                        ${payload[0].value.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                     </p>
                 </div>
             );
@@ -93,67 +95,109 @@ const StockChart = ({ data }) => {
             </div>
 
             <div style={{ flex: 1, width: '100%', minHeight: '300px', display: 'flex', alignItems: 'center', justifyContent: 'center', position: 'relative' }}>
-                {!hasData ? (
+                {!hasData || chartData.length === 0 ? (
                     <div style={{ textAlign: 'center', color: 'var(--text-secondary)' }}>
                         <TrendingUp size={48} style={{ opacity: 0.3, marginBottom: '1rem' }} />
                         <p style={{ fontSize: '1rem', marginBottom: '0.5rem' }}>No Performance Data Yet</p>
                         <p style={{ fontSize: '0.875rem', opacity: 0.7 }}>
-                            Historical data will appear here as the bot trades.
+                            {rawData.length === 0
+                                ? "Portfolio history will appear here once Alpaca has collected data."
+                                : "Historical data will appear here as the bot trades."
+                            }
                         </p>
-                        <p style={{ fontSize: '0.75rem', opacity: 0.5, marginTop: '0.5rem' }}>
-                            Portfolio snapshots are created periodically during trading.
+                    </div>
+                ) : chartData.length === 1 ? (
+                    <div style={{ textAlign: 'center', color: 'var(--text-secondary)', width: '100%' }}>
+                        <TrendingUp size={48} style={{ opacity: 0.3, marginBottom: '1rem' }} />
+                        <p style={{ fontSize: '1rem', marginBottom: '0.5rem' }}>Current Portfolio Value</p>
+                        <p style={{ fontSize: '1.5rem', fontWeight: '600', color: 'var(--accent-primary)', marginBottom: '0.5rem' }}>
+                            ${chartData[0].portfolio_value?.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 }) || '0.00'}
+                        </p>
+                        <p style={{ fontSize: '0.875rem', opacity: 0.7 }}>
+                            Historical data will appear here as more data becomes available from Alpaca.
                         </p>
                     </div>
                 ) : (
                     <div style={{ width: '100%', height: '100%', minHeight: '300px', minWidth: 0 }}>
                         <ResponsiveContainer width="100%" height="100%" minHeight={300} minWidth={0}>
-                        <AreaChart
-                            data={chartData}
-                            margin={{ top: 10, right: 10, left: 0, bottom: 0 }}
-                        >
-                            <defs>
-                                <linearGradient id="colorValue" x1="0" y1="0" x2="0" y2="1">
-                                    <stop offset="5%" stopColor="var(--accent-primary)" stopOpacity={0.3} />
-                                    <stop offset="95%" stopColor="var(--accent-primary)" stopOpacity={0} />
-                                </linearGradient>
-                            </defs>
-                            <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.05)" vertical={false} />
-                            <XAxis
-                                dataKey="timestamp"
-                                stroke="var(--text-muted)"
-                                fontSize={12}
-                                tickLine={false}
-                                axisLine={false}
-                                tickFormatter={(str) => {
-                                    try {
-                                        const date = new Date(str);
-                                        if (isNaN(date.getTime())) return str;
-                                        return date.toLocaleDateString(undefined, { month: 'short', day: 'numeric' });
-                                    } catch {
-                                        return str;
-                                    }
-                                }}
-                            />
-                            <YAxis
-                                stroke="var(--text-muted)"
-                                fontSize={12}
-                                tickLine={false}
-                                axisLine={false}
-                                tickFormatter={(value) => `$${value.toLocaleString()}`}
-                                domain={['dataMin', 'dataMax']}
-                            />
-                            <Tooltip content={<CustomTooltip />} />
-                            <Area
-                                type="monotone"
-                                dataKey="portfolio_value"
-                                stroke="var(--accent-primary)"
-                                strokeWidth={2}
-                                fillOpacity={1}
-                                fill="url(#colorValue)"
-                                isAnimationActive={true}
-                            />
-                        </AreaChart>
-                    </ResponsiveContainer>
+                            <AreaChart
+                                data={chartData}
+                                margin={{ top: 10, right: 10, left: 0, bottom: 5 }}
+                            >
+                                <defs>
+                                    <linearGradient id="colorValue" x1="0" y1="0" x2="0" y2="1">
+                                        <stop offset="5%" stopColor="var(--accent-primary)" stopOpacity={0.3} />
+                                        <stop offset="95%" stopColor="var(--accent-primary)" stopOpacity={0} />
+                                    </linearGradient>
+                                </defs>
+                                <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.05)" vertical={false} />
+                                <XAxis
+                                    dataKey="timestamp"
+                                    tickFormatter={(str) => {
+                                        try {
+                                            const date = new Date(str);
+                                            if (isNaN(date.getTime())) return str;
+                                            return date.toLocaleDateString(undefined, { month: 'short', day: 'numeric' });
+                                        } catch {
+                                            return str;
+                                        }
+                                    }}
+                                    stroke="rgba(255,255,255,0.2)"
+                                    strokeWidth={2}
+                                    tickLine={false}
+                                    axisLine={true}
+                                    tick={{
+                                        fill: 'rgba(255,255,255,0.7)',
+                                        fontSize: '10px',
+                                        fontWeight: '500',
+                                        fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif'
+                                    }}
+                                    style={{
+                                        fontSize: '10px',
+                                        fill: 'rgba(255,255,255,0.7)',
+                                        fontWeight: '500',
+                                        fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif'
+                                    }}
+                                    tickMargin={6}
+                                    height={30}
+                                />
+                                <YAxis
+                                    domain={['auto', 'auto']}
+                                    tickFormatter={(value) => {
+                                        return `$${Math.round(value).toLocaleString('en-US', { minimumFractionDigits: 0, maximumFractionDigits: 0 })}`;
+                                    }}
+                                    stroke="rgba(255,255,255,0.2)"
+                                    strokeWidth={2}
+                                    tickLine={false}
+                                    axisLine={true}
+                                    tick={{
+                                        fill: 'rgba(255,255,255,0.7)',
+                                        fontSize: '10px',
+                                        fontWeight: '500',
+                                        fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif'
+                                    }}
+                                    style={{
+                                        fontSize: '10px',
+                                        fill: 'rgba(255,255,255,0.7)',
+                                        fontWeight: '500',
+                                        fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif'
+                                    }}
+                                    tickMargin={8}
+                                    width={75}
+                                    allowDataOverflow={false}
+                                />
+                                <Tooltip content={<CustomTooltip />} />
+                                <Area
+                                    type="monotone"
+                                    dataKey="portfolio_value"
+                                    stroke="var(--accent-primary)"
+                                    strokeWidth={2}
+                                    fillOpacity={1}
+                                    fill="url(#colorValue)"
+                                    isAnimationActive={true}
+                                />
+                            </AreaChart>
+                        </ResponsiveContainer>
                     </div>
                 )}
             </div>
