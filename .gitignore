@@ -49,3 +49,13 @@ logs/
 .env
 .env.local
 Thumbs.db
+
+# Runtime files
+*.pid
+*.db
+src/flask_session/
+site/
+
+# Frontend
+src/frontend/node_modules/
+src/frontend/dist/
