@@ -74,7 +74,7 @@ const Trades = () => {
                     <TrendingUp size={24} />
                 </div>
                 <div>
-                    <h1 style={{ fontSize: '1.875rem', marginBottom: '0.25rem' }}>Active Trades</h1>
+                    <h1 style={{ fontSize: '1.875rem', marginBottom: '0.25rem' }}>Positions</h1>
                     <p style={{ color: 'var(--text-secondary)' }}>Monitor and manage your open positions.</p>
                 </div>
             </div>

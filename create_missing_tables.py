@@ -1,33 +1,57 @@
 #!/usr/bin/env python3
-"""Create missing database tables."""
+"""Create missing database tables for BaseModel-based tables (strategies, signals, etc.).
+
+This script creates the strategies, signals, and backtest_results tables that use
+SQLAlchemy BaseModel (separate from Flask-SQLAlchemy models).
+"""
 
 import os
 import sys
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
+from flask import Flask
 
-from src.infrastructure import db_config
+from src.database import init_db
 
 
 def create_missing_tables():
-    """Create missing tables."""
-    print("Creating missing tables...")
+    """Create missing tables for BaseModel-based models."""
+    print("Creating missing BaseModel tables...")
 
-    try:
-        # Import all models to ensure they're registered
-        from src.infrastructure.base_model import Base
+    # Create Flask app to get proper database configuration
+    app = Flask(__name__)
+    init_db(app)  # This creates users table first
 
-        # Create all tables
-        engine = db_config.engine
-        Base.metadata.create_all(engine, checkfirst=True)
+    with app.app_context():
+        try:
+            # Import all BaseModel-based models to ensure they're registered
+            from src.business.strategy.models.backtest_result import BacktestResult  # noqa: F401
+            from src.business.strategy.models.signal import Signal  # noqa: F401
+            from src.business.strategy.models.strategy import Strategy  # noqa: F401
+            from src.infrastructure import db_config
+            from src.infrastructure.base_model import Base
 
-        print("✅ All tables created successfully")
-        return True
+            # Use the SAME database URL as Flask app
+            database_url = app.config.get("SQLALCHEMY_DATABASE_URI")
+            if database_url:
+                db_config.database_url = database_url
 
-    except Exception as e:
-        print(f"❌ Error creating tables: {e}")
-        return False
+            print(f"Database URL: {db_config.database_url}")
+
+            # Create all BaseModel tables (users table should already exist from init_db)
+            Base.metadata.create_all(bind=db_config.engine, checkfirst=True)
+
+            print("✅ All tables created successfully!")
+            print("   Created/verified: strategies, signals, backtest_results")
+            return True
+
+        except Exception as e:
+            print(f"❌ Error creating tables: {e}")
+            import traceback
+
+            traceback.print_exc()
+            return False
 
 
 if __name__ == "__main__":

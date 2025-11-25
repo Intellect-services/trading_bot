@@ -44,6 +44,7 @@ class RiskManager:
         max_drawdown: float = 0.2,
         max_leverage: float = 2.0,
         trailing_stop_pct: float = 0.01,
+        max_daily_loss: float = 0.05,
     ) -> None:
         """Initialize the risk manager.
 
@@ -65,11 +66,16 @@ class RiskManager:
         self._max_drawdown = max_drawdown
         self._max_leverage = max_leverage
         self.trailing_stop_pct = trailing_stop_pct
+        self.max_daily_loss = max_daily_loss
 
         # Track positions and their risk metrics
         self.positions: dict[str, dict[str, float]] = {}
         self.highest_prices: dict[str, float] = {}
         self.lowest_prices: dict[str, float] = {}
+        self.equity_high = initial_capital
+        self.daily_start_equity = initial_capital
+        self.current_drawdown = 0.0
+        self.last_equity = initial_capital
 
     @property
     def risk_per_trade(self) -> float:
@@ -119,16 +125,97 @@ class RiskManager:
             raise ValueError("Maximum leverage must be at least 1")
         self._max_leverage = value
 
-    def calculate_position_size(self, price: float, risk_amount: float) -> float:
+    def calculate_position_size(
+        self,
+        price: float,
+        risk_amount: float,
+        portfolio_value: float | None = None,
+    ) -> float:
         """Calculate position size based on risk amount and price."""
         if price <= 0:
             raise ValueError("Price must be positive")
         if risk_amount <= 0:
             raise ValueError("Risk amount must be positive")
 
+        base_capital = (
+            portfolio_value if portfolio_value and portfolio_value > 0 else self.initial_capital
+        )
         position_size = risk_amount / price
-        max_size = self.initial_capital * self.max_position_size / price
+        max_size = base_capital * self.max_position_size / price
         return min(position_size, max_size)
+
+    @staticmethod
+    def kelly_fraction(win_rate: float, reward_risk: float) -> float:
+        """Compute Kelly fraction."""
+
+        if reward_risk <= 0:
+            raise ValueError("reward_risk must be positive")
+        if not 0 < win_rate < 1:
+            raise ValueError("win_rate must be between 0 and 1")
+        fraction = win_rate - (1 - win_rate) / reward_risk
+        return max(min(fraction, 1.0), 0.0)
+
+    def position_size_kelly(
+        self,
+        price: float,
+        portfolio_value: float,
+        win_rate: float,
+        reward_risk: float,
+    ) -> float:
+        """Position size using Kelly fraction."""
+
+        fraction = self.kelly_fraction(win_rate, reward_risk)
+        capital_at_risk = portfolio_value * fraction
+        return self.calculate_position_size(price, capital_at_risk, portfolio_value=portfolio_value)
+
+    def position_size_volatility(
+        self,
+        price: float,
+        portfolio_value: float,
+        atr: float,
+        atr_multiple: float = 1.5,
+    ) -> float:
+        """ATR-based position size."""
+
+        if atr <= 0:
+            raise ValueError("ATR must be positive")
+        risk_per_share = atr * atr_multiple
+        capital_at_risk = portfolio_value * self.risk_per_trade
+        shares = capital_at_risk / risk_per_share
+        max_shares = (portfolio_value * self.max_position_size) / price
+        return max(0.0, min(shares, max_shares))
+
+    def update_equity(self, equity: float) -> None:
+        """Track equity highs and drawdown."""
+
+        if equity <= 0:
+            return
+        self.last_equity = equity
+        if equity > self.equity_high:
+            self.equity_high = equity
+        drawdown = 1 - (equity / self.equity_high if self.equity_high else 1.0)
+        self.current_drawdown = max(self.current_drawdown, drawdown)
+
+    def check_drawdown_limit(self, equity: float) -> bool:
+        """Return False if drawdown exceeds max_drawdown."""
+
+        self.update_equity(equity)
+        allowed_equity = self.equity_high * (1 - self.max_drawdown)
+        return equity >= allowed_equity
+
+    def check_daily_loss_limit(self, equity: float) -> bool:
+        """Ensure intraday loss stays within limit."""
+
+        if self.daily_start_equity <= 0:
+            self.daily_start_equity = equity
+            return True
+        loss_pct = (self.daily_start_equity - equity) / self.daily_start_equity
+        return loss_pct <= self.max_daily_loss
+
+    def reset_daily_equity(self, equity: float) -> None:
+        """Reset daily equity reference point."""
+
+        self.daily_start_equity = equity
 
     def get_stop_loss(self, symbol: str) -> float | None:
         """Get the stop loss price for a position.

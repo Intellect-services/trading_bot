@@ -27,14 +27,50 @@ const BotMonitor = () => {
             const data = response.data;
 
             if (data.status_messages && data.status_messages.length > 0) {
+                // Filter to show only system/technical events (exclude trading events)
+                const systemLogs = data.status_messages
+                    .filter(msg => {
+                        const msgLower = msg.message.toLowerCase();
+                        // Exclude trading events - those belong to Trading Activity page
+                        const isTradingEvent =
+                            msgLower.includes('executing') ||
+                            msgLower.includes('buy order') ||
+                            msgLower.includes('sell order') ||
+                            msgLower.includes('signal') ||
+                            msgLower.includes('generated') ||
+                            msg.level === 'trade' ||
+                            msg.level === 'signal';
+
+                        // Include system events: errors, warnings, initialization, database, connections, market status
+                        const isSystemEvent =
+                            msgLower.includes('error') ||
+                            msgLower.includes('failed') ||
+                            msgLower.includes('database') ||
+                            msgLower.includes('connected') ||
+                            msgLower.includes('initialized') ||
+                            msgLower.includes('started') ||
+                            msgLower.includes('stopped') ||
+                            msgLower.includes('market') ||
+                            msgLower.includes('closed') ||
+                            msgLower.includes('open') ||
+                            msgLower.includes('data') ||
+                            msgLower.includes('api') ||
+                            msg.level === 'error' ||
+                            msg.level === 'warning' ||
+                            (msg.level === 'info' && !isTradingEvent);
+
+                        return isSystemEvent && !isTradingEvent;
+                    })
+                    .slice(-10) // Show only last 10 system messages
+                    .reverse(); // Most recent first
+
                 // Only update if logs actually changed
                 setLogs(prevLogs => {
-                    const newLogs = data.status_messages.slice(-50);
                     // Check if logs are actually different
-                    if (JSON.stringify(prevLogs) === JSON.stringify(newLogs)) {
+                    if (JSON.stringify(prevLogs) === JSON.stringify(systemLogs)) {
                         return prevLogs; // Don't trigger re-render
                     }
-                    return newLogs;
+                    return systemLogs;
                 });
 
                 setStats({
@@ -72,7 +108,7 @@ const BotMonitor = () => {
                 </h3>
                 <div className="monitor-stats">
                     <div className="stat">
-                        <span className="stat-label">Messages</span>
+                        <span className="stat-label">System Events</span>
                         <span className="stat-value">{logs.length}</span>
                     </div>
                 </div>
@@ -82,9 +118,12 @@ const BotMonitor = () => {
                 {logs.length === 0 ? (
                     <div className="logs-empty">
                         <Clock size={32} />
-                        <p>Waiting for bot activity...</p>
+                        <p>No system events</p>
                         <p style={{ fontSize: '0.85rem', color: 'var(--text-secondary)', marginTop: '0.5rem' }}>
-                            Checking status every 2 seconds
+                            System and technical events will appear here
+                        </p>
+                        <p style={{ fontSize: '0.75rem', color: 'var(--text-muted)', marginTop: '0.5rem', fontStyle: 'italic' }}>
+                            Trading events are shown on the Trading Activity page
                         </p>
                     </div>
                 ) : (

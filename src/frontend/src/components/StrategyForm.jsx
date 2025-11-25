@@ -27,10 +27,13 @@ const StrategyForm = ({ strategy, onClose, onSave }) => {
     }, [strategy]);
 
     const strategyTypes = [
-        { value: 'moving_average', label: 'Moving Average Crossover' },
-        { value: 'mean_reversion', label: 'Mean Reversion' },
-        { value: 'momentum', label: 'Momentum' },
-        { value: 'rsi', label: 'RSI Strategy' }
+        { value: 'rsi', label: 'RSI Strategy', description: 'Relative Strength Index - Buy when oversold, sell when overbought' },
+        { value: 'macd', label: 'MACD Strategy', description: 'Moving Average Convergence Divergence - Buy on bullish crossover' },
+        { value: 'bollinger', label: 'Bollinger Bands', description: 'Price volatility bands - Buy at lower band, sell at upper band' },
+        { value: 'ai', label: 'AI/ML Strategy', description: 'Machine learning model - Uses trained model for entry/exit signals' },
+        { value: 'moving_average', label: 'Moving Average Crossover', description: 'Buy when short MA crosses above long MA' },
+        { value: 'mean_reversion', label: 'Mean Reversion', description: 'Trade price deviations from mean' },
+        { value: 'momentum', label: 'Momentum', description: 'Trade based on price momentum' }
     ];
 
     const handleChange = (field, value) => {
@@ -132,34 +135,207 @@ const StrategyForm = ({ strategy, onClose, onSave }) => {
                 return (
                     <>
                         <div className="form-group">
+                            <label>Symbols (comma-separated)</label>
+                            <input
+                                type="text"
+                                value={formData.parameters.symbols ? (Array.isArray(formData.parameters.symbols) ? formData.parameters.symbols.join(', ') : formData.parameters.symbols) : 'AAPL'}
+                                onChange={(e) => handleParameterChange('symbols', e.target.value.split(',').map(s => s.trim()))}
+                                placeholder="AAPL, MSFT, GOOGL"
+                            />
+                            <span className="help-text">Stock symbols to trade (comma-separated)</span>
+                        </div>
+                        <div className="form-group">
                             <label>RSI Period</label>
                             <input
                                 type="number"
-                                value={formData.parameters.rsi_period || 14}
-                                onChange={(e) => handleParameterChange('rsi_period', parseInt(e.target.value))}
+                                value={formData.parameters.window || formData.parameters.rsi_period || 14}
+                                onChange={(e) => handleParameterChange('window', parseInt(e.target.value))}
                                 min="2"
                                 max="50"
                             />
+                            <span className="help-text">Number of periods for RSI calculation</span>
                         </div>
                         <div className="form-group">
-                            <label>Oversold Threshold</label>
+                            <label>Lower Threshold (Oversold)</label>
                             <input
                                 type="number"
-                                value={formData.parameters.oversold || 30}
-                                onChange={(e) => handleParameterChange('oversold', parseInt(e.target.value))}
+                                value={formData.parameters.lower_threshold || formData.parameters.oversold || 30}
+                                onChange={(e) => handleParameterChange('lower_threshold', parseInt(e.target.value))}
                                 min="0"
                                 max="50"
                             />
+                            <span className="help-text">RSI level below which to buy (oversold)</span>
                         </div>
                         <div className="form-group">
-                            <label>Overbought Threshold</label>
+                            <label>Upper Threshold (Overbought)</label>
                             <input
                                 type="number"
-                                value={formData.parameters.overbought || 70}
-                                onChange={(e) => handleParameterChange('overbought', parseInt(e.target.value))}
+                                value={formData.parameters.upper_threshold || formData.parameters.overbought || 70}
+                                onChange={(e) => handleParameterChange('upper_threshold', parseInt(e.target.value))}
                                 min="50"
                                 max="100"
                             />
+                            <span className="help-text">RSI level above which to sell (overbought)</span>
+                        </div>
+                    </>
+                );
+
+            case 'macd':
+                return (
+                    <>
+                        <div className="form-group">
+                            <label>Symbols (comma-separated)</label>
+                            <input
+                                type="text"
+                                value={formData.parameters.symbols ? (Array.isArray(formData.parameters.symbols) ? formData.parameters.symbols.join(', ') : formData.parameters.symbols) : 'AAPL'}
+                                onChange={(e) => handleParameterChange('symbols', e.target.value.split(',').map(s => s.trim()))}
+                                placeholder="AAPL, MSFT, GOOGL"
+                            />
+                            <span className="help-text">Stock symbols to trade (comma-separated)</span>
+                        </div>
+                        <div className="form-group">
+                            <label>Fast Period</label>
+                            <input
+                                type="number"
+                                value={formData.parameters.fast || 12}
+                                onChange={(e) => handleParameterChange('fast', parseInt(e.target.value))}
+                                min="1"
+                                max="50"
+                            />
+                            <span className="help-text">Fast EMA period (typically 12)</span>
+                        </div>
+                        <div className="form-group">
+                            <label>Slow Period</label>
+                            <input
+                                type="number"
+                                value={formData.parameters.slow || 26}
+                                onChange={(e) => handleParameterChange('slow', parseInt(e.target.value))}
+                                min="1"
+                                max="100"
+                            />
+                            <span className="help-text">Slow EMA period (typically 26)</span>
+                        </div>
+                        <div className="form-group">
+                            <label>Signal Period</label>
+                            <input
+                                type="number"
+                                value={formData.parameters.signal || 9}
+                                onChange={(e) => handleParameterChange('signal', parseInt(e.target.value))}
+                                min="1"
+                                max="50"
+                            />
+                            <span className="help-text">Signal line EMA period (typically 9)</span>
+                        </div>
+                    </>
+                );
+
+            case 'bollinger':
+                return (
+                    <>
+                        <div className="form-group">
+                            <label>Symbols (comma-separated)</label>
+                            <input
+                                type="text"
+                                value={formData.parameters.symbols ? (Array.isArray(formData.parameters.symbols) ? formData.parameters.symbols.join(', ') : formData.parameters.symbols) : 'AAPL'}
+                                onChange={(e) => handleParameterChange('symbols', e.target.value.split(',').map(s => s.trim()))}
+                                placeholder="AAPL, MSFT, GOOGL"
+                            />
+                            <span className="help-text">Stock symbols to trade (comma-separated)</span>
+                        </div>
+                        <div className="form-group">
+                            <label>Window Period</label>
+                            <input
+                                type="number"
+                                value={formData.parameters.window || 20}
+                                onChange={(e) => handleParameterChange('window', parseInt(e.target.value))}
+                                min="5"
+                                max="100"
+                            />
+                            <span className="help-text">Moving average window (typically 20)</span>
+                        </div>
+                        <div className="form-group">
+                            <label>Number of Standard Deviations</label>
+                            <input
+                                type="number"
+                                step="0.1"
+                                value={formData.parameters.num_std || 2.0}
+                                onChange={(e) => handleParameterChange('num_std', parseFloat(e.target.value))}
+                                min="1"
+                                max="5"
+                            />
+                            <span className="help-text">Standard deviations for bands (typically 2.0)</span>
+                        </div>
+                    </>
+                );
+
+            case 'ai':
+            case 'ml':
+                return (
+                    <>
+                        <div className="form-group">
+                            <label>Symbols (comma-separated)</label>
+                            <input
+                                type="text"
+                                value={formData.parameters.symbols ? (Array.isArray(formData.parameters.symbols) ? formData.parameters.symbols.join(', ') : formData.parameters.symbols) : 'AAPL'}
+                                onChange={(e) => handleParameterChange('symbols', e.target.value.split(',').map(s => s.trim()))}
+                                placeholder="AAPL, MSFT, GOOGL"
+                            />
+                            <span className="help-text">Stock symbols to trade (comma-separated)</span>
+                        </div>
+                        <div className="form-group">
+                            <label>Model ID</label>
+                            <input
+                                type="text"
+                                value={formData.parameters.model_id || 'default_ai_model'}
+                                onChange={(e) => handleParameterChange('model_id', e.target.value)}
+                                placeholder="default_ai_model"
+                            />
+                            <span className="help-text">Identifier for the trained ML model</span>
+                        </div>
+                        <div className="form-group">
+                            <label>Model Version</label>
+                            <input
+                                type="text"
+                                value={formData.parameters.model_version || '1.0.0'}
+                                onChange={(e) => handleParameterChange('model_version', e.target.value)}
+                                placeholder="1.0.0"
+                            />
+                            <span className="help-text">Model version (e.g., 1.0.0, 1.1.0)</span>
+                        </div>
+                        <div className="form-group">
+                            <label>Minimum Confidence</label>
+                            <input
+                                type="number"
+                                step="0.01"
+                                value={formData.parameters.min_confidence || 0.65}
+                                onChange={(e) => handleParameterChange('min_confidence', parseFloat(e.target.value))}
+                                min="0"
+                                max="1"
+                            />
+                            <span className="help-text">Minimum model confidence (0.0 - 1.0) to execute trade</span>
+                        </div>
+                        <div className="form-group">
+                            <label>Fallback Strategy Type</label>
+                            <select
+                                value={formData.parameters.fallback_strategy_type || 'rsi'}
+                                onChange={(e) => handleParameterChange('fallback_strategy_type', e.target.value)}
+                            >
+                                <option value="rsi">RSI</option>
+                                <option value="macd">MACD</option>
+                                <option value="bollinger">Bollinger Bands</option>
+                            </select>
+                            <span className="help-text">Classical strategy to use if AI model unavailable</span>
+                        </div>
+                        <div className="form-group">
+                            <label>Max Daily Trades</label>
+                            <input
+                                type="number"
+                                value={formData.parameters.max_daily_trades || 5}
+                                onChange={(e) => handleParameterChange('max_daily_trades', parseInt(e.target.value))}
+                                min="1"
+                                max="100"
+                            />
+                            <span className="help-text">Maximum trades per day for this strategy</span>
                         </div>
                     </>
                 );
@@ -250,6 +426,9 @@ const StrategyForm = ({ strategy, onClose, onSave }) => {
                                 </option>
                             ))}
                         </select>
+                        <span className="help-text">
+                            {strategyTypes.find(t => t.value === formData.type)?.description || 'Select a strategy type'}
+                        </span>
                         {errors.type && <span className="error-text">{errors.type}</span>}
                     </div>
 

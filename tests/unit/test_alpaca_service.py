@@ -1,6 +1,7 @@
 """Unit tests for AlpacaService request handling."""
 
 from datetime import datetime, timedelta, timezone
+from typing import Any
 from unittest.mock import patch
 
 import pytest
@@ -150,3 +151,119 @@ def test_get_orders_includes_optional_filters(
     assert captured["params"]["status"] == "open"
     assert captured["params"]["limit"] == 1
     assert captured["params"]["direction"] == "desc"
+
+
+def test_submit_stop_order_includes_stop_price(
+    service: AlpacaService, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Stop orders must include stop price."""
+
+    captured: dict[str, Any] = {}
+
+    def fake_request(method, path, *, body=None, **kwargs):
+        captured["body"] = body
+        return {"id": "stop_id"}
+
+    monkeypatch.setattr(service, "_request", fake_request)
+    service.submit_stop_order(symbol="AAPL", qty=1, side=OrderSide.BUY, stop_price=150.0)
+
+    assert captured["body"]["type"] == "stop"
+    assert captured["body"]["stop_price"] == 150.0
+
+
+def test_submit_stop_limit_order_includes_prices(
+    service: AlpacaService, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Stop limit orders must include both stop and limit prices."""
+
+    captured: dict[str, Any] = {}
+
+    def fake_request(method, path, *, body=None, **kwargs):
+        captured["body"] = body
+        return {"id": "stop_limit_id"}
+
+    monkeypatch.setattr(service, "_request", fake_request)
+    service.submit_stop_limit_order(
+        symbol="AAPL",
+        qty=1,
+        side=OrderSide.SELL,
+        stop_price=149.0,
+        limit_price=148.5,
+    )
+
+    assert captured["body"]["type"] == "stop_limit"
+    assert captured["body"]["stop_price"] == 149.0
+    assert captured["body"]["limit_price"] == 148.5
+
+
+def test_submit_trailing_stop_order_supports_trail_percent(
+    service: AlpacaService, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Trailing stop orders should include trail information."""
+
+    captured: dict[str, Any] = {}
+
+    def fake_request(method, path, *, body=None, **kwargs):
+        captured["body"] = body
+        return {"id": "trailing_id"}
+
+    monkeypatch.setattr(service, "_request", fake_request)
+    service.submit_trailing_stop_order(
+        symbol="AAPL",
+        qty=1,
+        side=OrderSide.SELL,
+        trail_percent=1.5,
+    )
+
+    assert captured["body"]["type"] == "trailing_stop"
+    assert captured["body"]["trail_percent"] == 1.5
+
+
+def test_submit_bracket_order_sets_order_class(
+    service: AlpacaService, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Bracket orders should configure TP and SL legs."""
+
+    captured: dict[str, Any] = {}
+
+    def fake_request(method, path, *, body=None, **kwargs):
+        captured["body"] = body
+        return {"id": "bracket_id"}
+
+    monkeypatch.setattr(service, "_request", fake_request)
+    service.submit_bracket_order(
+        symbol="AAPL",
+        qty=1,
+        side=OrderSide.BUY,
+        take_profit_limit_price=160.0,
+        stop_loss_stop_price=145.0,
+    )
+
+    assert captured["body"]["order_class"] == "bracket"
+    assert captured["body"]["take_profit"]["limit_price"] == 160.0
+    assert captured["body"]["stop_loss"]["stop_price"] == 145.0
+
+
+def test_submit_oco_order_configures_legs(
+    service: AlpacaService, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """OCO orders should include take profit and stop loss."""
+
+    captured: dict[str, Any] = {}
+
+    def fake_request(method, path, *, body=None, **kwargs):
+        captured["body"] = body
+        return {"id": "oco_id"}
+
+    monkeypatch.setattr(service, "_request", fake_request)
+    service.submit_oco_order(
+        symbol="AAPL",
+        qty=1,
+        side=OrderSide.SELL,
+        take_profit_limit_price=170.0,
+        stop_loss_stop_price=155.0,
+    )
+
+    assert captured["body"]["order_class"] == "oco"
+    assert captured["body"]["take_profit"]["limit_price"] == 170.0
+    assert captured["body"]["stop_loss"]["stop_price"] == 155.0

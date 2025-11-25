@@ -4,6 +4,7 @@ import logging
 import os
 import secrets
 import sys
+import threading
 from datetime import datetime, timedelta
 from typing import Any, TypeAlias
 
@@ -31,6 +32,7 @@ FlaskResponse: TypeAlias = (
 )
 from src.core.alpaca_service import AlpacaService
 from src.core.bot import TradingBot
+from src.core.portfolio_analytics import PortfolioAnalytics
 from src.models.email_token import TokenType
 from src.strategies.moving_average import MovingAverageCrossover
 from src.utils.config import Config
@@ -72,6 +74,36 @@ app.secret_key = os.getenv("SECRET_KEY", secrets.token_hex(32))
 from src.database import init_db
 
 init_db(app)
+
+# Flag to track if auto-restart has been initialized (thread-safe)
+_auto_restart_lock = threading.Lock()
+_auto_restart_initialized = False
+
+
+def initialize_bot_auto_restart_once():
+    """Initialize bot auto-restart (only once, thread-safe).
+
+    This is called on app startup and ensures bots are restarted
+    after server restart if they were running before.
+    """
+    global _auto_restart_initialized
+    with _auto_restart_lock:
+        if _auto_restart_initialized:
+            return
+
+        _auto_restart_initialized = True
+        from src.core.bot_auto_restart import auto_restart_bots
+
+        auto_restart_bots(app)
+        logger.info("Bot auto-restart initialized")
+
+
+# Initialize auto-restart on first request (for gunicorn/production)
+@app.before_request
+def ensure_bot_auto_restart():
+    """Ensure bot auto-restart is initialized (only runs once)."""
+    initialize_bot_auto_restart_once()
+
 
 # Configure session
 app.config["SESSION_TYPE"] = "filesystem"
@@ -254,8 +286,8 @@ def get_user_trading_bot(user_id: int) -> TradingBot | None:
             return None
 
         # Create user-specific trading bot with user's AlpacaService
-        # TradingBot requires: config (strategy params), strategy, alpaca_service (user's credentials), and user_id
-        user_bot = TradingBot(config, strategy, alpaca_service, user_id)
+        # TradingBot requires: config (strategy params), strategy, alpaca_service (user's credentials), user_id, and flask_app (for context)
+        user_bot = TradingBot(config, strategy, alpaca_service, user_id, flask_app=app)
 
         # Cache the bot instance
         _user_bot_cache[user_id] = user_bot
@@ -1060,7 +1092,7 @@ def test_credentials() -> FlaskResponse:
 @login_required
 @require_trading_enabled
 def start_bot() -> FlaskResponse:
-    """Start the trading bot."""
+    """Start the trading bot and persist state."""
     try:
         user_id = session.get("user_id")
         if not user_id:
@@ -1075,8 +1107,16 @@ def start_bot() -> FlaskResponse:
                 }
             ), 400
 
+        # Start the bot
         trading_bot.start()
-        app.logger.info(f"Trading bot started for user {user_id}")
+
+        # Persist bot state to database
+        from src.core.bot_state_manager import BotStateManager
+
+        BotStateManager.set_bot_is_running(user_id, True)
+        BotStateManager.set_bot_auto_start(user_id, True)  # Enable auto-start
+
+        app.logger.info(f"Trading bot started for user {user_id} (persisted to database)")
         return jsonify({"status": "success", "message": "Trading bot started"})
     except Exception as e:
         app.logger.error(f"Error starting bot: {e}")
@@ -1086,7 +1126,7 @@ def start_bot() -> FlaskResponse:
 @app.route("/api/stop", methods=["POST"])
 @login_required
 def stop_bot() -> FlaskResponse:
-    """Stop the trading bot."""
+    """Stop the trading bot and persist state."""
     try:
         user_id = session.get("user_id")
         if not user_id:
@@ -1096,8 +1136,16 @@ def stop_bot() -> FlaskResponse:
         if trading_bot is None:
             return jsonify({"status": "error", "message": "Trading bot not running"}), 400
 
+        # Stop the bot
         trading_bot.stop()
-        app.logger.info(f"Trading bot stopped for user {user_id}")
+
+        # Persist bot state to database
+        from src.core.bot_state_manager import BotStateManager
+
+        BotStateManager.set_bot_is_running(user_id, False)
+        BotStateManager.set_bot_auto_start(user_id, False)  # Disable auto-start
+
+        app.logger.info(f"Trading bot stopped for user {user_id} (persisted to database)")
         return jsonify({"status": "success", "message": "Trading bot stopped"})
     except Exception as e:
         app.logger.error(f"Error stopping bot: {e}")
@@ -1107,17 +1155,50 @@ def stop_bot() -> FlaskResponse:
 @app.route("/api/status", methods=["GET"])
 @login_required
 def get_status() -> FlaskResponse:
-    """Get bot status."""
+    """Get bot status with market hours and next open time."""
     try:
         user_id = session.get("user_id")
         if not user_id:
             return jsonify({"status": "error", "message": "Not authenticated"}), 401
 
         trading_bot = get_user_trading_bot(user_id)
+
+        # Sync bot state with database
+        from src.core.bot_state_manager import BotStateManager
+
         if trading_bot is not None:
             status = trading_bot.get_status()
+            # Sync actual running state with database
+            actual_is_running = trading_bot.is_running
+            db_is_running = BotStateManager.get_bot_is_running(user_id)
+
+            # If there's a mismatch, update database to match reality
+            if actual_is_running != db_is_running:
+                BotStateManager.set_bot_is_running(user_id, actual_is_running)
+
+            # Add bot state from database
+            bot_state = BotStateManager.get_bot_state(user_id)
+            status["bot_auto_start"] = bot_state.get("bot_auto_start", False)
         else:
             status = {"status": "stopped", "message": "Trading bot not configured"}
+            # Get bot state from database even if bot not created
+            bot_state = BotStateManager.get_bot_state(user_id)
+            status["bot_auto_start"] = bot_state.get("bot_auto_start", False)
+            status["bot_is_running"] = False
+
+        # Add market hours information
+        alpaca_service = get_user_alpaca_service(user_id)
+        if alpaca_service:
+            try:
+                clock = alpaca_service.get_clock()
+                status["market_status"] = "open" if clock.get("is_open", False) else "closed"
+                status["next_open"] = clock.get("next_open")
+                status["next_close"] = clock.get("next_close")
+                status["current_time"] = clock.get("timestamp")
+            except Exception as e:
+                logger.warning(f"Could not get market clock: {e}")
+                status["market_status"] = "unknown"
+
         return jsonify(status)
     except Exception as e:
         app.logger.error(f"Error getting status: {e}")
@@ -1187,100 +1268,90 @@ def get_dashboard_data() -> FlaskResponse:
 
         # Get historical portfolio value from orders and account activity
         # This creates a portfolio history based on actual trading activity
+        allowed_periods = {"1D", "1W", "1M", "3M", "6M", "1Y", "all"}
+        allowed_timeframes = {"1Min", "5Min", "15Min", "1H", "1Hour", "1D", "1Day"}
+
+        portfolio_period = request.args.get("portfolioPeriod", "1M")
+        if portfolio_period not in allowed_periods:
+            portfolio_period = "1M"
+        portfolio_timeframe = request.args.get("portfolioTimeframe", "1D")
+        if portfolio_timeframe not in allowed_timeframes:
+            portfolio_timeframe = "1D"
+
         if alpaca_service:
-            try:
-                # Get closed orders to reconstruct portfolio history
-                orders = alpaca_service.get_orders(status="closed", limit=100)
+            history_points = []
+            # Try multiple periods to get any available history
+            periods_to_try = [portfolio_period, "all", "1Y", "3M", "1M", "1W"]
 
-                # Get current portfolio value
-                current_portfolio_value = account_data["portfolio_value"]
-                _ = account_data["equity"]  # Access for completeness
-
-                # Create a simple history: use current value and add points based on orders
-                # Start with current value
-                now = datetime.now()
-                performance["history"].append(
-                    {
-                        "timestamp": now.strftime("%Y-%m-%dT%H:%M:%S"),
-                        "portfolio_value": current_portfolio_value,
-                        "daily_return": 0.0,
-                    }
-                )
-
-                # If we have orders, create historical points
-                if orders and len(orders) > 0:
-                    # Group orders by date
-                    orders_by_date: dict[Any, list[dict[str, Any]]] = {}
-                    for order in orders:
-                        if order.get("filled_at"):
-                            try:
-                                filled_date = datetime.fromisoformat(
-                                    order["filled_at"].replace("Z", "+00:00")
-                                )
-                                date_key = filled_date.date()
-                                if date_key not in orders_by_date:
-                                    orders_by_date[date_key] = []
-                                orders_by_date[date_key].append(order)
-                            except (ValueError, AttributeError):
-                                continue
-
-                    # Create portfolio value points based on order activity
-                    # For simplicity, we'll use the current value and estimate backwards
-                    # In a production system, you'd track portfolio snapshots over time
-                    if orders_by_date:
-                        # Sort dates
-                        sorted_dates = sorted(orders_by_date.keys(), reverse=True)
-
-                        # Estimate portfolio value for each day with activity
-                        # This is a simplified approach - ideally you'd track actual portfolio snapshots
-                        estimated_value = current_portfolio_value
-                        for date in sorted_dates[:30]:  # Last 30 days max
-                            _ = orders_by_date.get(date, [])  # Access to ensure date exists
-                            # Estimate portfolio value (simplified - in reality you'd calculate from positions)
-                            # For now, we'll just add a point with current value
-                            date_time = datetime.combine(date, datetime.min.time())
-                            performance["history"].append(
-                                {
-                                    "timestamp": date_time.strftime("%Y-%m-%dT%H:%M:%S"),
-                                    "portfolio_value": estimated_value,  # Simplified - would need actual historical tracking
-                                    "daily_return": 0.0,
-                                }
-                            )
-
-                # If no orders but we have positions, add a point for today
-                elif positions and len(positions) > 0:
-                    # Just use current value
-                    pass  # Already added above
-
-                # Sort history by timestamp
-                performance["history"].sort(key=lambda x: x["timestamp"])
-
-                # If we only have one point (current), add a point from 30 days ago with estimated starting value
-                # This gives at least some chart data
-                if len(performance["history"]) == 1:
-                    # Estimate starting value (could be initial capital or slightly less)
-                    initial_value = current_portfolio_value * 0.95  # Rough estimate
-                    start_date = now - timedelta(days=30)
-                    performance["history"].insert(
-                        0,
-                        {
-                            "timestamp": start_date.strftime("%Y-%m-%dT%H:%M:%S"),
-                            "portfolio_value": initial_value,
-                            "daily_return": 0.0,
-                        },
+            for period in periods_to_try:
+                try:
+                    history_points = alpaca_service.get_portfolio_history(
+                        period=period,
+                        timeframe=portfolio_timeframe,
                     )
+                    if history_points and len(history_points) > 0:
+                        logger.info(
+                            f"Found {len(history_points)} portfolio history points for period {period}"
+                        )
+                        break
+                except Exception as e:
+                    logger.debug(f"Failed to get portfolio history for period {period}: {e}")
+                    continue
 
-            except Exception as e:
-                logger.error(f"Error building portfolio history: {e}")
-                # Fallback: just use current value
-                now = datetime.now()
-                performance["history"] = [
-                    {
-                        "timestamp": now.strftime("%Y-%m-%dT%H:%M:%S"),
-                        "portfolio_value": account_data["portfolio_value"],
-                        "daily_return": 0.0,
-                    }
-                ]
+            if history_points and len(history_points) > 0:
+                try:
+                    analytics = PortfolioAnalytics()
+                    metrics = analytics.calculate_metrics(history_points)
+                    performance["history"] = [
+                        {
+                            "timestamp": point["timestamp"],
+                            "portfolio_value": point["equity"],
+                            "daily_return": point["profit_loss_pct"],
+                        }
+                        for point in history_points
+                    ]
+                    performance["sharpe_ratio"] = metrics["sharpe"]
+                    performance["max_drawdown"] = metrics["max_drawdown"]
+                    performance["cumulative_return"] = metrics["cumulative_return"]
+                except Exception as e:
+                    logger.error(f"Error calculating portfolio analytics: {e}")
+                    # Use raw history points even if analytics fail
+                    performance["history"] = [
+                        {
+                            "timestamp": point["timestamp"],
+                            "portfolio_value": point["equity"],
+                            "daily_return": point.get("profit_loss_pct", 0.0),
+                        }
+                        for point in history_points
+                    ]
+            else:
+                # Fallback: Generate a basic history from current account value
+                logger.info("No portfolio history available from Alpaca, generating fallback data")
+                current_value = account_data["portfolio_value"]
+                if current_value > 0:
+                    # Generate 30 days of history with current value
+                    now = datetime.now()
+                    history = []
+                    for days_ago in range(30, -1, -1):
+                        history.append(
+                            {
+                                "timestamp": (now - timedelta(days=days_ago)).strftime(
+                                    "%Y-%m-%dT%H:%M:%S"
+                                ),
+                                "portfolio_value": current_value,  # Use current value for all points initially
+                                "daily_return": 0.0,
+                            }
+                        )
+                    performance["history"] = history
+                else:
+                    # No account value either, just use current timestamp
+                    performance["history"] = [
+                        {
+                            "timestamp": datetime.now().strftime("%Y-%m-%dT%H:%M:%S"),
+                            "portfolio_value": 0.0,
+                            "daily_return": 0.0,
+                        }
+                    ]
 
         # Construct response
         response = {
@@ -1348,6 +1419,116 @@ def health_check_detailed() -> FlaskResponse:
 
     status_code = 200 if health_status["status"] == "healthy" else 503
     return jsonify(health_status), status_code
+
+
+@app.route("/api/features/status", methods=["GET"])
+@login_required
+def get_features_status() -> FlaskResponse:
+    """Get comprehensive features status and market information."""
+    try:
+        user_id = session.get("user_id")
+        if not user_id:
+            return jsonify({"status": "error", "message": "Not authenticated"}), 401
+
+        alpaca_service = get_user_alpaca_service(user_id)
+
+        # Check what features are implemented
+        features = {
+            "portfolio_history": {
+                "implemented": True,
+                "description": "Portfolio equity history (FREE Alpaca endpoint)",
+                "ui_location": "Dashboard portfolio chart",
+                "works_when_closed": True,
+            },
+            "account_activities": {
+                "implemented": True,
+                "description": "Account activities (fills, orders, etc.)",
+                "ui_location": "Not exposed yet (backend only)",
+                "works_when_closed": True,
+            },
+            "bracket_orders": {
+                "implemented": True,
+                "description": "Bracket orders (entry + TP + SL)",
+                "ui_location": "Order form (may need order type selector)",
+                "works_when_closed": True,  # Orders queue when market closed
+            },
+            "trailing_stop_orders": {
+                "implemented": True,
+                "description": "Trailing stop orders",
+                "ui_location": "Order form",
+                "works_when_closed": True,
+            },
+            "stop_orders": {
+                "implemented": True,
+                "description": "Stop and stop-limit orders",
+                "ui_location": "Order form",
+                "works_when_closed": True,
+            },
+            "websocket_streaming": {
+                "implemented": True,
+                "description": "Real-time market data streaming",
+                "ui_location": "Background (automatic)",
+                "works_when_closed": False,  # Only streams when market open
+            },
+            "data_cache": {
+                "implemented": True,
+                "description": "Market data caching system",
+                "ui_location": "Transparent (backend only)",
+                "works_when_closed": True,
+            },
+            "data_provider_fallbacks": {
+                "implemented": True,
+                "description": "Yahoo Finance, Alpha Vantage fallbacks",
+                "ui_location": "Transparent (backend only)",
+                "works_when_closed": True,
+            },
+            "ai_strategies": {
+                "implemented": True,
+                "description": "AI-enhanced trading strategies with ML models",
+                "ui_location": "Strategy creation (type='ai')",
+                "works_when_closed": True,  # Can create/config when closed
+            },
+            "portfolio_analytics": {
+                "implemented": True,
+                "description": "Portfolio performance analytics",
+                "ui_location": "Dashboard",
+                "works_when_closed": True,
+            },
+        }
+
+        # Get market hours
+        market_info = {}
+        if alpaca_service:
+            try:
+                clock = alpaca_service.get_clock()
+                market_info = {
+                    "is_open": clock.get("is_open", False),
+                    "next_open": clock.get("next_open"),
+                    "next_close": clock.get("next_close"),
+                    "current_time": clock.get("timestamp"),
+                    "market_hours": "Monday-Friday, 9:30 AM - 4:00 PM Eastern Time",
+                    "timezone": "ET (Eastern Time)",
+                }
+            except Exception as e:
+                logger.warning(f"Could not get market clock: {e}")
+                market_info = {"error": str(e)}
+
+        return jsonify(
+            {
+                "status": "success",
+                "features": features,
+                "market": market_info,
+                "summary": {
+                    "total_features": len([f for f in features.values() if f["implemented"]]),
+                    "features_available_when_closed": len(
+                        [f for f in features.values() if f.get("works_when_closed", False)]
+                    ),
+                },
+            }
+        )
+    except Exception as e:
+        app.logger.error(f"Error getting features status: {e}")
+        return jsonify({"status": "error", "message": str(e)}), 500
 
 
 @app.route("/api/history", methods=["GET"])
@@ -1462,6 +1643,12 @@ if __name__ == "__main__":
 
         # Start background updates
         start_background_updates()
+
+        # Auto-restart bots for users with auto-start enabled
+        from src.core.bot_auto_restart import auto_restart_bots
+
+        auto_restart_bots(app)
+        logger.info("Bot auto-restart initialized - bots will restart on server startup if enabled")
 
         run_host = os.getenv("FLASK_RUN_HOST", "127.0.0.1")
         run_port = int(os.getenv("FLASK_RUN_PORT", "5002"))

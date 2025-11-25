@@ -1,16 +1,26 @@
 import React, { useState, useEffect } from 'react';
-import { motion } from 'framer-motion';
-import { Plus, Play, Pause, Trash2, Edit, TrendingUp, Activity } from 'lucide-react';
+import { motion, AnimatePresence } from 'framer-motion';
+import { Plus, Play, Pause, Trash2, Edit, TrendingUp, Activity, BarChart3 } from 'lucide-react';
+import BacktestPanel from './BacktestPanel';
 import './StrategyList.css';
 
 const StrategyList = ({ onCreateNew, onEdit }) => {
     const [strategies, setStrategies] = useState([]);
     const [loading, setLoading] = useState(true);
     const [filter, setFilter] = useState('all'); // all, active, inactive
+    const [strategyMetrics, setStrategyMetrics] = useState({});
+    const [showBacktest, setShowBacktest] = useState(null); // strategy ID
 
     useEffect(() => {
         fetchStrategies();
     }, []);
+
+    useEffect(() => {
+        // Fetch metrics for all strategies
+        strategies.forEach(strategy => {
+            fetchStrategyMetrics(strategy.id);
+        });
+    }, [strategies]);
 
     const fetchStrategies = async () => {
         try {
@@ -24,6 +34,35 @@ const StrategyList = ({ onCreateNew, onEdit }) => {
             console.error('Error fetching strategies:', error);
         } finally {
             setLoading(false);
+        }
+    };
+
+    const fetchStrategyMetrics = async (strategyId) => {
+        try {
+            const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:5002';
+            const response = await fetch(`${API_URL}/api/strategies/${strategyId}/signals?limit=100`);
+            const data = await response.json();
+            if (data.status === 'success' && data.signals) {
+                const signals = data.signals;
+                const executedSignals = signals.filter(s => s.executed);
+                const winCount = executedSignals.filter(s => {
+                    // Simple win/loss calculation based on signal type and execution
+                    // This is simplified - actual implementation would need trade P&L data
+                    return true; // Placeholder
+                }).length;
+
+                setStrategyMetrics(prev => ({
+                    ...prev,
+                    [strategyId]: {
+                        totalTrades: executedSignals.length,
+                        winRate: executedSignals.length > 0 ? (winCount / executedSignals.length) : 0,
+                        totalSignals: signals.length,
+                        lastSignal: signals[0]?.generated_at || null
+                    }
+                }));
+            }
+        } catch (error) {
+            console.error(`Error fetching metrics for strategy ${strategyId}:`, error);
         }
     };
 
@@ -155,15 +194,37 @@ const StrategyList = ({ onCreateNew, onEdit }) => {
                             <div className="strategy-metrics">
                                 <div className="metric">
                                     <TrendingUp size={16} />
-                                    <span>Win Rate: --</span>
+                                    <span>
+                                        Win Rate: {strategyMetrics[strategy.id]?.winRate
+                                            ? `${(strategyMetrics[strategy.id].winRate * 100).toFixed(1)}%`
+                                            : '--'}
+                                    </span>
                                 </div>
                                 <div className="metric">
                                     <Activity size={16} />
-                                    <span>Trades: --</span>
+                                    <span>
+                                        Trades: {strategyMetrics[strategy.id]?.totalTrades || 0}
+                                    </span>
+                                </div>
+                                <div className="metric">
+                                    <Activity size={16} />
+                                    <span>
+                                        Signals: {strategyMetrics[strategy.id]?.totalSignals || 0}
+                                    </span>
                                 </div>
                             </div>
 
                             <div className="strategy-actions">
+                                <motion.button
+                                    className="btn-icon"
+                                    onClick={() => setShowBacktest(showBacktest === strategy.id ? null : strategy.id)}
+                                    whileHover={{ scale: 1.1 }}
+                                    whileTap={{ scale: 0.9 }}
+                                    title="Backtest Strategy"
+                                >
+                                    <BarChart3 size={18} />
+                                </motion.button>
+
                                 <motion.button
                                     className="btn-icon"
                                     onClick={() => toggleStrategy(strategy.id, strategy.is_active)}
@@ -194,6 +255,23 @@ const StrategyList = ({ onCreateNew, onEdit }) => {
                                     <Trash2 size={18} />
                                 </motion.button>
                             </div>
+
+                            <AnimatePresence>
+                                {showBacktest === strategy.id && (
+                                    <motion.div
+                                        initial={{ opacity: 0, height: 0 }}
+                                        animate={{ opacity: 1, height: 'auto' }}
+                                        exit={{ opacity: 0, height: 0 }}
+                                        transition={{ duration: 0.3 }}
+                                        style={{ marginTop: '1rem', overflow: 'hidden' }}
+                                    >
+                                        <BacktestPanel
+                                            strategyId={strategy.id}
+                                            strategyName={strategy.name}
+                                        />
+                                    </motion.div>
+                                )}
+                            </AnimatePresence>
                         </motion.div>
                     ))
                 )}

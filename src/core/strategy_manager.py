@@ -8,6 +8,15 @@ import pandas as pd
 
 from src.business.strategy.models import Strategy
 from src.core.bot_persistence import TradingBotPersistence
+from src.strategies import (
+    BollingerBandsStrategy,
+    BollingerStrategyConfig,
+    MACDStrategy,
+    MACDStrategyConfig,
+    MovingAverageCrossover,
+    RSIStrategy,
+    RSIStrategyConfig,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -40,12 +49,46 @@ class StrategyManager:
                 strategy_repo = StrategyRepository(session)
                 user_id = self.persistence.user_id
 
-                # Get active strategies for user
                 strategies = strategy_repo.get_active_strategies(user_id)
+                if not strategies:
+                    symbols = getattr(self.persistence, "symbols", ["AAPL"])
+                    defaults = [
+                        {
+                            "name": "Default RSI",
+                            "description": "Auto-created RSI strategy",
+                            "type": "rsi",
+                            "parameters": {
+                                "symbols": symbols,
+                                "window": 14,
+                                "lower_threshold": 30,
+                                "upper_threshold": 70,
+                            },
+                        },
+                        {
+                            "name": "Default MACD",
+                            "description": "Auto-created MACD strategy",
+                            "type": "macd",
+                            "parameters": {"symbols": symbols, "fast": 12, "slow": 26, "signal": 9},
+                        },
+                        {
+                            "name": "Default Bollinger",
+                            "description": "Auto-created Bollinger strategy",
+                            "type": "bollinger",
+                            "parameters": {"symbols": symbols, "window": 20, "num_std": 2},
+                        },
+                    ]
+                    for default in defaults:
+                        strategy_repo.create_strategy(
+                            user_id=user_id,
+                            name=default["name"],
+                            strategy_type=default["type"],
+                            parameters=default["parameters"],
+                            description=default["description"],
+                        )
+                    strategies = strategy_repo.get_active_strategies(user_id)
 
                 self.logger.info(f"Loaded {len(strategies)} active strategies")
 
-                # Store configs
                 for strategy in strategies:
                     raw_id = getattr(strategy, "id", None)
                     if raw_id is None:
@@ -388,28 +431,141 @@ class StrategyManager:
             Strategy instance or None
         """
         try:
-            # Map strategy types to classes
-            strategy_map = {
-                "moving_average": "MovingAverageCrossover",
-                "mean_reversion": "MeanReversionStrategy",
-                "momentum": "MomentumStrategy",
-                "rsi": "RSIStrategy",
-            }
-
-            strategy_type = str(getattr(config, "type", ""))
-            strategy_class_name = strategy_map.get(strategy_type)
-
-            if not strategy_class_name:
-                self.logger.warning(f"Unknown strategy type: {strategy_type}")
-                return None
-
-            # Import strategy class dynamically
-            # For now, return None (would need actual strategy implementations)
-            self.logger.warning(f"Strategy instantiation not implemented for {config.type}")
+            params = config.parameters or {}
+            strategy_type = str(getattr(config, "type", "")).lower()
+            if strategy_type == "moving_average":
+                return MovingAverageCrossover(
+                    short_window=params.get("short_window", 20),
+                    long_window=params.get("long_window", 50),
+                )
+            if strategy_type == "rsi":
+                return RSIStrategy(
+                    RSIStrategyConfig(
+                        window=params.get("window", 14),
+                        lower_threshold=params.get("lower_threshold", 30),
+                        upper_threshold=params.get("upper_threshold", 70),
+                    )
+                )
+            if strategy_type == "macd":
+                return MACDStrategy(
+                    MACDStrategyConfig(
+                        fast=params.get("fast", 12),
+                        slow=params.get("slow", 26),
+                        signal=params.get("signal", 9),
+                    )
+                )
+            if strategy_type == "bollinger":
+                return BollingerBandsStrategy(
+                    BollingerStrategyConfig(
+                        window=params.get("window", 20),
+                        num_std=params.get("num_std", 2.0),
+                    )
+                )
+            if strategy_type == "ai" or strategy_type == "ml":
+                return self._create_ai_strategy_instance(config, params)
+            self.logger.warning(f"Unknown strategy type: {strategy_type}")
             return None
 
         except Exception as e:
             self.logger.error(f"Error creating strategy instance: {e}")
+            return None
+
+    def _create_ai_strategy_instance(self, config: Strategy, params: dict[str, Any]) -> Any | None:
+        """Create AI strategy instance from configuration.
+
+        Args:
+            config: Strategy configuration
+            params: Strategy parameters dictionary
+
+        Returns:
+            AI Strategy instance or None
+        """
+        try:
+            from src.ml import AIStrategy, AIStrategyConfig
+            from src.ml.model_registry import ModelRegistry
+            from src.ml.models import SklearnClassificationModel
+            from src.strategies import RSIStrategy, RSIStrategyConfig
+
+            # Get model path and version from parameters
+            model_path = params.get("model_path")
+            model_id = params.get("model_id", "default_ai_model")
+            model_version = params.get("model_version", "1.0.0")
+            min_confidence = params.get("min_confidence", 0.65)
+            max_position_size = params.get("max_position_size", 0.05)
+            fallback_enabled = params.get("fallback_enabled", True)
+
+            # Load model from registry or file
+            model = None
+            if model_path:
+                # Try loading from file
+                try:
+                    model = SklearnClassificationModel(model_id=model_id, version=model_version)
+                    model.load(model_path)
+                    self.logger.info(f"Loaded AI model from {model_path}")
+                except Exception as e:
+                    self.logger.error(f"Failed to load model from {model_path}: {e}")
+
+            # If model loading failed, try registry
+            if model is None or not model.trained:
+                try:
+                    registry = ModelRegistry()
+                    model_info = registry.get_model_info(model_id, model_version)
+                    if model_info:
+                        model_path = model_info.get("model_path")
+                        if model_path:
+                            model = SklearnClassificationModel(
+                                model_id=model_id, version=model_version
+                            )
+                            model.load(model_path)
+                            self.logger.info(
+                                f"Loaded AI model from registry: {model_id} v{model_version}"
+                            )
+                except Exception as e:
+                    self.logger.warning(f"Failed to load model from registry: {e}")
+
+            # If still no model, create a placeholder (will use fallback only)
+            if model is None or not model.trained:
+                self.logger.warning(
+                    f"AI model not found for {model_id} v{model_version}. "
+                    "Strategy will use fallback only."
+                )
+                if not fallback_enabled:
+                    return None
+                model = SklearnClassificationModel(model_id=model_id, version=model_version)
+
+            # Create fallback strategy if enabled
+            fallback_strategy = None
+            if fallback_enabled:
+                try:
+                    fallback_type = params.get("fallback_strategy_type", "rsi")
+                    if fallback_type == "rsi":
+                        fallback_strategy = RSIStrategy(
+                            RSIStrategyConfig(
+                                window=params.get("fallback_window", 14),
+                                lower_threshold=params.get("fallback_lower", 30),
+                                upper_threshold=params.get("fallback_upper", 70),
+                            )
+                        )
+                    # Add other fallback strategy types as needed
+                except Exception as e:
+                    self.logger.warning(f"Failed to create fallback strategy: {e}")
+
+            # Create AI strategy config
+            ai_config = AIStrategyConfig(
+                model=model,
+                min_confidence=min_confidence,
+                max_position_size=max_position_size,
+                fallback_enabled=fallback_enabled,
+                fallback_strategy=fallback_strategy,
+                enable_risk_checks=True,
+                max_daily_trades=params.get("max_daily_trades", 5),
+                model_version=model_version,
+            )
+
+            return AIStrategy(ai_config)
+
+        except Exception as e:
+            self.logger.error(f"Error creating AI strategy instance: {e}", exc_info=True)
             return None
 
     def get_strategy_statistics(self) -> dict[str, Any]:

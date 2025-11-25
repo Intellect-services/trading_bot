@@ -1,6 +1,6 @@
 import React from 'react';
 import { NavLink, Link } from 'react-router-dom';
-import { LayoutDashboard, TrendingUp, History, Settings, LogOut, Activity, Binoculars } from 'lucide-react';
+import { LayoutDashboard, TrendingUp, History, Settings, LogOut, Activity, Binoculars, Sparkles, Zap, Wallet } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 
 const Sidebar = () => {
@@ -8,9 +8,11 @@ const Sidebar = () => {
 
     const navItems = [
         { icon: LayoutDashboard, label: 'Dashboard', path: '/' },
-        { icon: TrendingUp, label: 'Active Trades', path: '/trades' },
+        { icon: Zap, label: 'Trading Activity', path: '/trading-activity' },
+        { icon: Wallet, label: 'Positions', path: '/trades' },
         { icon: Activity, label: 'Strategies', path: '/strategies' },
         { icon: History, label: 'History', path: '/history' },
+        { icon: Sparkles, label: 'Features', path: '/features' },
         { icon: Settings, label: 'Settings', path: '/settings' },
     ];
 

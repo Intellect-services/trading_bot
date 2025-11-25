@@ -1,0 +1,28 @@
+.alpaca-free-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.25rem;
+    padding: 0.25rem 0.5rem;
+    background: rgba(255, 193, 7, 0.2);
+    border: 1px solid rgba(255, 193, 7, 0.4);
+    border-radius: 8px;
+    font-size: 0.75rem;
+    font-weight: 600;
+    color: #ffc107;
+    cursor: help;
+    transition: all 0.2s ease;
+}
+
+.alpaca-free-badge:hover {
+    background: rgba(255, 193, 7, 0.3);
+    border-color: rgba(255, 193, 7, 0.6);
+}
+
+.alpaca-free-badge.small {
+    padding: 0.15rem 0.35rem;
+    font-size: 0.65rem;
+}
+
+.alpaca-free-badge svg {
+    flex-shrink: 0;
+}

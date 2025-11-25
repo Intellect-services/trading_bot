@@ -1,7 +1,7 @@
 """Backtesting engine module."""
 
 from collections import defaultdict
-from collections.abc import Iterable
+from collections.abc import Callable, Iterable
 from datetime import datetime
 from typing import Any, TypedDict, cast
 
@@ -98,7 +98,30 @@ class BacktestEngine:
             "total_return": (self.portfolio_value - self.initial_capital) / self.initial_capital,
             "trades": self.trades,
             "metrics": self.metrics,
+            "equity_curve": self.equity_curve,
         }
+
+    def run_multiple(
+        self,
+        market_data: dict[str, pd.DataFrame],
+        *,
+        start_date: datetime | None = None,
+        end_date: datetime | None = None,
+        strategy_factory: Callable[[], Strategy] | None = None,
+    ) -> dict[str, dict[str, Any]]:
+        """Run backtests for multiple symbols."""
+
+        results: dict[str, dict[str, Any]] = {}
+        for symbol, df in market_data.items():
+            strategy_instance = strategy_factory() if strategy_factory else self.strategy
+            engine = BacktestEngine(
+                strategy=strategy_instance,
+                initial_capital=self.initial_capital,
+                commission=self.commission,
+                slippage=self.slippage,
+            )
+            results[symbol] = engine.run(df, start_date=start_date, end_date=end_date)
+        return results
 
     def _execute_signal(
         self,
@@ -147,7 +170,7 @@ class BacktestEngine:
 
         self.positions[symbol] = side_multiplier * shares
 
-    def _update_portfolio_value(self, current_bar: Series[float]) -> None:
+    def _update_portfolio_value(self, current_bar: Series) -> None:
         """Update portfolio value based on current prices."""
         portfolio_value = self.initial_capital
 
@@ -173,34 +196,26 @@ class BacktestEngine:
             return
 
         # Calculate returns
-        returns = []
-        equity = self.initial_capital
-        peak = self.initial_capital
-        max_drawdown = 0.0
-
-        for trade in self.trades:
-            pnl = trade["shares"] * trade["price"] - trade["commission"]
-            equity += pnl
-            returns.append(pnl / equity)
-
-            # Update max drawdown
-            if equity > peak:
-                peak = equity
-            drawdown = (peak - equity) / peak
-            max_drawdown = max(max_drawdown, drawdown)
-
-        # Convert returns to numpy array for calculations
-        returns_array = np.array(returns)
-
-        # Calculate metrics
-        total_trades = len(self.trades)
-        winning_trades = sum(1 for r in returns if r > 0)
-        losing_trades = sum(1 for r in returns if r < 0)
-        win_rate = winning_trades / total_trades if total_trades > 0 else 0.0
-        avg_return = float(np.mean(returns_array)) if len(returns_array) > 0 else 0.0
-        sharpe_ratio = (
-            float(np.mean(returns_array) / np.std(returns_array)) if len(returns_array) > 1 else 0.0
+        pnls = [trade.get("pnl", 0.0) for trade in self.trades if trade.get("side") == "sell"]
+        returns_array = (
+            np.array([pnl / self.initial_capital for pnl in pnls], dtype=float)
+            if pnls
+            else np.array([], dtype=float)
         )
+
+        total_trades = len(pnls)
+        winning_trades = sum(1 for pnl in pnls if pnl > 0)
+        losing_trades = sum(1 for pnl in pnls if pnl < 0)
+        win_rate = winning_trades / total_trades if total_trades > 0 else 0.0
+        avg_return = float(returns_array.mean()) if returns_array.size else 0.0
+        volatility = float(np.std(returns_array)) if returns_array.size > 1 else 0.0
+        sharpe_ratio = float(avg_return / volatility) if volatility else 0.0
+        downside = returns_array[returns_array < 0]
+        downside_std = float(np.std(downside)) if downside.size else 0.0
+        sortino_ratio = float(avg_return / downside_std) if downside_std else 0.0
+        max_drawdown = self.calculate_max_drawdown()
+        cagr = self._calculate_cagr()
+        profit_factor = self.calculate_profit_factor()
 
         self.metrics = {
             "total_trades": total_trades,
@@ -208,8 +223,12 @@ class BacktestEngine:
             "losing_trades": losing_trades,
             "win_rate": win_rate,
             "avg_return": avg_return,
+            "volatility": volatility,
             "sharpe_ratio": sharpe_ratio,
+            "sortino_ratio": sortino_ratio,
             "max_drawdown": max_drawdown,
+            "cagr": cagr,
+            "profit_factor": profit_factor,
         }
 
     def calculate_returns(self) -> float:
@@ -282,18 +301,9 @@ class BacktestEngine:
         try:
             if not self.trades:
                 return 0.0
-            gross_profit = sum(
-                trade["shares"] * trade["price"]
-                for trade in self.trades
-                if trade["shares"] * trade["price"] > 0
-            )
-            gross_loss = abs(
-                sum(
-                    trade["shares"] * trade["price"]
-                    for trade in self.trades
-                    if trade["shares"] * trade["price"] < 0
-                )
-            )
+            pnl_list = [trade.get("pnl", 0.0) for trade in self.trades if trade["side"] == "sell"]
+            gross_profit = sum(pnl for pnl in pnl_list if pnl > 0)
+            gross_loss = abs(sum(pnl for pnl in pnl_list if pnl < 0))
             return float(gross_profit / gross_loss) if gross_loss != 0 else float("inf")
         except Exception as e:
             logger.error("Error calculating profit factor: %s", str(e))
@@ -385,6 +395,20 @@ class BacktestEngine:
             return float(min(losing_trades)) if losing_trades else 0.0
         except Exception as e:
             logger.error("Error calculating max loss: %s", str(e))
+            return 0.0
+
+    def _calculate_cagr(self) -> float:
+        """Calculate compound annual growth rate from the equity curve."""
+
+        try:
+            if len(self.equity_curve) < 2:
+                return 0.0
+            total_return = self.equity_curve[-1] / self.equity_curve[0]
+            periods = len(self.equity_curve) - 1
+            years = max(periods / 252, 1 / 252)
+            return float(total_return ** (1 / years) - 1)
+        except Exception as e:
+            logger.error("Error calculating CAGR: %s", str(e))
             return 0.0
 
     def _normalize_signals(

@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { AnimatePresence } from 'framer-motion';
 import StrategyList from './StrategyList';
 import StrategyForm from './StrategyForm';
+import StrategyExplanation from './StrategyExplanation';
 import './Strategies.css';
 
 const Strategies = () => {
@@ -30,6 +31,7 @@ const Strategies = () => {
 
     return (
         <div className="strategies-page">
+            <StrategyExplanation />
             <StrategyList
                 onCreateNew={handleCreateNew}
                 onEdit={handleEdit}

@@ -14,6 +14,8 @@ import VerifyEmail from './pages/VerifyEmail';
 import ForgotPassword from './pages/ForgotPassword';
 import ResetPassword from './pages/ResetPassword';
 import Account from './pages/Account';
+import Features from './pages/Features';
+import TradingActivity from './pages/TradingActivity';
 import Strategies from './components/Strategies';
 
 function App() {
@@ -39,8 +41,10 @@ function App() {
           }>
             <Route index element={<Dashboard />} />
             <Route path="trades" element={<Trades />} />
+            <Route path="trading-activity" element={<TradingActivity />} />
             <Route path="history" element={<History />} />
             <Route path="strategies" element={<Strategies />} />
+            <Route path="features" element={<Features />} />
             <Route path="settings" element={<Settings />} />
             <Route path="account" element={<Account />} />
           </Route>

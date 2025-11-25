@@ -76,7 +76,7 @@ npm run dev
 
 ### Production Mode
 
-See the [Production Deployment](deployment/production.md) guide.
+See the [Production Deployment](../deployment/production.md) guide.
 
 ## Verification
 

@@ -1,5 +1,6 @@
 import React from 'react';
 import { ArrowUpRight, ArrowDownRight } from 'lucide-react';
+import StockLogo from './StockLogo';
 
 const ActiveTrades = ({ trades }) => {
     // trades is expected to be a list of positions from Alpaca
@@ -24,51 +25,56 @@ const ActiveTrades = ({ trades }) => {
                 <table style={{ width: '100%', borderCollapse: 'collapse' }}>
                     <thead>
                         <tr style={{ borderBottom: '1px solid var(--glass-border)' }}>
-                            <th style={{ textAlign: 'left', padding: '0.75rem 0', color: 'var(--text-muted)', fontSize: '0.75rem', fontWeight: '500' }}>SYMBOL</th>
-                            <th style={{ textAlign: 'right', padding: '0.75rem 0', color: 'var(--text-muted)', fontSize: '0.75rem', fontWeight: '500' }}>QTY</th>
-                            <th style={{ textAlign: 'right', padding: '0.75rem 0', color: 'var(--text-muted)', fontSize: '0.75rem', fontWeight: '500' }}>PRICE</th>
-                            <th style={{ textAlign: 'right', padding: '0.75rem 0', color: 'var(--text-muted)', fontSize: '0.75rem', fontWeight: '500' }}>P&L</th>
+                            <th style={{ textAlign: 'left', padding: '0.75rem 0.5rem', color: 'var(--text-muted)', fontSize: '0.75rem', fontWeight: '500' }}>SYMBOL</th>
+                            <th style={{ textAlign: 'right', padding: '0.75rem 0.5rem', color: 'var(--text-muted)', fontSize: '0.75rem', fontWeight: '500' }}>QTY</th>
+                            <th style={{ textAlign: 'right', padding: '0.75rem 0.5rem', color: 'var(--text-muted)', fontSize: '0.75rem', fontWeight: '500' }}>ENTRY</th>
+                            <th style={{ textAlign: 'right', padding: '0.75rem 0.5rem', color: 'var(--text-muted)', fontSize: '0.75rem', fontWeight: '500' }}>CURRENT</th>
+                            <th style={{ textAlign: 'right', padding: '0.75rem 0.5rem', color: 'var(--text-muted)', fontSize: '0.75rem', fontWeight: '500' }}>MARKET VALUE</th>
+                            <th style={{ textAlign: 'right', padding: '0.75rem 0.5rem', color: 'var(--text-muted)', fontSize: '0.75rem', fontWeight: '500' }}>P&L</th>
+                            <th style={{ textAlign: 'right', padding: '0.75rem 0.5rem', color: 'var(--text-muted)', fontSize: '0.75rem', fontWeight: '500' }}>P&L %</th>
                         </tr>
                     </thead>
                     <tbody>
                         {trades && trades.length > 0 ? (
                             trades.map((trade) => {
-                                const pnl = parseFloat(trade.unrealized_pl);
+                                const pnl = parseFloat(trade.unrealized_pl || trade.pl || 0);
+                                const pnlPercent = parseFloat(trade.unrealized_plpc || trade.plpc || 0) * 100;
+                                const marketValue = parseFloat(trade.market_value || trade.current_price || 0) * parseFloat(trade.qty || 0);
                                 const isPositive = pnl >= 0;
+                                const side = parseFloat(trade.qty || 0) >= 0 ? 'Long' : 'Short';
 
                                 return (
                                     <tr key={trade.symbol} style={{ borderBottom: '1px solid rgba(255,255,255,0.02)' }}>
-                                        <td style={{ padding: '1rem 0' }}>
-                                            <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-                                                <div style={{
-                                                    width: '32px',
-                                                    height: '32px',
-                                                    borderRadius: '8px',
-                                                    background: 'rgba(255,255,255,0.05)',
-                                                    display: 'flex',
-                                                    alignItems: 'center',
-                                                    justifyContent: 'center',
-                                                    fontWeight: '600',
-                                                    fontSize: '0.75rem'
-                                                }}>
-                                                    {trade.symbol}
-                                                </div>
+                                        <td style={{ padding: '1rem 0.5rem' }}>
+                                            <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
+                                                <StockLogo symbol={trade.symbol} size={40} />
                                                 <div style={{ display: 'flex', flexDirection: 'column' }}>
                                                     <span style={{ fontWeight: '600', fontSize: '0.875rem' }}>{trade.symbol}</span>
-                                                    <span style={{ fontSize: '0.75rem', color: isPositive ? 'var(--success)' : 'var(--danger)', display: 'flex', alignItems: 'center', gap: '2px' }}>
-                                                        {isPositive ? 'Long' : 'Short'}
+                                                    <span style={{ fontSize: '0.75rem', color: side === 'Long' ? 'var(--success)' : 'var(--danger)' }}>
+                                                        {side}
                                                     </span>
                                                 </div>
                                             </div>
                                         </td>
-                                        <td style={{ textAlign: 'right', padding: '1rem 0', fontWeight: '500' }}>{trade.qty}</td>
-                                        <td style={{ textAlign: 'right', padding: '1rem 0' }}>
-                                            <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end' }}>
-                                                <span style={{ fontWeight: '500' }}>${parseFloat(trade.current_price).toFixed(2)}</span>
-                                                <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>Entry: ${parseFloat(trade.avg_entry_price).toFixed(2)}</span>
-                                            </div>
+                                        <td style={{ textAlign: 'right', padding: '1rem 0.5rem', fontWeight: '500' }}>
+                                            {Math.abs(parseFloat(trade.qty || 0)).toFixed(2)}
                                         </td>
-                                        <td style={{ textAlign: 'right', padding: '1rem 0' }}>
+                                        <td style={{ textAlign: 'right', padding: '1rem 0.5rem' }}>
+                                            <span style={{ fontWeight: '500' }}>
+                                                ${parseFloat(trade.avg_entry_price || 0).toFixed(2)}
+                                            </span>
+                                        </td>
+                                        <td style={{ textAlign: 'right', padding: '1rem 0.5rem' }}>
+                                            <span style={{ fontWeight: '500' }}>
+                                                ${parseFloat(trade.current_price || trade.last_price || 0).toFixed(2)}
+                                            </span>
+                                        </td>
+                                        <td style={{ textAlign: 'right', padding: '1rem 0.5rem' }}>
+                                            <span style={{ fontWeight: '500' }}>
+                                                ${marketValue.toFixed(2)}
+                                            </span>
+                                        </td>
+                                        <td style={{ textAlign: 'right', padding: '1rem 0.5rem' }}>
                                             <div style={{
                                                 display: 'inline-flex',
                                                 alignItems: 'center',
@@ -80,12 +86,20 @@ const ActiveTrades = ({ trades }) => {
                                                 ${Math.abs(pnl).toFixed(2)}
                                             </div>
                                         </td>
+                                        <td style={{ textAlign: 'right', padding: '1rem 0.5rem' }}>
+                                            <span style={{
+                                                color: isPositive ? 'var(--success)' : 'var(--danger)',
+                                                fontWeight: '600'
+                                            }}>
+                                                {isPositive ? '+' : ''}{pnlPercent.toFixed(2)}%
+                                            </span>
+                                        </td>
                                     </tr>
                                 );
                             })
                         ) : (
                             <tr>
-                                <td colSpan="4" style={{ textAlign: 'center', padding: '2rem', color: 'var(--text-muted)' }}>
+                                <td colSpan="7" style={{ textAlign: 'center', padding: '2rem', color: 'var(--text-muted)' }}>
                                     No active positions
                                 </td>
                             </tr>

@@ -5,10 +5,17 @@ from enum import Enum, auto
 from typing import Any, TypedDict, cast
 
 import pandas as pd
-from alpaca.trading.enums import OrderSide, OrderType, TimeInForce
 
 from src.core.alpaca_service import AlpacaService
-from src.core.alpaca_types import Asset, Clock, Order, TradeAccount
+from src.core.alpaca_types import (
+    Asset,
+    Clock,
+    Order,
+    OrderSide,
+    OrderType,
+    TimeInForce,
+    TradeAccount,
+)
 from src.strategies.moving_average import MovingAverageCrossover
 
 from ..utils.logger import setup_logger

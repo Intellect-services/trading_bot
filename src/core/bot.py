@@ -17,6 +17,8 @@ from src.core.alpaca_types import (
     TimeFrame,
     TimeInForce,
 )
+from src.core.data_provider import DataProvider
+from src.core.market_data_stream import MarketDataStreamer
 from src.core.portfolio import Portfolio
 from src.core.risk_manager import RiskManager
 from src.core.strategy import Strategy
@@ -40,7 +42,12 @@ class TradingBot:
     """Main trading bot class that manages trading operations."""
 
     def __init__(
-        self, config: Config, strategy: Strategy, alpaca_service: AlpacaService, user_id: int = 1
+        self,
+        config: Config,
+        strategy: Strategy,
+        alpaca_service: AlpacaService,
+        user_id: int = 1,
+        flask_app=None,
     ):
         """Initialize the trading bot.
 
@@ -49,10 +56,17 @@ class TradingBot:
             strategy: Trading strategy (fallback, will be replaced by StrategyManager)
             alpaca_service: Alpaca service for API calls
             user_id: User ID for database operations (default: 1)
+            flask_app: Flask application instance (required for database operations in background threads)
         """
         self.config = config
         self.strategy = strategy  # Keep as fallback
         self.alpaca_service = alpaca_service
+        self.flask_app = flask_app  # Store Flask app for application context
+        self.data_provider = DataProvider(alpaca_service=alpaca_service)
+        self.market_streamer = MarketDataStreamer(
+            alpaca_service=alpaca_service,
+            data_provider=self.data_provider,
+        )
         self.user_id = user_id
         self.is_running = False
         self.status_messages: list[dict[str, Any]] = []
@@ -151,16 +165,37 @@ class TradingBot:
         self.is_running = True
         self.add_status_message("Starting trading bot...", "info")
 
+        if self.market_streamer and self.config.strategy_symbols:
+            try:
+                self.market_streamer.start(
+                    self.config.strategy_symbols,
+                    self.config.strategy_timeframe,
+                )
+                self.add_status_message("Real-time market data streaming enabled", "info")
+            except Exception as exc:  # pragma: no cover - defensive
+                self.logger.error("Failed to start market data streamer: %s", exc, exc_info=True)
+                self.add_status_message(
+                    "Unable to start live market data streaming. Falling back to cached/REST data.",
+                    "warning",
+                )
+
         # Start OrderManager monitoring
         if hasattr(self, "order_manager"):
             self.order_manager.start_monitoring()
             self.add_status_message("Order monitoring started", "info")
 
         # Start the trading loop in a separate thread
-        self.trading_thread = threading.Thread(target=self._trading_loop, daemon=True)
+        # Note: Using daemon=False would keep threads alive, but Flask shutdown would hang
+        # Daemon=True allows Flask to exit cleanly, but threads die on process exit
+        # For persistence, we rely on auto-restart mechanism
+        self.trading_thread = threading.Thread(
+            target=self._trading_loop, daemon=True, name=f"TradingBot-{self.user_id}"
+        )
         self.trading_thread.start()
         self.add_status_message("Trading bot started successfully", "info")
-        self.logger.info("Trading bot started")
+        self.logger.info(
+            f"Trading bot started for user {self.user_id} (thread: {self.trading_thread.name})"
+        )
 
     def _convert_position(self, position_data: dict[str, Any]) -> LocalPosition:
         """Convert Alpaca position payload into the simplified structure used internally."""
@@ -220,21 +255,20 @@ class TradingBot:
         for symbol in self.config.strategy_symbols:
             try:
                 # Try with full date range first
-                bars = self.alpaca_service.get_bars(
+                bars = self.data_provider.get_historical_bars(
                     symbol=symbol,
                     timeframe=self.config.strategy_timeframe,
                     start=start,
                     end=now,
-                    limit=None,
                 )
 
                 # If no data, try with a shorter range (last 30 days) as fallback
-                if not bars.get(symbol) or len(bars.get(symbol, [])) == 0:
+                if not bars:
                     self.logger.debug(
                         f"No data with full range for {symbol}, trying shorter range (30 days)"
                     )
                     shorter_start = now - timedelta(days=30)
-                    bars = self.alpaca_service.get_bars(
+                    bars = self.data_provider.get_historical_bars(
                         symbol=symbol,
                         timeframe=self.config.strategy_timeframe,
                         start=shorter_start,
@@ -242,7 +276,7 @@ class TradingBot:
                         limit=100,  # Limit to 100 bars
                     )
 
-                df = self._convert_bars_to_dataframe(symbol, bars)
+                df = self._convert_bars_to_dataframe(symbol, {symbol: bars})
                 if df is not None and not df.empty:
                     market_data[symbol] = df
                     self.logger.debug(f"Collected {len(df)} data points for {symbol}")
@@ -270,6 +304,12 @@ class TradingBot:
         if self.is_running:
             self.is_running = False
             self.logger.info("Trading bot stopped")
+
+        if hasattr(self, "market_streamer") and self.market_streamer:
+            try:
+                self.market_streamer.stop()
+            except Exception as exc:  # pragma: no cover - defensive
+                self.logger.error("Error stopping market data streamer: %s", exc)
 
         # Stop OrderManager monitoring
         if hasattr(self, "order_manager"):
@@ -326,131 +366,150 @@ class TradingBot:
 
     def _trading_loop(self) -> None:
         """Main trading loop."""
-        while self.is_running:
-            try:
-                # Check if market is open
-                self.market_clock = self.alpaca_service.get_clock()
-                if not self.market_clock.get("is_open", False):
-                    self.add_status_message("Market is closed", "info")
-                    time.sleep(60)  # Check every minute
-                    continue
+        # Push Flask application context for database operations
+        # This is required because DataCache uses Flask-SQLAlchemy which needs app context
+        ctx = None
+        if self.flask_app:
+            ctx = self.flask_app.app_context()
+            ctx.push()
 
-                # Update account information
-                account = self.alpaca_service.get_account()
-                if not account:
-                    self.add_status_message("Failed to get account information", "error")
-                    time.sleep(60)
-                    continue
+        try:
+            while self.is_running:
+                try:
+                    # Check if market is open
+                    self.market_clock = self.alpaca_service.get_clock()
+                    if not self.market_clock.get("is_open", False):
+                        self.add_status_message("Market is closed", "info")
+                        time.sleep(60)  # Check every minute
+                        continue
 
-                # Update enhanced risk manager with current portfolio value
-                if hasattr(self, "enhanced_risk_manager"):
-                    self.enhanced_risk_manager.portfolio_value = float(account["portfolio_value"])
+                    # Update account information
+                    account = self.alpaca_service.get_account()
+                    if not account:
+                        self.add_status_message("Failed to get account information", "error")
+                        time.sleep(60)
+                        continue
 
-                # Get current positions
-                positions = self.alpaca_service.get_positions()
-                self.add_status_message(f"Current positions: {len(positions)}", "info")
+                    # Update enhanced risk manager with current portfolio value
+                    if hasattr(self, "enhanced_risk_manager"):
+                        self.enhanced_risk_manager.portfolio_value = float(
+                            account["portfolio_value"]
+                        )
 
-                # Check market status first
-                market_clock = self.alpaca_service.get_clock()
-                is_market_open = market_clock.get("is_open", False)
+                    # Get current positions
+                    positions = self.alpaca_service.get_positions()
+                    self.add_status_message(f"Current positions: {len(positions)}", "info")
 
-                if not is_market_open:
-                    next_open = market_clock.get("next_open", "unknown")
-                    self.add_status_message(f"Market is closed. Next open: {next_open}", "info")
+                    # Check market status first
+                    market_clock = self.alpaca_service.get_clock()
+                    is_market_open = market_clock.get("is_open", False)
 
-                market_data = self._collect_market_data()
-                if not market_data:
-                    # Provide more specific error message
-                    error_msg = f"No market data available for symbols: {', '.join(self.config.strategy_symbols)}. "
                     if not is_market_open:
-                        error_msg += (
-                            "Market is currently closed. Historical data should still be available."
-                        )
-                    else:
-                        error_msg += "This may be due to API issues, invalid symbols, or data API access problems."
-                    self.add_status_message(error_msg, "warning")
-                    time.sleep(30)
-                    continue
+                        next_open = market_clock.get("next_open", "unknown")
+                        self.add_status_message(f"Market is closed. Next open: {next_open}", "info")
 
-                # Log successful data collection
-                symbols_with_data = list(market_data.keys())
-                if symbols_with_data:
-                    total_points = sum(len(df) for df in market_data.values())
-                    self.add_status_message(
-                        f"Collected {total_points} data points for {len(symbols_with_data)} symbol(s): {', '.join(symbols_with_data)}",
-                        "info",
-                    )
-
-                aggregated_signals: dict[str, dict[str, Any]] = {}
-
-                if hasattr(self, "strategy_manager"):
-                    try:
-                        self.add_status_message("Executing active strategies...", "info")
-                        aggregated_signals = self.strategy_manager.execute_all_strategies(
-                            market_data
-                        )
-                        if aggregated_signals:
-                            self.add_status_message(
-                                f"Generated {len(aggregated_signals)} aggregated signals", "signal"
-                            )
+                    market_data = self._collect_market_data()
+                    if not market_data:
+                        # Provide more specific error message
+                        error_msg = f"No market data available for symbols: {', '.join(self.config.strategy_symbols)}. "
+                        if not is_market_open:
+                            error_msg += "Market is currently closed. Historical data should still be available."
                         else:
-                            self.add_status_message("No aggregated signals generated", "info")
-                    except Exception as e:
-                        self.add_status_message(f"Error executing strategies: {e!s}", "error")
-                        self.logger.error(f"Error executing strategies: {e}")
+                            error_msg += "This may be due to API issues, invalid symbols, or data API access problems."
+                        self.add_status_message(error_msg, "warning")
+                        time.sleep(30)
+                        continue
 
-                if aggregated_signals:
-                    for symbol, signal in aggregated_signals.items():
-                        signal_type = signal.get("action") or signal.get("type", "hold")
-                        strength = float(signal.get("strength", 0))
+                    # Log successful data collection
+                    symbols_with_data = list(market_data.keys())
+                    if symbols_with_data:
+                        total_points = sum(len(df) for df in market_data.values())
                         self.add_status_message(
-                            f"Signal for {symbol}: {signal_type} (strength: {strength:.2f})",
-                            "signal",
+                            f"Collected {total_points} data points for {len(symbols_with_data)} symbol(s): {', '.join(symbols_with_data)}",
+                            "info",
                         )
 
-                        if hasattr(self, "enhanced_risk_manager"):
-                            position_size = self.enhanced_risk_manager.calculate_position_size(
-                                symbol=symbol,
-                                signal_strength=strength,
-                                current_price=self.alpaca_service.get_latest_price(symbol),
+                    aggregated_signals: dict[str, dict[str, Any]] = {}
+
+                    if hasattr(self, "strategy_manager"):
+                        try:
+                            self.add_status_message("Executing active strategies...", "info")
+                            aggregated_signals = self.strategy_manager.execute_all_strategies(
+                                market_data
                             )
-                            if not self.enhanced_risk_manager.check_position_risk(
-                                symbol, position_size
-                            ):
-                                self.add_status_message(
-                                    f"Position risk check failed for {symbol}", "warning"
+                            if aggregated_signals:
+                                signal_details = ", ".join(
+                                    [
+                                        f"{sym}: {sig.get('action', 'hold').upper()}"
+                                        for sym, sig in list(aggregated_signals.items())[:5]
+                                    ]
                                 )
-                                continue
+                                self.add_status_message(
+                                    f"⚡ SIGNAL GENERATED: {len(aggregated_signals)} signal(s) - {signal_details}",
+                                    "signal",
+                                )
+                            else:
+                                self.add_status_message("No aggregated signals generated", "info")
+                        except Exception as e:
+                            self.add_status_message(f"Error executing strategies: {e!s}", "error")
+                            self.logger.error(f"Error executing strategies: {e}")
 
-                        if signal_type == "buy":
-                            self._execute_buy(symbol)
-                        elif signal_type == "sell":
-                            self._execute_sell(symbol)
-                else:
-                    self.add_status_message("Using fallback strategy", "warning")
-                    if not self.strategy:
-                        self.add_status_message("No fallback strategy configured", "error")
-                    else:
-                        for symbol, data in market_data.items():
-                            try:
-                                signals = self.strategy.generate_signals(data)
-                                if not signals:
+                    if aggregated_signals:
+                        for symbol, signal in aggregated_signals.items():
+                            signal_type = signal.get("action") or signal.get("type", "hold")
+                            strength = float(signal.get("strength", 0))
+                            self.add_status_message(
+                                f"📊 SIGNAL: {symbol} → {signal_type.upper()} (strength: {strength:.2f})",
+                                "signal",
+                            )
+
+                            if hasattr(self, "enhanced_risk_manager"):
+                                position_size = self.enhanced_risk_manager.calculate_position_size(
+                                    symbol=symbol,
+                                    signal_strength=strength,
+                                    current_price=self.alpaca_service.get_latest_price(symbol),
+                                )
+                                if not self.enhanced_risk_manager.check_position_risk(
+                                    symbol, position_size
+                                ):
+                                    self.add_status_message(
+                                        f"Position risk check failed for {symbol}", "warning"
+                                    )
                                     continue
-                                last_price = float(data["close"].iloc[-1])
-                                for signal in signals:
-                                    signal["symbol"] = symbol
-                                    signal.setdefault("price", last_price)
-                                    self.execute_trade(symbol, signal)
-                            except Exception as e:
-                                self.logger.error(f"Error processing {symbol}: {e}")
 
-                # Sleep before next iteration
-                time.sleep(30)  # Check every 30 seconds
+                            if signal_type == "buy":
+                                self._execute_buy(symbol)
+                            elif signal_type == "sell":
+                                self._execute_sell(symbol)
+                    else:
+                        self.add_status_message("Using fallback strategy", "warning")
+                        if not self.strategy:
+                            self.add_status_message("No fallback strategy configured", "error")
+                        else:
+                            for symbol, data in market_data.items():
+                                try:
+                                    signals = self.strategy.generate_signals(data)
+                                    if not signals:
+                                        continue
+                                    last_price = float(data["close"].iloc[-1])
+                                    for signal in signals:
+                                        signal["symbol"] = symbol
+                                        signal.setdefault("price", last_price)
+                                        self.execute_trade(symbol, signal)
+                                except Exception as e:
+                                    self.logger.error(f"Error processing {symbol}: {e}")
 
-            except Exception as e:
-                self.add_status_message(f"Error in trading loop: {e!s}", "error")
-                self.logger.error(f"Error in trading loop: {e}")
-                time.sleep(60)  # Wait a minute before retrying
+                    # Sleep before next iteration
+                    time.sleep(30)  # Check every 30 seconds
+
+                except Exception as e:
+                    self.add_status_message(f"Error in trading loop: {e!s}", "error")
+                    self.logger.error(f"Error in trading loop: {e}", exc_info=True)
+                    time.sleep(30)  # Wait before retrying
+        finally:
+            # Pop Flask application context when loop exits
+            if ctx:
+                ctx.pop()
 
     def _execute_buy(self, symbol: str) -> None:
         """Execute a buy order."""
@@ -468,7 +527,7 @@ class TradingBot:
 
             if quantity > 0:
                 self.add_status_message(
-                    f"Executing BUY order for {quantity} shares of {symbol} at ${current_price:.2f}",
+                    f"🚀 EXECUTING BUY ORDER: {quantity} shares of {symbol} at ${current_price:.2f}",
                     "trade",
                 )
                 order_response = self.alpaca_service.submit_order(
@@ -499,7 +558,7 @@ class TradingBot:
                 quantity = int(position.get("size", 0))
                 current_price = self.alpaca_service.get_latest_price(symbol)
                 self.add_status_message(
-                    f"Executing SELL order for {quantity} shares of {symbol} at ${current_price:.2f}",
+                    f"💰 EXECUTING SELL ORDER: {quantity} shares of {symbol} at ${current_price:.2f}",
                     "trade",
                 )
                 order_response = self.alpaca_service.submit_order(
@@ -678,6 +737,36 @@ class TradingBot:
             logger.error(f"Error submitting order: {e}")
             raise
 
+    def submit_bracket_order(
+        self,
+        symbol: str,
+        qty: int,
+        side: OrderSide,
+        take_profit_price: float,
+        stop_loss_price: float,
+        time_in_force: TimeInForce = TimeInForce.GTC,
+        order_type: OrderType = OrderType.MARKET,
+        entry_limit_price: float | None = None,
+    ) -> None:
+        """Submit a bracket order with take-profit and stop-loss legs."""
+
+        try:
+            order = self.alpaca_service.submit_bracket_order(
+                symbol=symbol,
+                qty=qty,
+                side=side,
+                order_type=order_type,
+                time_in_force=time_in_force,
+                limit_price=entry_limit_price,
+                take_profit_limit_price=take_profit_price,
+                stop_loss_stop_price=stop_loss_price,
+            )
+            self.orders[order["id"]] = order
+            logger.info("Bracket order submitted: %s", order["id"])
+        except Exception as exc:
+            logger.error(f"Error submitting bracket order: {exc}")
+            raise
+
     def execute_trade(self, symbol: str, signal: dict[str, Any]) -> None:
         """Execute a trade based on the signal."""
         try:
@@ -686,9 +775,32 @@ class TradingBot:
 
             # Calculate position size
             risk_fraction = getattr(self.config, "risk_per_trade", 0.01)
+            account = self.alpaca_service.get_account()
+            portfolio_value = float(account.get("portfolio_value", self.equity))
+            if not self.risk_manager.check_drawdown_limit(portfolio_value):
+                self.add_status_message("Max drawdown exceeded. No new trades.", "warning")
+                return
+            if not self.risk_manager.check_daily_loss_limit(portfolio_value):
+                self.add_status_message("Daily loss limit reached. Halting trades.", "warning")
+                return
+
             position_size = self.strategy.calculate_position_size(
                 price=float(signal["price"]),
                 risk_amount=self.equity * risk_fraction,
+            )
+            risk_amount = self.risk_manager.risk_per_trade * portfolio_value
+            risk_limited = self.risk_manager.calculate_position_size(
+                price=float(signal["price"]),
+                risk_amount=risk_amount,
+                portfolio_value=portfolio_value,
+            )
+            win_rate = self.get_win_rate() or 0.5
+            reward_risk = 2.0
+            kelly_size = self.risk_manager.position_size_kelly(
+                price=float(signal["price"]),
+                portfolio_value=portfolio_value,
+                win_rate=max(min(win_rate, 0.99), 0.01),
+                reward_risk=reward_risk,
             )
 
             if position:
@@ -704,17 +816,27 @@ class TradingBot:
                     take_profit = self.strategy.get_take_profit(price=float(signal["price"]))
 
                     # Submit the order
-                    quantity = max(1, int(position_size))
+                    quantity = max(1, int(min(position_size, risk_limited, kelly_size)))
                     side = OrderSide.BUY if signal.get("side", "long") == "long" else OrderSide.SELL
-                    self.submit_order(
-                        symbol=symbol,
-                        qty=quantity,
-                        side=side,
-                        type=OrderType.MARKET,
-                        time_in_force=TimeInForce.DAY,
-                        stop_price=stop_loss if stop_loss else None,
-                        limit_price=take_profit if take_profit else None,
-                    )
+                    if stop_loss and take_profit:
+                        self.submit_bracket_order(
+                            symbol=symbol,
+                            qty=quantity,
+                            side=side,
+                            take_profit_price=float(take_profit),
+                            stop_loss_price=float(stop_loss),
+                            time_in_force=TimeInForce.GTC,
+                        )
+                    else:
+                        self.submit_order(
+                            symbol=symbol,
+                            qty=quantity,
+                            side=side,
+                            type=OrderType.MARKET,
+                            time_in_force=TimeInForce.DAY,
+                            stop_price=stop_loss if stop_loss else None,
+                            limit_price=take_profit if take_profit else None,
+                        )
                     logger.info(f"Opened new position for {symbol}")
         except Exception as e:
             logger.error(f"Error executing trade for {symbol}: {e}")

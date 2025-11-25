@@ -10,6 +10,8 @@ import requests
 from src.core.alpaca_types import OrderSide, OrderType, TimeInForce
 from src.utils.config import Config
 
+logger = logging.getLogger(__name__)
+
 TRADING_BASE_URLS = {
     "paper": "https://paper-api.alpaca.markets",
     "live": "https://api.alpaca.markets",
@@ -167,6 +169,158 @@ class AlpacaService:
 
         return cast("dict[str, Any]", self._request("POST", "/orders", body=payload))
 
+    def submit_stop_order(
+        self,
+        symbol: str,
+        qty: int | float,
+        side: str | OrderSide,
+        *,
+        stop_price: float,
+        time_in_force: str | TimeInForce = "day",
+    ) -> dict[str, Any]:
+        """Submit a stop order."""
+
+        if stop_price is None:
+            raise ValueError("stop_price is required for stop orders")
+        return self.submit_order(
+            symbol=symbol,
+            qty=qty,
+            side=side,
+            type="stop",
+            time_in_force=time_in_force,
+            stop_price=stop_price,
+        )
+
+    def submit_stop_limit_order(
+        self,
+        symbol: str,
+        qty: int | float,
+        side: str | OrderSide,
+        *,
+        stop_price: float,
+        limit_price: float,
+        time_in_force: str | TimeInForce = "day",
+    ) -> dict[str, Any]:
+        """Submit a stop-limit order."""
+
+        if stop_price is None or limit_price is None:
+            raise ValueError("stop_price and limit_price are required for stop-limit orders")
+        return self.submit_order(
+            symbol=symbol,
+            qty=qty,
+            side=side,
+            type="stop_limit",
+            time_in_force=time_in_force,
+            stop_price=stop_price,
+            limit_price=limit_price,
+        )
+
+    def submit_trailing_stop_order(
+        self,
+        symbol: str,
+        qty: int | float,
+        side: str | OrderSide,
+        *,
+        trail_price: float | None = None,
+        trail_percent: float | None = None,
+        time_in_force: str | TimeInForce = "day",
+    ) -> dict[str, Any]:
+        """Submit a trailing stop order."""
+
+        if trail_price is None and trail_percent is None:
+            raise ValueError("Either trail_price or trail_percent must be provided")
+
+        payload = {
+            "symbol": symbol,
+            "qty": int(qty),
+            "side": side.value if isinstance(side, OrderSide) else side,
+            "type": "trailing_stop",
+            "time_in_force": (
+                time_in_force.value if isinstance(time_in_force, TimeInForce) else time_in_force
+            ),
+        }
+        if trail_price is not None:
+            payload["trail_price"] = float(trail_price)
+        if trail_percent is not None:
+            payload["trail_percent"] = float(trail_percent)
+
+        return cast("dict[str, Any]", self._request("POST", "/orders", body=payload))
+
+    def submit_bracket_order(
+        self,
+        symbol: str,
+        qty: int | float,
+        side: str | OrderSide,
+        *,
+        order_type: str | OrderType = "market",
+        time_in_force: str | TimeInForce = "day",
+        limit_price: float | None = None,
+        take_profit_limit_price: float,
+        stop_loss_stop_price: float,
+        stop_loss_limit_price: float | None = None,
+    ) -> dict[str, Any]:
+        """Submit a bracket order (entry + TP + SL)."""
+
+        if take_profit_limit_price is None or stop_loss_stop_price is None:
+            raise ValueError(
+                "Bracket orders require both take_profit_limit_price and stop_loss_stop_price"
+            )
+
+        payload: dict[str, Any] = {
+            "symbol": symbol,
+            "qty": int(qty),
+            "side": side.value if isinstance(side, OrderSide) else side,
+            "type": order_type.value if isinstance(order_type, OrderType) else order_type,
+            "time_in_force": (
+                time_in_force.value if isinstance(time_in_force, TimeInForce) else time_in_force
+            ),
+            "order_class": "bracket",
+            "take_profit": {"limit_price": float(take_profit_limit_price)},
+            "stop_loss": {"stop_price": float(stop_loss_stop_price)},
+        }
+        if limit_price is not None:
+            payload["limit_price"] = float(limit_price)
+        if stop_loss_limit_price is not None:
+            payload["stop_loss"]["limit_price"] = float(stop_loss_limit_price)
+
+        return cast("dict[str, Any]", self._request("POST", "/orders", body=payload))
+
+    def submit_oco_order(
+        self,
+        symbol: str,
+        qty: int | float,
+        side: str | OrderSide,
+        *,
+        time_in_force: str | TimeInForce = "gtc",
+        take_profit_limit_price: float,
+        stop_loss_stop_price: float,
+        order_type: str | OrderType = "limit",
+        limit_price: float | None = None,
+    ) -> dict[str, Any]:
+        """Submit an OCO (one-cancels-other) order."""
+
+        if take_profit_limit_price is None or stop_loss_stop_price is None:
+            raise ValueError(
+                "OCO orders require both take_profit_limit_price and stop_loss_stop_price"
+            )
+
+        payload: dict[str, Any] = {
+            "symbol": symbol,
+            "qty": int(qty),
+            "side": side.value if isinstance(side, OrderSide) else side,
+            "type": order_type.value if isinstance(order_type, OrderType) else order_type,
+            "time_in_force": (
+                time_in_force.value if isinstance(time_in_force, TimeInForce) else time_in_force
+            ),
+            "order_class": "oco",
+            "take_profit": {"limit_price": float(take_profit_limit_price)},
+            "stop_loss": {"stop_price": float(stop_loss_stop_price)},
+        }
+        if limit_price is not None:
+            payload["limit_price"] = float(limit_price)
+
+        return cast("dict[str, Any]", self._request("POST", "/orders", body=payload))
+
     def cancel_order(self, order_id: str) -> bool:
         """Cancel an existing order."""
         self._request("DELETE", f"/orders/{order_id}")
@@ -233,6 +387,98 @@ class AlpacaService:
             }
             for order in orders
         ]
+
+    def get_account_activities(
+        self,
+        activity_type: str | None = None,
+        *,
+        date: str | None = None,
+        page_size: int | None = None,
+    ) -> list[dict[str, Any]]:
+        """Fetch account activities such as fills and transfers."""
+
+        params: dict[str, Any] = {}
+        if activity_type:
+            params["activity_types"] = activity_type
+        if date:
+            params["date"] = date
+        if page_size:
+            params["page_size"] = page_size
+
+        activities = self._request(
+            "GET",
+            "/account/activities",
+            params=params,
+        )
+        return cast(list[dict[str, Any]], activities or [])
+
+    def get_portfolio_history(
+        self,
+        *,
+        period: str = "1M",
+        timeframe: str = "1D",
+        date_end: str | None = None,
+        extended_hours: bool = False,
+    ) -> list[dict[str, Any]]:
+        """Return account equity history derived from the trading API."""
+
+        # Convert common timeframe formats to Alpaca API format
+        timeframe_map = {
+            "1Day": "1D",
+            "1day": "1D",
+            "1D": "1D",
+            "1Min": "1Min",
+            "5Min": "5Min",
+            "15Min": "15Min",
+            "1H": "1H",
+            "1Hour": "1H",
+        }
+        alpaca_timeframe = timeframe_map.get(timeframe, timeframe)
+
+        params: dict[str, Any] = {
+            "period": period,
+            "timeframe": alpaca_timeframe,
+            "extended_hours": str(extended_hours).lower(),
+        }
+        if date_end:
+            params["date_end"] = date_end
+
+        history = self._request(
+            "GET",
+            "/account/portfolio/history",
+            params=params,
+        )
+        if not history:
+            logger.debug(
+                f"Portfolio history API returned empty response for period={period}, timeframe={timeframe}"
+            )
+            return []
+
+        equity = history.get("equity", [])
+        timestamps = history.get("timestamp", [])
+        profit_loss = history.get("profit_loss", [])
+        profit_loss_pct = history.get("profit_loss_pct", [])
+
+        # Log if we got empty arrays
+        if not timestamps or not equity:
+            logger.debug(
+                f"Portfolio history API returned empty arrays: equity={len(equity) if equity else 0}, timestamps={len(timestamps) if timestamps else 0}"
+            )
+            return []
+
+        points: list[dict[str, Any]] = []
+        for idx, timestamp in enumerate(timestamps):
+            points.append(
+                {
+                    "timestamp": datetime.fromtimestamp(timestamp).isoformat(),
+                    "equity": float(equity[idx]) if idx < len(equity) else 0.0,
+                    "profit_loss": float(profit_loss[idx]) if idx < len(profit_loss) else 0.0,
+                    "profit_loss_pct": float(profit_loss_pct[idx] or 0.0)
+                    if idx < len(profit_loss_pct)
+                    else 0.0,
+                }
+            )
+        return points
 
     def get_historical_bars(
         self,

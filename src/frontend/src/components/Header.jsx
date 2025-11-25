@@ -2,6 +2,8 @@ import React, { useState, useRef, useEffect } from 'react';
 import { Bell, Search, ChevronDown, LogOut, User, Settings } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 import { useNavigate } from 'react-router-dom';
+import TradingModeToggle from './TradingModeToggle';
+import NotificationPanel from './NotificationPanel';
 
 const Header = () => {
     const { user, logout } = useAuth();
@@ -62,25 +64,9 @@ const Header = () => {
             </div>
 
             <div className="flex-center" style={{ gap: '1.5rem' }}>
-                <button style={{
-                    background: 'transparent',
-                    border: 'none',
-                    color: 'var(--text-secondary)',
-                    cursor: 'pointer',
-                    position: 'relative'
-                }}>
-                    <Bell size={20} />
-                    <span style={{
-                        position: 'absolute',
-                        top: '-2px',
-                        right: '-2px',
-                        width: '8px',
-                        height: '8px',
-                        background: 'var(--accent-primary)',
-                        borderRadius: '50%',
-                        boxShadow: '0 0 8px var(--accent-primary)'
-                    }} />
-                </button>
+                <TradingModeToggle />
+
+                <NotificationPanel />
 
                 <div
                     ref={dropdownRef}

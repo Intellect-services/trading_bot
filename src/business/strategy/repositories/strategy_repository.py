@@ -40,13 +40,26 @@ class StrategyRepository(BaseRepository[Strategy]):
         return self.session.query(Strategy).filter_by(user_id=user_id, is_active=True).all()
 
     def get_by_type(self, user_id: int, strategy_type: str) -> list[Strategy]:
-        """Get strategies by type.
-
-        Args:
-            user_id: User ID
-            strategy_type: Strategy type
-
-        Returns:
-            List of strategies of specified type
-        """
+        """Get strategies by type."""
         return self.session.query(Strategy).filter_by(user_id=user_id, type=strategy_type).all()
+
+    def create_strategy(
+        self,
+        user_id: int,
+        name: str,
+        strategy_type: str,
+        parameters: dict,
+        description: str | None = None,
+    ) -> Strategy:
+        """Create and persist a new strategy."""
+
+        strategy = Strategy(
+            user_id=user_id,
+            name=name,
+            type=strategy_type,
+            parameters=parameters,
+            description=description,
+        )
+        self.session.add(strategy)
+        self.session.commit()
+        return strategy

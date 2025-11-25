@@ -211,18 +211,16 @@ const Dashboard = () => {
                 gridTemplateColumns: 'repeat(12, 1fr)',
                 gap: '1.5rem'
             }}>
-                {/* Chart - Full Width */}
-                <div style={{ gridColumn: '1 / -1' }}>
+                {/* Bot Control Panel (1/4) and Portfolio Performance (3/4) on same row */}
+                <div style={{ gridColumn: 'span 3' }}>
+                    <BotControlPanel />
+                </div>
+                <div style={{ gridColumn: 'span 9' }}>
                     <StockChart data={data?.performance?.history || []} />
                 </div>
 
-                {/* Bot Control Panel - Left */}
-                <div style={{ gridColumn: 'span 4' }}>
-                    <BotControlPanel />
-                </div>
-
-                {/* Active Trades - Right */}
-                <div style={{ gridColumn: 'span 8' }}>
+                {/* Active Positions - Full Width */}
+                <div style={{ gridColumn: '1 / -1' }}>
                     <ActiveTrades trades={data?.positions || []} />
                 </div>
 

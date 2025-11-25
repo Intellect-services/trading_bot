@@ -429,10 +429,24 @@ show_status() {
             echo -e "  ${YELLOW}● Note:${NC}   Using alternative port (default $DEFAULT_BACKEND_PORT was busy)"
         fi
     else
-        echo -e "  ${RED}● Status:${NC} Not running"
-        echo -e "  ${BLUE}● Port:${NC}   $BACKEND_PORT (default: $DEFAULT_BACKEND_PORT)"
-        if is_port_in_use "$DEFAULT_BACKEND_PORT"; then
-            echo -e "  ${YELLOW}● Note:${NC}   Default port $DEFAULT_BACKEND_PORT is in use"
+        # Check if port is actually in use (backend might be running without PID file)
+        if is_port_in_use "$BACKEND_PORT"; then
+            local port_pid=$(lsof -ti:$BACKEND_PORT | head -1)
+            if [ -n "$port_pid" ] && ps -p "$port_pid" > /dev/null 2>&1; then
+                # Backend is running but PID file is missing - recreate it
+                echo "$port_pid" > "$BACKEND_PID_FILE"
+                echo -e "  ${GREEN}● Status:${NC} Running (detected on port, PID file restored)"
+                echo -e "  ${GREEN}● PID:${NC}    $port_pid"
+                echo -e "  ${GREEN}● Port:${NC}   $BACKEND_PORT"
+                echo -e "  ${GREEN}● URL:${NC}    http://localhost:$BACKEND_PORT"
+            else
+                echo -e "  ${RED}● Status:${NC} Not running"
+                echo -e "  ${BLUE}● Port:${NC}   $BACKEND_PORT (default: $DEFAULT_BACKEND_PORT)"
+                echo -e "  ${YELLOW}● Note:${NC}   Port $BACKEND_PORT is in use by another process"
+            fi
+        else
+            echo -e "  ${RED}● Status:${NC} Not running"
+            echo -e "  ${BLUE}● Port:${NC}   $BACKEND_PORT (default: $DEFAULT_BACKEND_PORT)"
         fi
     fi
 

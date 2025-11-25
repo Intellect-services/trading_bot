@@ -4,9 +4,9 @@
     border: 1px solid rgba(255, 255, 255, 0.1);
     border-radius: 16px;
     padding: 1.5rem;
-    height: 500px;
     display: flex;
     flex-direction: column;
+    /* Removed fixed height - content expands naturally */
 }
 
 .bot-monitor.inactive {
@@ -105,26 +105,8 @@
 
 .logs-list {
     flex: 1;
-    overflow-y: auto;
-    padding-right: 0.5rem;
-}
-
-.logs-list::-webkit-scrollbar {
-    width: 6px;
-}
-
-.logs-list::-webkit-scrollbar-track {
-    background: rgba(255, 255, 255, 0.05);
-    border-radius: 3px;
-}
-
-.logs-list::-webkit-scrollbar-thumb {
-    background: rgba(102, 126, 234, 0.5);
-    border-radius: 3px;
-}
-
-.logs-list::-webkit-scrollbar-thumb:hover {
-    background: rgba(102, 126, 234, 0.7);
+    overflow: visible;
+    /* No scrolling - shows last 10 events only */
 }
 
 .log-entry {
