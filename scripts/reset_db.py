@@ -57,6 +57,10 @@ with app.app_context():
     from src.business.trading.models.trade import Trade  # noqa: F401
     from src.common.models.audit_log import AuditLog  # noqa: F401
     from src.common.models.user_settings import UserSettings  # noqa: F401
+    from src.models.email_campaign import EmailCampaign  # noqa: F401
+    from src.models.email_event import EmailEvent  # noqa: F401
+    from src.models.email_preference import EmailPreference  # noqa: F401
+    from src.models.email_send_log import EmailSendLog  # noqa: F401
     from src.models.email_token import EmailToken  # noqa: F401
     from src.models.market_data_bar import MarketDataBar  # noqa: F401
     from src.models.user import User  # noqa: F401
@@ -101,8 +105,18 @@ with app.app_context():
 
         # Recreate all tables using migrations
         print("\n  📈 Creating all tables using migrations...")
-        command.upgrade(alembic_cfg, "head")
-        print("  ✅ All tables created from migrations")
+        try:
+            # Try to upgrade to head first (single head case)
+            command.upgrade(alembic_cfg, "head")
+            print("  ✅ All tables created from migrations")
+        except Exception as upgrade_error:
+            # If multiple heads exist, upgrade to all heads
+            if "Multiple head revisions" in str(upgrade_error):
+                print("Multiple migration heads detected, upgrading all heads...")
+                command.upgrade(alembic_cfg, "heads")
+                print("  ✅ All tables created from migrations (all heads)")
+            else:
+                raise  # Re-raise if it's a different error
 
         # If Alembic fails, fallback to Flask-SQLAlchemy
     except Exception as e:

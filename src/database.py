@@ -124,6 +124,10 @@ def init_db(app: "Flask") -> None:
         from src.business.trading.models.trade import Trade  # noqa: F401
         from src.common.models.audit_log import AuditLog  # noqa: F401
         from src.common.models.user_settings import UserSettings  # noqa: F401
+        from src.models.email_campaign import EmailCampaign  # noqa: F401
+        from src.models.email_event import EmailEvent  # noqa: F401
+        from src.models.email_preference import EmailPreference  # noqa: F401
+        from src.models.email_send_log import EmailSendLog  # noqa: F401
         from src.models.email_token import EmailToken  # noqa: F401
         from src.models.market_data_bar import MarketDataBar  # noqa: F401
         from src.models.user import User
@@ -171,19 +175,28 @@ def init_db(app: "Flask") -> None:
             else:
                 # Database has migrations - run them to ensure schema is up-to-date
                 try:
+                    # Try to upgrade to head first (single head case)
                     command.upgrade(alembic_cfg, "head")
                 except Exception as e:
-                    # If migration fails, create all tables as fallback
-                    import logging
+                    # If multiple heads exist, upgrade to all heads
+                    if "Multiple head revisions" in str(e):
+                        import logging
 
-                    logger = logging.getLogger(__name__)
-                    logger.warning(f"Migration failed: {e}. Creating all tables as fallback.")
-                    # Create Flask-SQLAlchemy tables
-                    db.create_all()
-                    # Create BaseModel tables
-                    from src.infrastructure.base_model import Base
+                        logger = logging.getLogger(__name__)
+                        logger.info("Multiple migration heads detected, upgrading all heads...")
+                        command.upgrade(alembic_cfg, "heads")
+                    else:
+                        # If migration fails for other reasons, create all tables as fallback
+                        import logging
 
-                    Base.metadata.create_all(bind=db.engine, checkfirst=True)
+                        logger = logging.getLogger(__name__)
+                        logger.warning(f"Migration failed: {e}. Creating all tables as fallback.")
+                        # Create Flask-SQLAlchemy tables
+                        db.create_all()
+                        # Create BaseModel tables
+                        from src.infrastructure.base_model import Base
+
+                        Base.metadata.create_all(bind=db.engine, checkfirst=True)
 
         except Exception as e:
             # Fallback to creating all tables if Alembic is not available
@@ -206,7 +219,16 @@ def init_db(app: "Flask") -> None:
         existing_tables = set(inspector.get_table_names())
 
         # Required Flask-SQLAlchemy tables
-        required_flask_tables = {"users", "user_credentials", "email_tokens", "market_data_bars"}
+        required_flask_tables = {
+            "users",
+            "user_credentials",
+            "email_tokens",
+            "market_data_bars",
+            "email_campaigns",
+            "email_preferences",
+            "email_send_logs",
+            "email_events",
+        }
         missing_flask = required_flask_tables - existing_tables
 
         # Required BaseModel tables
