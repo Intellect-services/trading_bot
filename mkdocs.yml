@@ -49,28 +49,28 @@ markdown_extensions:
 nav:
   - Home: index.md
   - Getting Started:
-    - Installation: getting-started/installation.md
-    - Configuration: getting-started/configuration.md
-    - Quick Start: getting-started/quick-start.md
+      - Installation: getting-started/installation.md
+      - Configuration: getting-started/configuration.md
+      - Quick Start: getting-started/quick-start.md
   - User Guide:
-    - Authentication: user-guide/authentication.md
-    - Trading Setup: user-guide/trading-setup.md
-    - Bot Control: user-guide/bot-control.md
-    - Account Management: user-guide/account-management.md
+      - Authentication: user-guide/authentication.md
+      - Trading Setup: user-guide/trading-setup.md
+      - Bot Control: user-guide/bot-control.md
+      - Account Management: user-guide/account-management.md
   - API Reference:
-    - Overview: api-reference/overview.md
-    - Endpoints: api-reference/endpoints.md
-    - Models: api-reference/models.md
-    - Authentication: api-reference/authentication.md
+      - Overview: api-reference/overview.md
+      - Endpoints: api-reference/endpoints.md
+      - Models: api-reference/models.md
+      - Authentication: api-reference/authentication.md
   - Development:
-    - Setup: development/setup.md
-    - Testing: development/testing.md
-    - Contributing: development/contributing.md
-    - Architecture: development/architecture.md
+      - Setup: development/setup.md
+      - Testing: development/testing.md
+      - Contributing: development/contributing.md
+      - Architecture: development/architecture.md
   - Deployment:
-    - Local: deployment/local.md
-    - Staging: deployment/staging.md
-    - Production: deployment/production.md
+      - Local: deployment/local.md
+      - Staging: deployment/staging.md
+      - Production: deployment/production.md
 
 plugins:
   - search
