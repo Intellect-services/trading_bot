@@ -189,10 +189,9 @@ class AIStrategy(Strategy):
             }
 
             # Risk checks
-            if self.config.enable_risk_checks:
-                if not self._validate_signal(signal):
-                    self.logger.warning("Signal failed risk validation")
-                    return self._try_fallback(bars)
+            if self.config.enable_risk_checks and not self._validate_signal(signal):
+                self.logger.warning("Signal failed risk validation")
+                return self._try_fallback(bars)
 
             # Record signal
             self.signal_history.append(signal.copy())
@@ -211,7 +210,7 @@ class AIStrategy(Strategy):
 
         return signals
 
-    def _calculate_position_size(self, confidence: float, price: float) -> float:
+    def _calculate_position_size(self, confidence: float, _price: float) -> float:
         """Calculate position size based on confidence and price.
 
         Args:
@@ -257,11 +256,7 @@ class AIStrategy(Strategy):
 
         # Check confidence
         confidence = signal.get("confidence", 0)
-        if confidence < self.config.min_confidence:
-            return False
-
-        # Additional validations can be added here
-        return True
+        return confidence >= self.config.min_confidence
 
     def _exceeded_daily_limit(self, date: str) -> bool:
         """Check if daily trade limit is exceeded.
@@ -322,7 +317,7 @@ class AIStrategy(Strategy):
             return 0.0
         return risk_amount / price
 
-    def should_open_position(self, price: float) -> bool:
+    def should_open_position(self, _price: float) -> bool:
         """Check if position should be opened (not used in AI strategy).
 
         Args:
@@ -333,7 +328,7 @@ class AIStrategy(Strategy):
         """
         return False
 
-    def should_close_position(self, price: float) -> bool:
+    def should_close_position(self, _price: float) -> bool:
         """Check if position should be closed (not used in AI strategy).
 
         Args:

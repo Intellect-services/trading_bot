@@ -1,5 +1,14 @@
 #!/usr/bin/env python3
-"""Database migration script to add new columns to users table and create new tables."""
+"""DEPRECATED: Database migration script to add new columns to users table and create new tables.
+
+⚠️  This script is deprecated. Use Alembic migrations instead:
+    python scripts/migrate.py upgrade head
+
+This script was SQLite-specific and has been replaced by Alembic migrations
+which support both SQLite and PostgreSQL. See:
+- docs/database/MIGRATION_GUIDE.md
+- scripts/migrate.py
+"""
 
 import os
 import sqlite3

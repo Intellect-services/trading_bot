@@ -5,9 +5,12 @@ from __future__ import annotations
 import json
 import logging
 import threading
-from collections.abc import Callable, Iterable
+from typing import TYPE_CHECKING, ClassVar
 
 import websocket
+
+if TYPE_CHECKING:
+    from collections.abc import Callable, Iterable
 
 logger = logging.getLogger(__name__)
 
@@ -15,7 +18,7 @@ logger = logging.getLogger(__name__)
 class AlpacaWebSocket:
     """Manage Alpaca streaming connections for market data."""
 
-    MARKET_STREAMS = {
+    MARKET_STREAMS: ClassVar[dict[str, str]] = {
         "paper": "wss://stream.data.alpaca.markets/v2/iex",
         "live": "wss://stream.data.alpaca.markets/v2/sip",
     }

@@ -38,7 +38,7 @@ def _sample_prices() -> pd.DataFrame:
 def test_sma_matches_manual_average() -> None:
     df = _sample_prices()
     series = sma(df["close"], window=3)
-    assert series.iloc[4] == pytest.approx((df["close"].iloc[2:5].mean()))
+    assert series.iloc[4] == pytest.approx(df["close"].iloc[2:5].mean())
 
 
 def test_ema_weights_recent_prices_more() -> None:

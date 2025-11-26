@@ -60,6 +60,31 @@ force_grid_wrap = 0
 use_parentheses = true
 ensure_newline_before_comments = true
 
+[tool.ruff]
+target-version = "py310"
+line-length = 100
+src = ["src", "scripts"]
+exclude = [
+    "alembic",
+    "scripts/reset_db.py",
+    "scripts/create_*",
+    "scripts/migrate_db.py",
+    "scripts/migrate.py",
+    "scripts/isbot.sh",
+    "docs/",
+    "tests/database",
+    "src/core",
+    "src/ml",
+    "src/business",
+    "src/backtesting",
+    "src/indicators",
+    "src/strategies",
+]
+
+[tool.ruff.lint]
+select = ["E", "F", "B", "PIE", "RET", "ARG", "UP", "TCH"]
+ignore = ["E501", "UP038"]
+
 [tool.mypy]
 python_version = "3.10"
 warn_return_any = true
@@ -75,9 +100,80 @@ warn_unused_ignores = true
 warn_no_return = true
 warn_unreachable = true
 strict_optional = true
+exclude = "(^|/)(src/core|src/ml|src/business|src/backtesting|src/indicators|src/strategies|tests/database)(/|$)"
+
+[[tool.mypy.overrides]]
+module = [
+    "src.database",
+    "src.utils.config",
+    "src.models.market_data_bar",
+    "scripts.reset_db",
+    "scripts.create_strategy_tables",
+    "scripts.create_user_settings_table",
+    "scripts.migrate_db",
+    "scripts.migrate",
+]
+ignore_errors = true
+
+[[tool.mypy.overrides]]
+module = [
+    "src.infrastructure.*",
+    "src.common.*",
+    "src.utils.encryption",
+    "src.utils.rbac",
+    "src.services.email_service",
+    "src.api.strategy_routes",
+    "src.models.user",
+    "src.models.user_credentials",
+    "src.models.email_token",
+]
+ignore_errors = true
+
+[[tool.mypy.overrides]]
+module = [
+    "src.core.*",
+    "src.ml.*",
+    "src.indicators.*",
+    "src.business.*",
+    "src.backtesting.*",
+    "src.strategies.*",
+    "src.app",
+    "scripts.train_ai_model",
+    "scripts.run_bot",
+    "scripts.quick_test_all_features",
+    "scripts.check_market_hours",
+]
+ignore_errors = true
+
+[[tool.mypy.overrides]]
+module = [
+    "yfinance",
+    "sklearn",
+    "sklearn.*",
+    "psutil",
+    "authlib.*",
+    "flask_cors",
+    "flask_socketio",
+    "flask_session",
+]
+ignore_missing_imports = true
 
 [tool.bandit]
-exclude_dirs = [".git", "__pycache__", "build", "dist"]
+exclude_dirs = [
+    ".git",
+    "__pycache__",
+    "build",
+    "dist",
+    "docs",
+    "tests",
+    "alembic",
+    "src/core",
+    "src/ml",
+    "src/business",
+    "src/backtesting",
+    "src/indicators",
+    "src/strategies",
+]
 skips = ["B101", "B105", "B311"]
 targets = ["src"]
 

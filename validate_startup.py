@@ -27,9 +27,11 @@ def check_database():
             session.execute(text("SELECT 1"))
             print("✅ Database connection successful")
 
-            # Check tables exist
-            result = session.execute(text("SELECT name FROM sqlite_master WHERE type='table'"))
-            tables = [row[0] for row in result]
+            # Check tables exist (database-agnostic)
+            from sqlalchemy import inspect
+
+            inspector = inspect(db_config.engine)
+            tables = inspector.get_table_names()
 
             expected_tables = [
                 "users",

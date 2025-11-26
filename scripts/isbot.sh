@@ -669,17 +669,9 @@ case "${1:-}" in
             source venv310/bin/activate
         fi
 
-        # Delete SQLite database files
-        if [ -f "trading_bot.db" ]; then
-            rm -f "trading_bot.db"
-            echo -e "${GREEN}Deleted trading_bot.db${NC}"
-        fi
-        if [ -f "src/trading_bot.db" ]; then
-            rm -f "src/trading_bot.db"
-            echo -e "${GREEN}Deleted src/trading_bot.db${NC}"
-        fi
-
-        # Run reset script
+        # Run reset script (it handles everything through migrations)
+        # Note: reset_db.py will drop all tables and recreate via migrations
+        # SQLite files will be handled automatically
         python scripts/reset_db.py
 
         echo ""

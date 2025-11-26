@@ -461,8 +461,8 @@ class StrategyManager:
                         num_std=params.get("num_std", 2.0),
                     )
                 )
-            if strategy_type == "ai" or strategy_type == "ml":
-                return self._create_ai_strategy_instance(config, params)
+            if strategy_type in {"ai", "ml"}:
+                return self._create_ai_strategy_instance(params)
             self.logger.warning(f"Unknown strategy type: {strategy_type}")
             return None
 
@@ -470,11 +470,10 @@ class StrategyManager:
             self.logger.error(f"Error creating strategy instance: {e}")
             return None
 
-    def _create_ai_strategy_instance(self, config: Strategy, params: dict[str, Any]) -> Any | None:
+    def _create_ai_strategy_instance(self, params: dict[str, Any]) -> Any | None:
         """Create AI strategy instance from configuration.
 
         Args:
-            config: Strategy configuration
             params: Strategy parameters dictionary
 
         Returns:

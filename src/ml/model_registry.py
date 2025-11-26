@@ -6,8 +6,6 @@ from datetime import datetime
 from pathlib import Path
 from typing import Any
 
-import pandas as pd
-
 logger = logging.getLogger(__name__)
 
 
@@ -30,7 +28,7 @@ class ModelRegistry:
         """Load registry from disk."""
         if self.registry_path.exists():
             try:
-                with open(self.registry_path, "r") as f:
+                with open(self.registry_path) as f:
                     self._registry = json.load(f)
                 self.logger.info(f"Loaded registry with {len(self._registry)} models")
             except Exception as e:
@@ -323,7 +321,7 @@ class ModelMonitor:
 
         # Calculate accuracy (for classification)
         if all(isinstance(p, (int, float)) and p in [-1, 0, 1] for p in predictions):
-            correct = sum(1 for p, o in zip(predictions, outcomes) if p == o)
+            correct = sum(1 for p, o in zip(predictions, outcomes, strict=False) if p == o)
             accuracy = correct / len(predictions) if predictions else 0.0
 
             # Precision/recall for buy signals

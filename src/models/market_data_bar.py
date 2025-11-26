@@ -7,10 +7,10 @@ from datetime import datetime
 from sqlalchemy import UniqueConstraint
 from sqlalchemy.orm import Mapped, mapped_column
 
-from src.database import db
+from src.database import SQLAlchemyModel
 
 
-class MarketDataBar(db.Model):
+class MarketDataBar(SQLAlchemyModel):
     """Persisted market data bar for building historical datasets."""
 
     __tablename__ = "market_data_bars"

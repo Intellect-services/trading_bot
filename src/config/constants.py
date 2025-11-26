@@ -43,6 +43,29 @@ SESSION_LIFETIME_SECONDS = int(os.getenv("SESSION_LIFETIME_SECONDS", "3600"))  #
 # Email Configuration
 EMAIL_FROM = os.getenv("EMAIL_FROM", "noreply@intellectscout.com")
 
+# Brand & Marketing Configuration
+BRAND_NAME = os.getenv("BRAND_NAME", "IntellectScout")
+BRAND_PRIMARY_COLOR = os.getenv("BRAND_PRIMARY_COLOR", "#4338CA")
+BRAND_SECONDARY_COLOR = os.getenv("BRAND_SECONDARY_COLOR", "#14B8A6")
+BRAND_LOGO_URL = os.getenv("BRAND_LOGO_URL", f"{FRONTEND_URL}/assets/email-logo.svg")
+BRAND_SUPPORT_EMAIL = os.getenv("BRAND_SUPPORT_EMAIL", "support@intellectscout.com")
+BRAND_FOOTER_ADDRESS = os.getenv(
+    "BRAND_FOOTER_ADDRESS", "500 Market Street, San Francisco, CA 94105"
+)
+MARKETING_EMAIL_PERSONA_NAME = os.getenv("MARKETING_EMAIL_PERSONA_NAME", "Andrew")
+MARKETING_EMAIL_PERSONA_TITLE = os.getenv("MARKETING_EMAIL_PERSONA_TITLE", "Customer Success Lead")
+MARKETING_EMAIL_PERSONA_EMAIL = os.getenv(
+    "MARKETING_EMAIL_PERSONA_EMAIL", "andrew@intellectscout.com"
+)
+MARKETING_EMAIL_REPLY_TO = os.getenv("MARKETING_EMAIL_REPLY_TO", BRAND_SUPPORT_EMAIL)
+MARKETING_EMAIL_FROM_FORMAT = os.getenv(
+    "MARKETING_EMAIL_FROM_FORMAT", "{persona_name} from {brand_name} <{persona_email}>"
+)
+MARKETING_EMAIL_UNSUBSCRIBE_URL = os.getenv(
+    "MARKETING_EMAIL_UNSUBSCRIBE_URL", f"{APP_URL}/api/email/unsubscribe"
+)
+RESEND_WEBHOOK_SECRET = os.getenv("RESEND_WEBHOOK_SECRET", "")
+
 # Alpaca API URLs
 ALPACA_PAPER_API_URL = "https://paper-api.alpaca.markets"
 ALPACA_LIVE_API_URL = "https://api.alpaca.markets"

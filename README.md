@@ -84,6 +84,38 @@ ALPACA_API_KEY=your_api_key
 ALPACA_SECRET_KEY=your_secret_key
 ```
 
+### Email Marketing Environment Variables
+
+Add the following variables to `.env` (or your hosting provider):
+
+```
+# Resend transactional/marketing email configuration
+RESEND_API_KEY=your_resend_api_key
+EMAIL_FROM=noreply@intellectscout.com
+
+# Branding/Persona (override defaults only if needed)
+BRAND_NAME=IntellectScout
+BRAND_PRIMARY_COLOR=#4338CA
+BRAND_SECONDARY_COLOR=#14B8A6
+BRAND_SUPPORT_EMAIL=support@intellectscout.com
+MARKETING_EMAIL_PERSONA_NAME=Andrew
+MARKETING_EMAIL_PERSONA_TITLE=Customer Success Lead
+MARKETING_EMAIL_PERSONA_EMAIL=andrew@intellectscout.com
+
+# Compliance + automation
+RESEND_WEBHOOK_SECRET=shared-secret-from-resend
+MARKETING_SCHEDULER_INTERVAL_SECONDS=300
+MARKETING_EMAIL_UNSUBSCRIBE_URL=https://your-domain.com/api/email/unsubscribe
+```
+
+### Marketing Email Deployment Checklist
+
+1. **Apply migrations** – run `alembic upgrade head` so `email_campaigns`, `email_preferences`, `email_send_logs`, and `email_events` exist.
+2. **Seed defaults** – execute `python scripts/seed_marketing_emails.py` (after activating the venv) to insert campaign rows and backfill preferences for existing users.
+3. **Provision scheduler** – run the `scheduler: python scripts/run_marketing_scheduler.py` process (Procfile + docker-compose + Render definitions are included) with the same environment variables as the web app.
+4. **Configure webhook** – in the Resend dashboard, point webhooks to `https://your-domain.com/api/email/webhooks/resend` and set `RESEND_WEBHOOK_SECRET` to the signing token they provide.
+5. **Build frontend** – `cd src/frontend && npm install && npm run build` before packaging/deploying so the Settings preference card and `/unsubscribe` landing screen are available.
+
 ## Usage
 
 ### Running the Bot

@@ -19,6 +19,7 @@ aiohttp>=3.12.14
 regex>=2025.2.10
 resend>=2.0.0
 psycopg2-binary>=2.9.9
+alembic>=1.13.0
 
 # Production Deployment & Monitoring
 gunicorn>=22.0.0

@@ -3,11 +3,14 @@
 import logging
 import threading
 import time
+from contextlib import suppress
+
+from flask import Flask
 
 logger = logging.getLogger(__name__)
 
 
-def auto_restart_bots(app: "Flask") -> None:
+def auto_restart_bots(app: Flask) -> None:
     """Auto-restart bots for users with auto-start enabled.
 
     This function should be called on Flask application startup.
@@ -75,10 +78,8 @@ def auto_restart_bots(app: "Flask") -> None:
                             f"Error auto-restarting bot for user {user_id}: {e}", exc_info=True
                         )
                         # Mark as not running on error
-                        try:
+                        with suppress(Exception):
                             BotStateManager.set_bot_is_running(user_id, False)
-                        except Exception:
-                            pass
 
                 logger.info("Auto-restart complete")
 

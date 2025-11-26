@@ -63,7 +63,7 @@ class SklearnClassificationModel(ClassificationModel):
         X: pd.DataFrame | np.ndarray,
         y: pd.Series | np.ndarray,
         test_size: float = 0.2,
-        **kwargs: Any,
+        **_kwargs: Any,
     ) -> dict[str, Any]:
         """Train the classification model.
 
@@ -216,7 +216,7 @@ class SklearnRegressionModel(RegressionModel):
         X: pd.DataFrame | np.ndarray,
         y: pd.Series | np.ndarray,
         test_size: float = 0.2,
-        **kwargs: Any,
+        **_kwargs: Any,
     ) -> dict[str, Any]:
         """Train the regression model.
 

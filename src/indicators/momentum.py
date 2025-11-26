@@ -71,8 +71,7 @@ def commodity_channel_index(
     mean_deviation = typical_price.rolling(window=window, min_periods=window).apply(
         lambda x: (abs(x - x.mean())).mean(), raw=True
     )
-    cci = (typical_price - sma_tp) / (0.015 * mean_deviation)
-    return cci
+    return (typical_price - sma_tp) / (0.015 * mean_deviation)
 
 
 def rate_of_change(series: pd.Series, window: int = 10) -> pd.Series:

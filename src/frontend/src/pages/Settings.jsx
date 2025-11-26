@@ -1,7 +1,7 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import { motion } from 'framer-motion';
-import { botAPI } from '../services/api';
-import { Settings as SettingsIcon, Save, RefreshCw } from 'lucide-react';
+import { botAPI, emailAPI } from '../services/api';
+import { Settings as SettingsIcon, Save, RefreshCw, Mail, Shield } from 'lucide-react';
 
 const Settings = () => {
     const [settings, setSettings] = useState({
@@ -13,9 +13,14 @@ const Settings = () => {
     const [loading, setLoading] = useState(true);
     const [saving, setSaving] = useState(false);
     const [message, setMessage] = useState(null);
+    const [preferences, setPreferences] = useState(null);
+    const [prefLoading, setPrefLoading] = useState(true);
+    const [prefSaving, setPrefSaving] = useState(false);
+    const [prefMessage, setPrefMessage] = useState(null);
 
     useEffect(() => {
         fetchSettings();
+        fetchPreferences();
     }, []);
 
     const fetchSettings = async () => {
@@ -52,6 +57,61 @@ const Settings = () => {
             setSaving(false);
         }
     };
+
+    const fetchPreferences = async () => {
+        setPrefLoading(true);
+        try {
+            const response = await emailAPI.getPreferences();
+            if (response.data.status === 'success') {
+                setPreferences(response.data.data);
+            }
+        } catch (error) {
+            console.error('Failed to load email preferences', error);
+            setPrefMessage({ type: 'error', text: 'Unable to load email preferences' });
+        } finally {
+            setPrefLoading(false);
+        }
+    };
+
+    const handlePreferenceToggle = async () => {
+        if (!preferences) {
+            return;
+        }
+        setPrefSaving(true);
+        setPrefMessage(null);
+        try {
+            const response = await emailAPI.updatePreferences({
+                marketing_opt_in: !preferences.marketing_opt_in
+            });
+            if (response.data.status === 'success') {
+                setPreferences(response.data.data);
+                setPrefMessage({
+                    type: 'success',
+                    text: response.data.data.marketing_opt_in
+                        ? 'Marketing emails enabled'
+                        : 'Marketing emails disabled'
+                });
+            } else {
+                setPrefMessage({
+                    type: 'error',
+                    text: response.data.message || 'Unable to update preference'
+                });
+            }
+        } catch (error) {
+            console.error('Failed to update preference', error);
+            setPrefMessage({ type: 'error', text: 'Unable to update preference' });
+        } finally {
+            setPrefSaving(false);
+        }
+    };
+
+    const lastSendLabel = useMemo(() => {
+        if (!preferences?.last_sent_at) {
+            return 'No marketing emails sent yet';
+        }
+        const formatted = new Date(preferences.last_sent_at).toLocaleString();
+        return `Last campaign received on ${formatted}`;
+    }, [preferences]);
 
     const handleChange = (e) => {
         const { name, value } = e.target;
@@ -218,6 +278,86 @@ const Settings = () => {
                             </label>
                         </div>
                     </div>
+                </div>
+
+                <div className="glass-card" style={{ padding: '2rem', marginBottom: '2rem' }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', marginBottom: '1rem' }}>
+                        <div style={{ width: 40, height: 40, borderRadius: '50%', background: 'rgba(99, 102, 241, 0.15)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                            <Mail size={20} color="var(--accent-primary)" />
+                        </div>
+                        <div>
+                            <h2 style={{ fontSize: '1.25rem', margin: 0 }}>Email Preferences</h2>
+                            <p style={{ color: 'var(--text-muted)', fontSize: '0.9rem' }}>Control branded marketing communications.</p>
+                        </div>
+                    </div>
+
+                    {prefMessage && (
+                        <div style={{
+                            padding: '0.75rem 1rem',
+                            borderRadius: 'var(--radius-md)',
+                            marginBottom: '1.5rem',
+                            background: prefMessage.type === 'success' ? 'rgba(16, 185, 129, 0.1)' : 'rgba(239, 68, 68, 0.1)',
+                            color: prefMessage.type === 'success' ? 'var(--success)' : 'var(--danger)',
+                            border: `1px solid ${prefMessage.type === 'success' ? 'rgba(16, 185, 129, 0.2)' : 'rgba(239, 68, 68, 0.2)'}`
+                        }}>
+                            {prefMessage.text}
+                        </div>
+                    )}
+
+                    {prefLoading ? (
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', color: 'var(--text-muted)' }}>
+                            <div style={{ width: '28px', height: '28px', border: '3px solid rgba(99, 102, 241, 0.2)', borderTopColor: 'var(--accent-primary)', borderRadius: '50%', animation: 'spin 1s linear infinite' }} />
+                            Loading email preferences...
+                            <style>{`
+                                @keyframes spin {
+                                    to { transform: rotate(360deg); }
+                                }
+                            `}</style>
+                        </div>
+                    ) : (
+                        <>
+                            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.25rem' }}>
+                                <div>
+                                    <p style={{ margin: 0, fontWeight: 600 }}>Branded marketing updates</p>
+                                    <p style={{ margin: 0, color: 'var(--text-muted)', fontSize: '0.9rem' }}>
+                                        Receive onboarding guides, product drops, and market briefings.
+                                    </p>
+                                </div>
+                                <button
+                                    type="button"
+                                    onClick={handlePreferenceToggle}
+                                    className={preferences?.marketing_opt_in ? 'btn-primary' : 'btn-glass'}
+                                    disabled={prefSaving}
+                                    style={{ minWidth: '180px' }}
+                                >
+                                    {prefSaving
+                                        ? 'Updating...'
+                                        : preferences?.marketing_opt_in
+                                            ? 'Disable emails'
+                                            : 'Enable emails'}
+                                </button>
+                            </div>
+                            <div style={{
+                                display: 'flex',
+                                alignItems: 'center',
+                                gap: '0.6rem',
+                                padding: '0.9rem 1rem',
+                                borderRadius: 'var(--radius-md)',
+                                background: 'rgba(255,255,255,0.03)',
+                                border: '1px solid var(--glass-border)'
+                            }}>
+                                <Shield size={18} color="var(--text-muted)" />
+                                <div>
+                                    <p style={{ margin: 0, fontSize: '0.9rem', color: 'var(--text-muted)' }}>
+                                        {lastSendLabel}
+                                    </p>
+                                    <p style={{ margin: 0, fontSize: '0.8rem', color: 'var(--text-muted)' }}>
+                                        Use the unsubscribe links inside every campaign to opt out instantly.
+                                    </p>
+                                </div>
+                            </div>
+                        </>
+                    )}
                 </div>
 
                 <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '1rem' }}>

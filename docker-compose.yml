@@ -1,4 +1,4 @@
-version: '3.8'
+version: "3.8"
 
 services:
   # PostgreSQL Database
@@ -36,6 +36,10 @@ services:
       - SMTP_USER=${SMTP_USER:-}
       - SMTP_PASSWORD=${SMTP_PASSWORD:-}
       - ALERT_EMAIL=${ALERT_EMAIL:-}
+      - RESEND_API_KEY=${RESEND_API_KEY:-}
+      - EMAIL_FROM=${EMAIL_FROM:-noreply@example.com}
+      - RESEND_WEBHOOK_SECRET=${RESEND_WEBHOOK_SECRET:-}
+      - MARKETING_SCHEDULER_INTERVAL_SECONDS=${MARKETING_SCHEDULER_INTERVAL_SECONDS:-300}
     ports:
       - "5000:5000"
     depends_on:
@@ -48,18 +52,22 @@ services:
       - intellecttrader_network
     restart: unless-stopped
 
-  # Frontend (Optional - if serving from Docker)
-  # frontend:
-  #   build:
-  #     context: ./src/frontend
-  #     dockerfile: Dockerfile
-  #   container_name: intellecttrader_frontend
-  #   ports:
-  #     - "5173:5173"
-  #   depends_on:
-  #     - app
-  #   networks:
-  #     - intellecttrader_network
+  marketing_scheduler:
+    build: .
+    container_name: intellecttrader_scheduler
+    command: python scripts/run_marketing_scheduler.py
+    environment:
+      - DATABASE_URL=postgresql://trader:${DB_PASSWORD:-changeme}@db:5432/intellecttrader
+      - RESEND_API_KEY=${RESEND_API_KEY:-}
+      - RESEND_WEBHOOK_SECRET=${RESEND_WEBHOOK_SECRET:-}
+      - MARKETING_SCHEDULER_INTERVAL_SECONDS=${MARKETING_SCHEDULER_INTERVAL_SECONDS:-300}
+      - SECRET_KEY=${SECRET_KEY:-your-secret-key-change-in-production}
+    depends_on:
+      db:
+        condition: service_healthy
+    networks:
+      - intellecttrader_network
+    restart: unless-stopped
 
 volumes:
   postgres_data:

@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from datetime import datetime
-from typing import Any
+from typing import Any, ClassVar
 
 import pandas as pd
 import yfinance as yf
@@ -12,7 +12,7 @@ import yfinance as yf
 class YahooFinanceProvider:
     """Fetch historical market data from Yahoo Finance."""
 
-    INTERVAL_MAP: dict[str, str] = {
+    INTERVAL_MAP: ClassVar[dict[str, str]] = {
         "1Min": "1m",
         "5Min": "5m",
         "15Min": "15m",

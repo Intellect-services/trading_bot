@@ -3,12 +3,15 @@
 from __future__ import annotations
 
 from datetime import datetime
-from typing import Any, Callable
+from typing import TYPE_CHECKING, Any
 
 import pytest
 
 from src.core.data_cache import DataCache
 from src.core.market_data_stream import MarketDataStreamer
+
+if TYPE_CHECKING:
+    from collections.abc import Callable
 
 
 class DummyWebSocket:

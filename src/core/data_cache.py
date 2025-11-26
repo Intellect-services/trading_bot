@@ -2,13 +2,16 @@
 
 from __future__ import annotations
 
-from collections.abc import Iterable, Sequence
 from datetime import datetime
+from typing import TYPE_CHECKING
 
 from sqlalchemy import asc, desc, select
 
 from src.database import db
 from src.models.market_data_bar import MarketDataBar
+
+if TYPE_CHECKING:
+    from collections.abc import Iterable, Sequence
 
 
 class DataCache:

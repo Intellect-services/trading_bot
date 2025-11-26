@@ -53,7 +53,6 @@ class MLModel(ABC):
         Returns:
             Dictionary with training metrics
         """
-        pass
 
     @abstractmethod
     def predict(self, X: pd.DataFrame | np.ndarray) -> np.ndarray:
@@ -65,7 +64,6 @@ class MLModel(ABC):
         Returns:
             Predictions array
         """
-        pass
 
     @abstractmethod
     def predict_proba(self, X: pd.DataFrame | np.ndarray) -> np.ndarray:
@@ -77,7 +75,6 @@ class MLModel(ABC):
         Returns:
             Probability array
         """
-        pass
 
     def save(self, filepath: str | Path) -> None:
         """Save the model to disk.
@@ -124,12 +121,10 @@ class MLModel(ABC):
     @abstractmethod
     def _get_model_object(self) -> Any:
         """Get the underlying model object for serialization."""
-        pass
 
     @abstractmethod
     def _set_model_object(self, model: Any) -> None:
         """Set the underlying model object from deserialization."""
-        pass
 
 
 class ClassificationModel(MLModel):
@@ -152,7 +147,6 @@ class ClassificationModel(MLModel):
     @abstractmethod
     def _predict_proba_impl(self, X: pd.DataFrame | np.ndarray) -> np.ndarray:
         """Internal implementation of predict_proba."""
-        pass
 
 
 class RegressionModel(MLModel):
@@ -247,7 +241,7 @@ class EnsembleModel(MLModel):
 
         # Weighted average
         weighted_pred = np.zeros_like(predictions[0])
-        for pred, weight in zip(predictions, self.weights):
+        for pred, weight in zip(predictions, self.weights, strict=False):
             weighted_pred += pred * weight
 
         return weighted_pred
@@ -278,7 +272,7 @@ class EnsembleModel(MLModel):
 
         # Weighted average
         weighted_proba = np.zeros_like(probabilities[0])
-        for proba, weight in zip(probabilities, self.weights):
+        for proba, weight in zip(probabilities, self.weights, strict=False):
             weighted_proba += proba * weight
 
         return weighted_proba
@@ -289,5 +283,5 @@ class EnsembleModel(MLModel):
 
     def _set_model_object(self, models: list[Any]) -> None:
         """Set all model objects."""
-        for model, model_obj in zip(self.models, models):
+        for model, model_obj in zip(self.models, models, strict=False):
             model._set_model_object(model_obj)

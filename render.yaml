@@ -3,7 +3,7 @@ services:
     name: trading-bot
     env: python
     buildCommand: pip install -r requirements.txt
-    startCommand: gunicorn src.app:app
+    startCommand: gunicorn --bind 0.0.0.0:$PORT --workers 4 --timeout 120 --worker-class eventlet --worker-connections 1000 src.app:app
     envVars:
       - key: PYTHON_VERSION
         value: 3.9.0
@@ -11,3 +11,25 @@ services:
         sync: false
       - key: ALPACA_SECRET_KEY
         sync: false
+      - key: RESEND_API_KEY
+        sync: false
+      - key: EMAIL_FROM
+        value: noreply@intellectscout.com
+      - key: RESEND_WEBHOOK_SECRET
+        sync: false
+      - key: MARKETING_SCHEDULER_INTERVAL_SECONDS
+        value: "300"
+  - type: worker
+    name: marketing-scheduler
+    env: python
+    buildCommand: pip install -r requirements.txt
+    startCommand: python scripts/run_marketing_scheduler.py
+    envVars:
+      - key: PYTHON_VERSION
+        value: 3.9.0
+      - key: RESEND_API_KEY
+        sync: false
+      - key: RESEND_WEBHOOK_SECRET
+        sync: false
+      - key: MARKETING_SCHEDULER_INTERVAL_SECONDS
+        value: "300"

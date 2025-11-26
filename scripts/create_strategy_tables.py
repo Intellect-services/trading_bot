@@ -1,5 +1,13 @@
 #!/usr/bin/env python3
-"""Create strategy tables manually using SQL to avoid foreign key metadata issues."""
+"""DEPRECATED: Create strategy tables manually using SQL to avoid foreign key metadata issues.
+
+⚠️  This script is deprecated. Use Alembic migrations instead:
+    python scripts/migrate.py upgrade head
+
+All tables are now managed through Alembic migrations. See:
+- docs/database/MIGRATION_GUIDE.md
+- scripts/migrate.py
+"""
 
 import sys
 from pathlib import Path

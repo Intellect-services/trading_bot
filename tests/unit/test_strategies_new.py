@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import pandas as pd
-import pytest
 
 from src.strategies import (
     BollingerBandsStrategy,
@@ -35,7 +34,7 @@ def test_rsi_strategy_generates_long_signal() -> None:
 
 
 def test_macd_strategy_detects_crossover() -> None:
-    values = [i for i in range(40)]
+    values = list(range(40))
     df = price_frame(values)
     strategy = MACDStrategy(MACDStrategyConfig(fast=3, slow=6, signal=2))
     signals = strategy.generate_signals(df)

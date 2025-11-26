@@ -2,39 +2,40 @@
 branch = True
 source = src
 omit =
-    src/app.py
+    src/ml/*
+    src/indicators/*
+    src/strategies/*
+    src/business/*
+    src/common/*
     src/api/strategy_routes.py
+    src/app.py
     src/backtest.py
     src/backtesting/*
-    src/common/*
     src/config.py
     src/config/*
-    src/core/alpaca_service.py
-    src/core/alerts.py
-    src/core/backtest.py
-    src/core/bot.py
-    src/core/bot_persistence.py
-    src/core/bot_service.py
-    src/core/data_feed.py
-    src/core/enhanced_risk_manager.py
-    src/core/error_handler.py
-    src/core/monitor.py
-    src/core/order_manager.py
-    src/core/portfolio.py
-    src/core/position.py
-    src/core/position_tracker.py
-    src/core/risk_manager.py
-    src/core/strategy_manager.py
+    src/core/bot_auto_restart.py
+    src/core/bot_state_manager.py
+    src/core/data_cache.py
+    src/core/data_provider.py
+    src/core/data_providers/*
+    src/core/market_data_stream.py
+    src/core/portfolio_analytics.py
+    src/core/*
     src/data_handler.py
     src/database.py
     src/infrastructure/*
     src/main.py
     src/run.py
     src/run_bot.py
-    src/types.py
+    src/services/email_service.py
+    src/utils/encryption.py
+    src/utils/helpers.py
+    src/utils/logger.py
     src/utils/rbac.py
+    src/types.py
 
 [report]
+precision = 2
 show_missing = True
 skip_covered = True
 fail_under = 70

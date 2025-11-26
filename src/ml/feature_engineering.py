@@ -5,8 +5,6 @@ news, sentiment, and fundamental data for ML model training.
 """
 
 import logging
-from datetime import datetime, timedelta
-from typing import Any
 
 import numpy as np
 import pandas as pd
@@ -75,9 +73,7 @@ class FeatureEngineer:
         features = self._add_rolling_statistics(features)
 
         # Remove NaN values from the start (due to rolling windows)
-        features = features.dropna()
-
-        return features
+        return features.dropna()
 
     def _add_technical_indicators(self, data: pd.DataFrame) -> pd.DataFrame:
         """Add technical indicators as features.
@@ -285,10 +281,9 @@ class FeatureEngineer:
             return features
 
         news_df = news_data.copy()
-        if not isinstance(news_df.index, pd.DatetimeIndex):
-            if "timestamp" in news_df.columns:
-                news_df["timestamp"] = pd.to_datetime(news_df["timestamp"])
-                news_df.set_index("timestamp", inplace=True)
+        if not isinstance(news_df.index, pd.DatetimeIndex) and "timestamp" in news_df.columns:
+            news_df["timestamp"] = pd.to_datetime(news_df["timestamp"])
+            news_df.set_index("timestamp", inplace=True)
 
         # Aggregate news by time period (daily)
         if "sentiment" in news_df.columns:
@@ -322,10 +317,12 @@ class FeatureEngineer:
             return features
 
         sentiment_df = sentiment_data.copy()
-        if not isinstance(sentiment_df.index, pd.DatetimeIndex):
-            if "timestamp" in sentiment_df.columns:
-                sentiment_df["timestamp"] = pd.to_datetime(sentiment_df["timestamp"])
-                sentiment_df.set_index("timestamp", inplace=True)
+        if (
+            not isinstance(sentiment_df.index, pd.DatetimeIndex)
+            and "timestamp" in sentiment_df.columns
+        ):
+            sentiment_df["timestamp"] = pd.to_datetime(sentiment_df["timestamp"])
+            sentiment_df.set_index("timestamp", inplace=True)
 
         if "score" in sentiment_df.columns:
             # Resample to match feature frequency
@@ -351,10 +348,9 @@ class FeatureEngineer:
             return features
 
         fund_df = fundamental_data.copy()
-        if not isinstance(fund_df.index, pd.DatetimeIndex):
-            if "timestamp" in fund_df.columns:
-                fund_df["timestamp"] = pd.to_datetime(fund_df["timestamp"])
-                fund_df.set_index("timestamp", inplace=True)
+        if not isinstance(fund_df.index, pd.DatetimeIndex) and "timestamp" in fund_df.columns:
+            fund_df["timestamp"] = pd.to_datetime(fund_df["timestamp"])
+            fund_df.set_index("timestamp", inplace=True)
 
         # Forward fill fundamental data (updated quarterly)
         fundamental_cols = ["pe", "pb", "debt_to_equity", "roe", "roa"]
@@ -379,8 +375,7 @@ class FeatureEngineer:
         gain = (delta.where(delta > 0, 0)).rolling(window=window).mean()
         loss = (-delta.where(delta < 0, 0)).rolling(window=window).mean()
         rs = gain / (loss + 1e-8)
-        rsi = 100 - (100 / (1 + rs))
-        return rsi
+        return 100 - (100 / (1 + rs))
 
     @staticmethod
     def _calculate_macd(
@@ -453,5 +448,4 @@ class FeatureEngineer:
         if "close" not in features.columns:
             raise ValueError("Features must contain 'close' column")
 
-        forward_returns = features["close"].shift(-forward_window) / features["close"] - 1
-        return forward_returns
+        return features["close"].shift(-forward_window) / features["close"] - 1

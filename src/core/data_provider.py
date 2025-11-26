@@ -3,11 +3,13 @@
 from __future__ import annotations
 
 from datetime import datetime, timedelta
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
-from src.core.alpaca_service import AlpacaService
 from src.core.data_cache import DataCache
 from src.core.data_providers import AlphaVantageProvider, YahooFinanceProvider
+
+if TYPE_CHECKING:
+    from src.core.alpaca_service import AlpacaService
 
 
 class DataProvider:

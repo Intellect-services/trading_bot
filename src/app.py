@@ -1,5 +1,7 @@
 """Flask application for the trading bot."""
 
+import hashlib
+import hmac
 import logging
 import os
 import secrets
@@ -33,6 +35,9 @@ FlaskResponse: TypeAlias = (
 from src.core.alpaca_service import AlpacaService
 from src.core.bot import TradingBot
 from src.core.portfolio_analytics import PortfolioAnalytics
+from src.models.email_event import EmailEvent
+from src.models.email_preference import EmailPreference
+from src.models.email_send_log import EmailSendLog, EmailSendStatus
 from src.models.email_token import TokenType
 from src.strategies.moving_average import MovingAverageCrossover
 from src.utils.config import Config
@@ -117,6 +122,7 @@ from src.config.constants import (
     GITHUB_OAUTH_URL,
     GOOGLE_OAUTH_URL,
     LINKEDIN_OAUTH_URL,
+    RESEND_WEBHOOK_SECRET,
     SESSION_LIFETIME_SECONDS,
 )
 
@@ -152,11 +158,27 @@ def get_frontend_url() -> str:
             parsed = urlparse(origin)
             if parsed.scheme and parsed.netloc:
                 return f"{parsed.scheme}://{parsed.netloc}"
-    except Exception:
-        pass
+    except Exception as exc:  # nosec B110 - best-effort parsing only
+        logger.debug("Failed to infer frontend URL from headers: %s", exc)
 
     # Fall back to constant
     return FRONTEND_URL
+
+
+def _verify_resend_signature(payload: bytes, signature: str) -> bool:
+    """Verify Resend webhook signature using shared secret."""
+    if not RESEND_WEBHOOK_SECRET:
+        return True
+    try:
+        computed = hmac.new(
+            RESEND_WEBHOOK_SECRET.encode("utf-8"),
+            payload,
+            hashlib.sha256,
+        ).hexdigest()
+        return hmac.compare_digest(computed, signature or "")
+    except Exception as exc:
+        logger.error("Failed to verify Resend signature: %s", exc)
+        return False
 
 
 app.config["PERMANENT_SESSION_LIFETIME"] = SESSION_LIFETIME_SECONDS
@@ -519,6 +541,9 @@ def register() -> FlaskResponse:
         db.session.add(new_user)
         db.session.flush()  # Get user ID
 
+        # Ensure default email preferences exist
+        EmailPreference.ensure_for_user(new_user.id)
+
         # Create email verification token
         verification_token = EmailToken.create_verification_token(new_user.id)
         db.session.add(verification_token)
@@ -673,6 +698,151 @@ def resend_verification() -> FlaskResponse:
         app.logger.error(f"Resend verification error: {e}")
         db.session.rollback()
         return jsonify({"status": "error", "message": str(e)}), 500
+
+
+@app.route("/api/email/preferences", methods=["GET"])
+@login_required
+def get_email_preferences() -> FlaskResponse:
+    """Return the authenticated user's email preferences."""
+    try:
+        from src.database import db
+
+        user_id = session.get("user_id")
+        if user_id is None:
+            return jsonify({"status": "error", "message": "Not authenticated"}), 401
+        preference = EmailPreference.ensure_for_user(int(user_id))
+        db.session.commit()
+        return jsonify({"status": "success", "data": preference.to_dict()})
+    except Exception as e:
+        logger.error("Failed to load email preferences: %s", e)
+        return jsonify({"status": "error", "message": "Unable to fetch preferences"}), 500
+
+
+@app.route("/api/email/preferences", methods=["PUT"])
+@login_required
+def update_email_preferences() -> FlaskResponse:
+    """Update marketing opt-in for the authenticated user."""
+    try:
+        from src.database import db
+
+        data = request.get_json() or {}
+        if "marketing_opt_in" not in data:
+            return jsonify({"status": "error", "message": "marketing_opt_in is required"}), 400
+
+        user_id = session.get("user_id")
+        if user_id is None:
+            return jsonify({"status": "error", "message": "Not authenticated"}), 401
+        preference = EmailPreference.ensure_for_user(int(user_id))
+
+        if bool(data["marketing_opt_in"]):
+            preference.resubscribe()
+        else:
+            preference.mark_unsubscribed("user_preferences")
+
+        db.session.commit()
+        return jsonify({"status": "success", "data": preference.to_dict()})
+    except Exception as e:
+        logger.error("Failed to update email preferences: %s", e)
+        return jsonify({"status": "error", "message": "Unable to update preferences"}), 500
+
+
+@app.route("/api/email/unsubscribe", methods=["GET"])
+def unsubscribe_via_token() -> FlaskResponse:
+    """One-click unsubscribe endpoint referenced from marketing emails."""
+    try:
+        from src.database import db
+
+        token = request.args.get("token")
+        if not token:
+            return jsonify({"status": "error", "message": "Token is required"}), 400
+
+        preference = EmailPreference.from_token(token)
+        if not preference:
+            return jsonify({"status": "error", "message": "Invalid unsubscribe token"}), 404
+
+        preference.mark_unsubscribed("one-click")
+        db.session.commit()
+        redirect_url = (
+            request.args.get("redirect")
+            or f"{get_frontend_url()}/unsubscribe?status=success&token={token}"
+        )
+        return redirect(redirect_url)
+    except Exception as e:
+        logger.error("Unsubscribe link failed: %s", e)
+        return jsonify({"status": "error", "message": "Unable to unsubscribe"}), 500
+
+
+@app.route("/api/email/resubscribe", methods=["POST"])
+def resubscribe_via_token() -> FlaskResponse:
+    """Allow recipients to opt back in using the unsubscribe token."""
+    try:
+        from src.database import db
+
+        data = request.get_json() or {}
+        token = data.get("token")
+        if not token:
+            return jsonify({"status": "error", "message": "Token is required"}), 400
+
+        preference = EmailPreference.from_token(token)
+        if not preference:
+            return jsonify({"status": "error", "message": "Invalid token"}), 404
+
+        preference.resubscribe()
+        db.session.commit()
+        return jsonify({"status": "success", "data": preference.to_dict()})
+    except Exception as e:
+        logger.error("Resubscribe failed: %s", e)
+        return jsonify({"status": "error", "message": "Unable to resubscribe"}), 500
+
+
+@app.route("/api/email/webhooks/resend", methods=["POST"])
+def resend_webhook() -> FlaskResponse:
+    """Handle webhook callbacks from Resend for delivery/open/bounce events."""
+    from src.database import db
+
+    raw_payload = request.get_data()
+    signature = request.headers.get("X-Resend-Signature", "")
+    if RESEND_WEBHOOK_SECRET and not _verify_resend_signature(raw_payload, signature):
+        logger.warning("Rejected Resend webhook with invalid signature")
+        return jsonify({"status": "error", "message": "invalid signature"}), 400
+
+    data = request.get_json(silent=True) or {}
+    event_type = data.get("type") or data.get("event") or "unknown"
+    email_id = (
+        data.get("data", {}).get("email", {}).get("id")
+        or data.get("data", {}).get("id")
+        or data.get("email_id")
+    )
+
+    if not email_id:
+        return jsonify({"status": "ignored", "reason": "missing email id"}), 200
+
+    log = EmailSendLog.query.filter_by(provider_message_id=email_id).first()
+    if not log:
+        logger.info("Resend webhook for unknown message id %s", email_id)
+        return jsonify({"status": "ignored", "reason": "unknown message"}), 200
+
+    occurred_at = datetime.utcnow()
+    event = EmailEvent(  # type: ignore[call-arg]
+        send_log_id=log.id,
+        event_type=event_type,
+        occurred_at=occurred_at,
+        payload=data,
+    )
+    db.session.add(event)
+
+    log.last_event_type = event_type
+    log.last_event_at = occurred_at
+
+    if event_type in {"email.delivered", "email.opened", "email.clicked"}:
+        log.status = EmailSendStatus.SENT.value
+        log.error_message = None
+    elif event_type in {"email.bounced", "email.dropped", "email.complained"}:
+        log.status = EmailSendStatus.FAILED.value
+        log.error_message = data.get("data", {}).get("error")
+
+    db.session.commit()
+    return jsonify({"status": "ok"})
 
 
 @app.route("/api/forgot-password", methods=["POST"])
@@ -1610,7 +1780,7 @@ def settings() -> Response | WerkzeugResponse | tuple[Response, int] | tuple[Wer
 def serve_react_app(path: str) -> FlaskResponse:
     """Serve React app for all non-API routes."""
     # Don't serve React for API routes
-    if path.startswith("api/") or path.startswith("auth/") or path.startswith("health"):
+    if path.startswith(("api/", "auth/", "health")):
         return jsonify({"status": "error", "message": "Not found"}), 404
 
     # Allow static assets (JS, CSS, images, etc.) to be served normally
@@ -1618,22 +1788,21 @@ def serve_react_app(path: str) -> FlaskResponse:
         # This is likely a static file - let Flask handle it
         try:
             return app.send_static_file(path)
-        except Exception:
-            # If file doesn't exist, fall through to index.html
-            pass
+        except Exception as exc:  # nosec B110 - safe fallback to index.html
+            logger.debug("Static file %s not found, falling back to index.html: %s", path, exc)
 
     # In development, React is served by Vite dev server
     # In production, serve index.html from React build
     if os.path.exists(os.path.join(FRONTEND_DIST, "index.html")):
         return app.send_static_file("index.html")
-    else:
-        # Development mode - redirect to Vite dev server or show message
-        return jsonify(
-            {
-                "status": "info",
-                "message": "React frontend not built. Please run 'npm run build' in src/frontend or use Vite dev server.",
-            }
-        ), 503
+
+    # Development mode - redirect to Vite dev server or show message
+    return jsonify(
+        {
+            "status": "info",
+            "message": "React frontend not built. Please run 'npm run build' in src/frontend or use Vite dev server.",
+        }
+    ), 503
 
 
 if __name__ == "__main__":

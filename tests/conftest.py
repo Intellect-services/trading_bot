@@ -15,6 +15,7 @@ os.environ["SQLALCHEMY_DATABASE_URI"] = "sqlite:///:memory:"
 os.environ["ENCRYPTION_KEY"] = "test-encryption-key-32-bytes-long!!"
 os.environ["RESEND_API_KEY"] = os.getenv("RESEND_API_KEY", "test-mode")
 os.environ["EMAIL_FROM"] = os.getenv("EMAIL_FROM", "test@intellectscout.com")
+os.environ["RESEND_WEBHOOK_SECRET"] = os.getenv("RESEND_WEBHOOK_SECRET", "test-webhook-secret")
 
 
 @pytest.fixture()
@@ -123,6 +124,10 @@ def flask_app():
     app.config["SESSION_TYPE"] = "filesystem"
 
     with app.app_context():
+        from src.models.email_campaign import EmailCampaign  # noqa: F401
+        from src.models.email_event import EmailEvent  # noqa: F401
+        from src.models.email_preference import EmailPreference  # noqa: F401
+        from src.models.email_send_log import EmailSendLog  # noqa: F401
         from src.models.email_token import EmailToken  # noqa: F401
         from src.models.user import User  # noqa: F401
         from src.models.user_credentials import UserCredentials  # noqa: F401
@@ -170,7 +175,7 @@ def authenticated_client(client, flask_app):
 
 
 @pytest.fixture(autouse=True)
-def reset_logging():
+def _reset_logging():
     """Reset logging configuration before each test."""
     import logging
 

@@ -3,12 +3,16 @@
 from __future__ import annotations
 
 import logging
-from collections.abc import Iterable
 from datetime import datetime
+from typing import TYPE_CHECKING
 
 from src.core.alpaca_websocket import AlpacaWebSocket
-from src.core.data_cache import DataCache
-from src.core.data_provider import DataProvider
+
+if TYPE_CHECKING:
+    from collections.abc import Iterable
+
+    from src.core.data_cache import DataCache
+    from src.core.data_provider import DataProvider
 
 logger = logging.getLogger(__name__)
 

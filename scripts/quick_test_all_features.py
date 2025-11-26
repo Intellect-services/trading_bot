@@ -67,6 +67,7 @@ print("2. Checking WebSocket...")
 try:
     from src.core.alpaca_websocket import AlpacaWebSocket
 
+    _ = AlpacaWebSocket
     print("   ✅ AlpacaWebSocket imported")
 except ImportError as e:
     print(f"   ❌ AlpacaWebSocket not found: {e}")
@@ -77,6 +78,7 @@ print("3. Checking Data Cache...")
 try:
     from src.core.data_cache import DataCache
 
+    _ = DataCache
     print("   ✅ DataCache imported")
 except ImportError as e:
     print(f"   ❌ DataCache not found: {e}")
@@ -87,6 +89,7 @@ print("4. Checking Data Provider...")
 try:
     from src.core.data_provider import DataProvider
 
+    _ = DataProvider
     print("   ✅ DataProvider imported")
 except ImportError as e:
     print(f"   ❌ DataProvider not found: {e}")
@@ -97,6 +100,7 @@ print("5. Checking AI Strategy...")
 try:
     from src.ml import AIStrategy, AIStrategyConfig
 
+    _ = (AIStrategy, AIStrategyConfig)
     print("   ✅ AI Strategy imported")
 except ImportError as e:
     print(f"   ❌ AI Strategy not found: {e}")
@@ -107,6 +111,7 @@ print("6. Checking Portfolio Analytics...")
 try:
     from src.core.portfolio_analytics import PortfolioAnalytics
 
+    _ = PortfolioAnalytics
     print("   ✅ PortfolioAnalytics imported")
 except ImportError as e:
     print(f"   ❌ PortfolioAnalytics not found: {e}")

@@ -39,13 +39,13 @@ class DummyStrategy(Strategy):
             )
         return signals
 
-    def calculate_position_size(self, price: float, risk_amount: float) -> float:  # noqa: ARG002
+    def calculate_position_size(self, price: float, risk_amount: float) -> float:
         return 1.0
 
-    def should_open_position(self, price: float) -> bool:  # noqa: ARG002
+    def should_open_position(self, price: float) -> bool:
         return True
 
-    def should_close_position(self, price: float) -> bool:  # noqa: ARG002
+    def should_close_position(self, price: float) -> bool:
         return True
 
     def get_stop_loss(self, price: float) -> float:
@@ -83,6 +83,6 @@ def test_run_multiple_symbols() -> None:
         strategy_factory=DummyStrategy,
     )
     assert set(results.keys()) == {"AAA", "BBB"}
-    for symbol, summary in results.items():
+    for _symbol, summary in results.items():
         assert "metrics" in summary
         assert summary["metrics"]["total_trades"] > 0

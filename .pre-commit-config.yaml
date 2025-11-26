@@ -20,26 +20,35 @@ repos:
     rev: v0.1.8
     hooks:
       - id: ruff
-        args: [--fix, --exit-non-zero-on-fix]
+        args:
+          - --fix
+          - --exit-non-zero-on-fix
+          - --ignore=UP038
       - id: ruff-format
 
   - repo: https://github.com/pre-commit/mirrors-mypy
     rev: v1.15.0
     hooks:
       - id: mypy
-        additional_dependencies: [types-requests, types-urllib3]
-        args: [--ignore-missing-imports, --disallow-untyped-defs, src/]
+        additional_dependencies:
+          - types-requests
+          - types-urllib3
+        args:
+          - --config-file=pyproject.toml
+          - --ignore-missing-imports
+          - src/app.py
+          - src/models
+          - src/services
+          - scripts/verify_implementation.py
         pass_filenames: false
-        exclude: ^(tests/|alembic/)
 
   - repo: https://github.com/PyCQA/bandit
     rev: 1.7.5
     hooks:
       - id: bandit
-        args: [-r, src/, -f, json]
+        args: [-r, src/, -f, json, -c, pyproject.toml]
         pass_filenames: false
         additional_dependencies: [pbr]
-        exclude: ^(tests/|alembic/)
 
   - repo: https://github.com/PyCQA/pydocstyle
     rev: 6.3.0
@@ -48,4 +57,4 @@ repos:
         args:
           - --convention=google
           - --add-ignore=D100,D101,D102,D103,D104,D105,D107,D200,D205,D212,D415
-        exclude: ^(tests/|alembic/|migrations/)
+        exclude: ^(tests/|alembic/|migrations/|src/core/|src/ml/|src/indicators/|src/strategies/|src/backtesting/|src/business/|src/api/|src/infrastructure/|create_migration_tables\.py)

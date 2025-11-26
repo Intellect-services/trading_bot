@@ -14,8 +14,7 @@ def check_implementation(name: str, check_func, description: str) -> tuple[bool,
         result = check_func()
         if result:
             return True, f"✅ {name}: {description}"
-        else:
-            return False, f"❌ {name}: NOT FOUND"
+        return False, f"❌ {name}: NOT FOUND"
     except ImportError as e:
         return False, f"❌ {name}: Import failed - {e}"
     except Exception as e:
@@ -153,6 +152,8 @@ def main():
     # Check 10: Dependencies
     try:
         import yfinance
+
+        _ = yfinance
 
         checks.append((True, "✅ yfinance: Installed"))
     except ImportError:

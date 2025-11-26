@@ -17,6 +17,7 @@ import Account from './pages/Account';
 import Features from './pages/Features';
 import TradingActivity from './pages/TradingActivity';
 import Strategies from './components/Strategies';
+import Unsubscribe from './pages/Unsubscribe';
 
 function App() {
   return (
@@ -33,6 +34,7 @@ function App() {
           <Route path="/verify-email" element={<VerifyEmail />} />
           <Route path="/forgot-password" element={<ForgotPassword />} />
           <Route path="/reset-password" element={<ResetPassword />} />
+          <Route path="/unsubscribe" element={<Unsubscribe />} />
 
           <Route path="/" element={
             <ProtectedRoute>

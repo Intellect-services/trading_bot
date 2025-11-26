@@ -12,9 +12,9 @@ from src.ml.model_interface import (
 __all__ = [
     "AIStrategy",
     "AIStrategyConfig",
+    "ClassificationModel",
+    "EnsembleModel",
     "FeatureEngineer",
     "MLModel",
-    "ClassificationModel",
     "RegressionModel",
-    "EnsembleModel",
 ]

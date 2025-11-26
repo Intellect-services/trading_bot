@@ -61,3 +61,9 @@ export const accountAPI = {
   }),
   deleteCredentials: () => api.delete('/api/account/credentials'),
 };
+
+export const emailAPI = {
+  getPreferences: () => api.get('/api/email/preferences'),
+  updatePreferences: (payload) => api.put('/api/email/preferences', payload),
+  resubscribe: (token) => api.post('/api/email/resubscribe', { token }),
+};

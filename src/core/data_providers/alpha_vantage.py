@@ -2,11 +2,11 @@
 
 from __future__ import annotations
 
+import logging
 import os
 from datetime import datetime
-from typing import Any
+from typing import Any, ClassVar
 
-import logging
 import requests
 
 logger = logging.getLogger(__name__)
@@ -15,8 +15,8 @@ logger = logging.getLogger(__name__)
 class AlphaVantageProvider:
     """Fetch historical data from Alpha Vantage using the free tier."""
 
-    BASE_URL = "https://www.alphavantage.co/query"
-    INTERVAL_MAP: dict[str, str] = {
+    BASE_URL: ClassVar[str] = "https://www.alphavantage.co/query"
+    INTERVAL_MAP: ClassVar[dict[str, str]] = {
         "1Min": "1min",
         "5Min": "5min",
         "15Min": "15min",

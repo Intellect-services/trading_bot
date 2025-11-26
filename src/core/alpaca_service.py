@@ -410,7 +410,7 @@ class AlpacaService:
             "/account/activities",
             params=params,
         )
-        return cast(list[dict[str, Any]], activities or [])
+        return cast("list[dict[str, Any]]", activities or [])
 
     def get_portfolio_history(
         self,
@@ -631,16 +631,15 @@ class AlpacaService:
                 )
 
             # Check if response has error message
-            if response and isinstance(response, dict):
-                if "message" in response:
-                    error_msg = response.get("message", "")
-                    self.logger.error(f"API returned error message for {symbol}: {error_msg}")
-                    if "subscription" in error_msg.lower() or "access" in error_msg.lower():
-                        self.logger.error(
-                            f"Data API subscription may be required for {symbol}. "
-                            "Paper trading accounts may have limited data API access."
-                        )
-                    return {symbol: []}
+            if response and isinstance(response, dict) and "message" in response:
+                error_msg = response.get("message", "")
+                self.logger.error(f"API returned error message for {symbol}: {error_msg}")
+                if "subscription" in error_msg.lower() or "access" in error_msg.lower():
+                    self.logger.error(
+                        f"Data API subscription may be required for {symbol}. "
+                        "Paper trading accounts may have limited data API access."
+                    )
+                return {symbol: []}
 
             if not response:
                 if data_api_error:

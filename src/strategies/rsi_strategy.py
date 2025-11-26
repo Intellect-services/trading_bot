@@ -3,12 +3,13 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
-import pandas as pd
+if TYPE_CHECKING:
+    import pandas as pd
 
-from src.indicators import rsi
 from src.core.strategy import Strategy
+from src.indicators import rsi
 
 
 @dataclass
