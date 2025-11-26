@@ -2,14 +2,106 @@
 <urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
     <url>
          <loc>https://betintellect-com.github.io/trading_bot/</loc>
-         <lastmod>2025-11-24</lastmod>
+         <lastmod>2025-11-26</lastmod>
+    </url>
+    <url>
+         <loc>https://betintellect-com.github.io/trading_bot/api-reference/authentication/</loc>
+         <lastmod>2025-11-26</lastmod>
+    </url>
+    <url>
+         <loc>https://betintellect-com.github.io/trading_bot/api-reference/endpoints/</loc>
+         <lastmod>2025-11-26</lastmod>
+    </url>
+    <url>
+         <loc>https://betintellect-com.github.io/trading_bot/api-reference/models/</loc>
+         <lastmod>2025-11-26</lastmod>
+    </url>
+    <url>
+         <loc>https://betintellect-com.github.io/trading_bot/api-reference/overview/</loc>
+         <lastmod>2025-11-26</lastmod>
+    </url>
+    <url>
+         <loc>https://betintellect-com.github.io/trading_bot/database/</loc>
+         <lastmod>2025-11-26</lastmod>
+    </url>
+    <url>
+         <loc>https://betintellect-com.github.io/trading_bot/database/DATABASE_SCHEMA/</loc>
+         <lastmod>2025-11-26</lastmod>
+    </url>
+    <url>
+         <loc>https://betintellect-com.github.io/trading_bot/database/MIGRATION_GUIDE/</loc>
+         <lastmod>2025-11-26</lastmod>
+    </url>
+    <url>
+         <loc>https://betintellect-com.github.io/trading_bot/database/NAMING_CONVENTIONS/</loc>
+         <lastmod>2025-11-26</lastmod>
+    </url>
+    <url>
+         <loc>https://betintellect-com.github.io/trading_bot/database/SCHEMA_NAMING_STRATEGY/</loc>
+         <lastmod>2025-11-26</lastmod>
+    </url>
+    <url>
+         <loc>https://betintellect-com.github.io/trading_bot/database/STARTUP_INITIALIZATION/</loc>
+         <lastmod>2025-11-26</lastmod>
+    </url>
+    <url>
+         <loc>https://betintellect-com.github.io/trading_bot/deployment/email-marketing/</loc>
+         <lastmod>2025-11-26</lastmod>
+    </url>
+    <url>
+         <loc>https://betintellect-com.github.io/trading_bot/deployment/local/</loc>
+         <lastmod>2025-11-26</lastmod>
+    </url>
+    <url>
+         <loc>https://betintellect-com.github.io/trading_bot/deployment/production/</loc>
+         <lastmod>2025-11-26</lastmod>
+    </url>
+    <url>
+         <loc>https://betintellect-com.github.io/trading_bot/deployment/staging/</loc>
+         <lastmod>2025-11-26</lastmod>
+    </url>
+    <url>
+         <loc>https://betintellect-com.github.io/trading_bot/development/architecture/</loc>
+         <lastmod>2025-11-26</lastmod>
+    </url>
+    <url>
+         <loc>https://betintellect-com.github.io/trading_bot/development/contributing/</loc>
+         <lastmod>2025-11-26</lastmod>
+    </url>
+    <url>
+         <loc>https://betintellect-com.github.io/trading_bot/development/setup/</loc>
+         <lastmod>2025-11-26</lastmod>
+    </url>
+    <url>
+         <loc>https://betintellect-com.github.io/trading_bot/development/testing/</loc>
+         <lastmod>2025-11-26</lastmod>
     </url>
     <url>
          <loc>https://betintellect-com.github.io/trading_bot/getting-started/configuration/</loc>
-         <lastmod>2025-11-24</lastmod>
+         <lastmod>2025-11-26</lastmod>
     </url>
     <url>
          <loc>https://betintellect-com.github.io/trading_bot/getting-started/installation/</loc>
-         <lastmod>2025-11-24</lastmod>
+         <lastmod>2025-11-26</lastmod>
+    </url>
+    <url>
+         <loc>https://betintellect-com.github.io/trading_bot/getting-started/quick-start/</loc>
+         <lastmod>2025-11-26</lastmod>
+    </url>
+    <url>
+         <loc>https://betintellect-com.github.io/trading_bot/user-guide/account-management/</loc>
+         <lastmod>2025-11-26</lastmod>
+    </url>
+    <url>
+         <loc>https://betintellect-com.github.io/trading_bot/user-guide/authentication/</loc>
+         <lastmod>2025-11-26</lastmod>
+    </url>
+    <url>
+         <loc>https://betintellect-com.github.io/trading_bot/user-guide/bot-control/</loc>
+         <lastmod>2025-11-26</lastmod>
+    </url>
+    <url>
+         <loc>https://betintellect-com.github.io/trading_bot/user-guide/trading-setup/</loc>
+         <lastmod>2025-11-26</lastmod>
     </url>
 </urlset>
